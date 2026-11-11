@@ -1,0 +1,22 @@
+name: PPB V2 offline release guard tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-guard-tests:
+    name: Offline release guards (no DB, no AWS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate scripts without side effects
+        run: |
+          set -euo pipefail
+          bash -n ops/deploy/check-live.sh
+          python3 -m py_compile ops/deploy/check-release.py ops/deploy/tests/test_release_guard.py
+          python3 -m unittest discover -s ops/deploy/tests -p 'test_*.py' -v
