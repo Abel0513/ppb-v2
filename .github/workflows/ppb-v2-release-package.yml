@@ -1,0 +1,95 @@
+name: PPB V2 private S3 release package (no deployment)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ppb-v2-private-release
+  cancel-in-progress: false
+
+jobs:
+  package:
+    if: github.ref == 'refs/heads/main' && github.repository == 'Abel0513/ppb-v2' && github.repository_id == '1454285732' && github.repository_owner_id == '55256582'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      AWS_PAGER: ''
+      PPB_BUCKET: ppb-v2-release-artifacts-429724121147-use1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, intl, pdo_mysql, xml, zip
+          tools: composer:v2
+          coverage: none
+      - name: Install PHP production dependencies without scripts or plugins
+        run: |
+          set -euo pipefail
+          composer validate --no-check-publish
+          composer install --no-dev --prefer-dist --no-interaction --no-progress --no-scripts --no-plugins --optimize-autoloader
+          composer check-platform-reqs --no-dev
+          php -r 'require "vendor/autoload.php"; echo "AUTOLOAD=PASS\n";'
+      - name: Run all offline guard tests
+        run: |
+          set -euo pipefail
+          bash -n ops/deploy/check-live.sh
+          python3 -m unittest discover -s ops/deploy/tests -p 'test_*.py' -v
+      - name: Create and check version archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          archive="$RUNNER_TEMP/ppb-v2-$GITHUB_SHA.tar.gz"
+          python3 ops/deploy/build-release.py --root "$GITHUB_WORKSPACE" --output "$archive"
+          python3 ops/deploy/check-release.py "$archive"
+          sha256_hex="$(sha256sum "$archive" | awk '{print $1}')"
+          printf 'RELEASE_ARCHIVE=%s\n' "$archive" >> "$GITHUB_ENV"
+          printf 'RELEASE_SHA256=%s\n' "$sha256_hex" >> "$GITHUB_ENV"
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::429724121147:role/PPB-V2-GitHub-Deploy-Role
+          aws-region: us-east-1
+          allowed-account-ids: '429724121147'
+      - name: Upload versioned S3 object only; do not deploy
+        shell: bash
+        env:
+          AWS_REGION: us-east-1
+        run: |
+          set -euo pipefail
+          key="releases/$GITHUB_SHA/run-$GITHUB_RUN_ID-attempt-$GITHUB_RUN_ATTEMPT.tar.gz"
+          checksum_b64="$(python3 - "$RELEASE_ARCHIVE" <<'PY'
+          import base64, hashlib, sys
+          digest = hashlib.sha256()
+          with open(sys.argv[1], 'rb') as fp:
+              for block in iter(lambda: fp.read(1048576), b''):
+                  digest.update(block)
+          print(base64.b64encode(digest.digest()).decode())
+          PY
+          )"
+          aws s3api put-object \
+            --region "$AWS_REGION" \
+            --bucket "$PPB_BUCKET" \
+            --key "$key" \
+            --body "$RELEASE_ARCHIVE" \
+            --if-none-match '*' \
+            --checksum-algorithm SHA256 \
+            --checksum-sha256 "$checksum_b64" \
+            --server-side-encryption AES256 \
+            --metadata "git-commit=$GITHUB_SHA,sha256=$RELEASE_SHA256" \
+            --query '{VersionId:VersionId,ChecksumSHA256:ChecksumSHA256}' \
+            --output json
+          {
+            echo '## PPB V2 private release stored — not deployed'
+            printf -- '- Git commit: %s\n' "$GITHUB_SHA"
+            printf -- '- S3 key: %s\n' "$key"
+            printf -- '- SHA256: %s\n' "$RELEASE_SHA256"
+            echo '- No production host or DB access.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo 'RESULT=PPB_V2_PRIVATE_RELEASE_UPLOAD_PASS'
