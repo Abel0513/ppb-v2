@@ -1,0 +1,79 @@
+name: PPB V2 AWS read-only preflight
+
+# Only a person with permission to dispatch workflows can start this.
+# This is NOT the production deployment workflow.
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+
+concurrency:
+  group: ppb-v2-aws-preflight
+  cancel-in-progress: false
+
+jobs:
+  aws-readonly-preflight:
+    name: Check V2 EC2 through SSM (read-only)
+    if: github.ref == 'refs/heads/main' && github.repository == 'Abel0513/ppb-v2' && github.repository_id == '1454285732' && github.repository_owner_id == '55256582'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      AWS_REGION: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_PAGER: ""
+      PPB_INSTANCE_ID: i-0135d6b2fac7a54c2
+      PPB_PREFLIGHT_DOCUMENT: PPB-V2-Preflight
+
+    steps:
+      - name: Check runner AWS CLI
+        shell: bash
+        run: aws --version
+
+      - name: Assume dedicated AWS role using GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::429724121147:role/PPB-V2-GitHub-Deploy-Role
+          role-session-name: PPBV2Preflight-${{ github.run_id }}
+          aws-region: us-east-1
+          allowed-account-ids: '429724121147'
+
+      - name: Run fixed read-only SSM document and verify result
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          command_id="$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$PPB_INSTANCE_ID" \
+            --document-name "$PPB_PREFLIGHT_DOCUMENT" \
+            --timeout-seconds 60 \
+            --max-concurrency 1 \
+            --max-errors 0 \
+            --comment "ppb-v2 read-only preflight GitHub run ${GITHUB_RUN_ID}" \
+            --query 'Command.CommandId' \
+            --output text)"
+
+          echo "SSM command ID: $command_id"
+          echo "Only the fixed PPB-V2-Preflight document was invoked."
+          echo "No application write, database access, migration, or deployment."
+
+          wait_status=0
+          aws ssm wait command-executed \
+            --region "$AWS_REGION" \
+            --command-id "$command_id" \
+            --instance-id "$PPB_INSTANCE_ID" || wait_status=$?
+
+          aws ssm get-command-invocation \
+            --region "$AWS_REGION" \
+            --command-id "$command_id" \
+            --instance-id "$PPB_INSTANCE_ID" \
+            --query '{Status:Status,StatusDetails:StatusDetails,ResponseCode:ResponseCode,Output:StandardOutputContent,Error:StandardErrorContent}' \
+            --output json
+
+          if [[ "$wait_status" -ne 0 ]]; then
+            echo "::error::SSM command did not complete successfully."
+            exit 1
+          fi
+          echo "RESULT=PPB_V2_GITHUB_SSM_PREFLIGHT_PASS"
+          echo "PPB V2 read-only preflight passed. SSM command: $command_id" >> "$GITHUB_STEP_SUMMARY"
