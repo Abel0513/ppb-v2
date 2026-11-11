@@ -1,0 +1,116 @@
+/* PPB UI4 2026-11-04 | Visual source: old AdminSchedule/shift.tpl and Public/Admin/css/shift.css.
+ * Scoped to .ppb-shift-page. No old-site files or shared CSDA styling modified. */
+.ppb-shift-page{background:#f0f0f0;padding:18px 20px 32px}
+.ppb-shift-wrap{width:100%;max-width:none}
+.ppb-shift-page .ppb-shift-search-card,.ppb-shift-page .ppb-shift-card{
+ background:#fff;border:0;border-radius:10px;padding:15px 20px;margin:0 0 22px;
+ box-shadow:0 2px 8px rgba(0,0,0,.12);color:#202632}
+.ppb-shift-search-form{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.ppb-shift-filter{display:flex;align-items:center;gap:10px;white-space:nowrap;font-size:14px;font-weight:600;color:#555}
+.ppb-shift-filter input,.ppb-shift-more-filters input,.ppb-shift-more-filters select{width:200px;height:36px;padding:6px 10px;border-radius:6px;border:1px solid #ccd5e0;background:#f7f8fa;font-size:14px}
+.ppb-shift-search-btn,.ppb-shift-add-btn{display:inline-flex;justify-content:center;align-items:center;height:38px;padding:0 26px;border-radius:6px;border:0;color:#fff;font-size:15px;font-weight:600;cursor:pointer;text-decoration:none}
+.ppb-shift-search-btn{background:#4f5ecf}.ppb-shift-add-btn{background:#16a34a}.ppb-shift-add-btn:hover{background:#15803d;color:#fff}
+.ppb-shift-more-filters{font-size:12px;color:#596579;position:relative}.ppb-shift-more-filters summary{cursor:pointer;white-space:nowrap}.ppb-shift-more-filters[open]{flex-basis:100%;display:flex;flex-wrap:wrap;gap:12px}.ppb-shift-more-filters label{display:flex;gap:8px;align-items:center}
+.ppb-shift-header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:16px;font-weight:700;min-height:34px}
+.ppb-shift-header-first{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.ppb-shift-tag,.ppb-shift-time,.ppb-shift-number{border-radius:4px;padding:3px 8px;font-size:14px;line-height:1.45;color:#fff;white-space:nowrap;font-weight:700}
+.ppb-shift-tag-g{background:#4A6EDB}.ppb-shift-tag-e{background:#E5533D}
+.ppb-shift-time-11{background:#e8a0a0}.ppb-shift-time-16{background:#8080c0}.ppb-shift-number{background:#e8a0a0}
+.ppb-shift-matchup{font-size:17px;font-weight:800;flex:0 1 auto;overflow-wrap:anywhere}
+.ppb-shift-legends{display:flex;align-items:center;gap:8px;margin-left:12px;white-space:nowrap}
+.ppb-shift-legend{font-size:13px;padding:3px 9px;border-radius:4px;color:#fff;font-weight:700}.ppb-shift-win{background:#22c55e}.ppb-shift-lose{background:#ef4444}.ppb-shift-pending{background:#2f66c9}
+.ppb-shift-reviewer{font-size:14px;color:#666;font-weight:800;display:flex;align-items:center;gap:6px;white-space:nowrap}.ppb-shift-reviewer span{background:#e9d5f1;color:#5b4e8f;padding:4px 12px;border-radius:4px;border:1px solid #ddd;font-weight:700}
+.ppb-shift-actions{display:flex;gap:6px;margin-left:auto}.ppb-shift-action{display:grid;place-items:center;width:34px;height:34px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;color:#475569;font-size:17px;text-decoration:none}.ppb-shift-action:hover{background:#eef2ff;border-color:#c7d2fe;color:#3730a3}
+.ppb-shift-prediction{margin:12px 0 6px;background:#4f76ad;color:#fff;border-radius:6px;padding:10px;font-size:15px;font-weight:800;line-height:1.4}.ppb-shift-market{font-weight:500;font-size:13px}
+.ppb-shift-row{display:grid;grid-template-columns:90px 90px 200px minmax(0,1fr);align-items:center;gap:4px;padding:3px 0}
+.ppb-shift-label{display:grid;place-items:center;width:80px;min-height:26px;background:#6f4dbd;color:#fff;border-radius:4px;font-size:13px;font-weight:600;white-space:nowrap}
+.ppb-shift-label-bonus{background:#f59e0b}.ppb-shift-label-long{background:#795548}
+.ppb-shift-name{display:block;width:90px;max-width:100%;border:1px solid #bcd2f5;background:#e8f1ff;color:#1e4fa3;padding:6px 8px;border-radius:4px;text-align:center;font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ppb-shift-pick{display:block;min-width:200px;background:#2f66c9;color:#fff;text-align:center;border-radius:4px;padding:6px 10px;font-size:14px;font-weight:700;line-height:1.4}
+.ppb-shift-note,.ppb-shift-long-note{background:#f7f8fa;border-radius:4px;padding:8px 10px;font-size:14px;line-height:1.5;color:#111;min-width:0;overflow-wrap:anywhere}
+.ppb-shift-row-long{grid-template-columns:90px 90px minmax(0,1fr)}
+.ppb-shift-footnotes{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;color:#6d4250;font-size:12px}.ppb-shift-footnotes span{background:#fff3f3;border:1px solid #f3d6d6;border-radius:5px;padding:4px 8px}
+.ppb-shift-empty{background:#fff;padding:30px 22px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);font-size:14px;color:#596579}
+.ppb-shift-pagination{margin:10px 0 22px}
+@media(max-width:1100px){.ppb-shift-header{gap:8px}.ppb-shift-matchup{flex:1 1 100%;order:2}.ppb-shift-legends{margin-left:0}.ppb-shift-reviewer{order:3}.ppb-shift-actions{order:1}}
+@media(max-width:640px){
+ .ppb-shift-page{padding:8px 8px 20px;background:#f3f6fb}
+ .ppb-shift-page .ppb-shift-search-card{padding:10px 12px;margin-bottom:10px}
+ .ppb-shift-search-form{gap:8px}.ppb-shift-filter{flex:1 1 140px;flex-direction:column;align-items:stretch;gap:2px;font-size:11px}
+ .ppb-shift-filter input{width:100%;font-size:12px;height:34px}.ppb-shift-search-btn,.ppb-shift-add-btn{height:34px;padding:0 16px;font-size:13px}
+ .ppb-shift-more-filters{width:100%}.ppb-shift-more-filters[open]{display:block}.ppb-shift-more-filters label{margin-top:7px}
+ .ppb-shift-page .ppb-shift-card{padding:10px 10px 12px;margin-bottom:10px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+ .ppb-shift-header{display:flex;gap:6px}.ppb-shift-header-first{gap:6px;flex:1 1 auto;min-width:0}
+ .ppb-shift-header-first .ppb-shift-tag,.ppb-shift-header-first .ppb-shift-time,.ppb-shift-header-first .ppb-shift-number{font-size:11px;padding:3px 7px;border-radius:999px}
+ .ppb-shift-matchup{flex:1 1 100%;order:3;font-size:14px;line-height:1.45}.ppb-shift-legends{order:4;gap:4px;margin-left:0;flex:1 1 100%}.ppb-shift-legend{font-size:10px;padding:2px 7px;border-radius:999px}
+ .ppb-shift-reviewer{display:none}.ppb-shift-actions{order:2;margin-left:auto}.ppb-shift-action{width:29px;height:29px;font-size:14px}
+ .ppb-shift-prediction{font-size:13px;padding:6px 12px;margin-top:8px;margin-bottom:6px;border-radius:8px}
+ .ppb-shift-row,.ppb-shift-row-long{grid-template-columns:74px 88px minmax(0,1fr);gap:3px;padding:4px;background:#f8fafc;border:1px solid #e5edf6;border-radius:10px}
+ .ppb-shift-label{width:74px;min-width:74px;min-height:28px;border-radius:8px;font-size:0}.ppb-shift-label:not(.ppb-shift-label-bonus):not(.ppb-shift-label-long)::after{content:'短文';font-size:12px}.ppb-shift-label-bonus,.ppb-shift-label-long{font-size:11px}
+ .ppb-shift-name{width:100%;font-size:12px;padding:5px 6px;border-radius:8px;min-width:0}
+ .ppb-shift-pick{min-width:0;font-size:12px;padding:6px 5px;border-radius:8px;line-height:1.25}
+ .ppb-shift-note{display:none}.ppb-shift-long-note{grid-column:3;font-size:12px;line-height:1.25;padding:6px 8px;white-space:normal;overflow-wrap:anywhere}
+}
+@media(max-width:374px){.ppb-shift-row,.ppb-shift-row-long{grid-template-columns:66px 78px minmax(0,1fr)}.ppb-shift-label{width:66px;min-width:66px}.ppb-shift-name,.ppb-shift-pick{font-size:11px}}
+
+/* PPB UI5 | 2026-11-04 | Pixel-aligned source shift.tpl controls, scope to V2 only. */
+.ppb-shift-page .ppb-shift-search-form{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.ppb-shift-page .ppb-shift-search-form input[type="hidden"]{display:none}
+.ppb-shift-page .ppb-shift-mobile-add{display:none}
+.ppb-shift-modal{box-sizing:border-box;width:min(680px,calc(100vw - 28px));max-width:none;height:min(90vh,820px);max-height:90vh;margin:auto;padding:0;border:0;border-radius:10px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.25);background:#fff}
+.ppb-shift-modal::backdrop{background:rgba(0,0,0,.45)}
+.ppb-shift-modal[open]{display:flex;flex-direction:column}
+.ppb-shift-modal-header{display:flex;align-items:center;justify-content:space-between;flex:0 0 60px;padding:14px 20px;border-bottom:1px solid #e5e7eb;background:#fff;color:#202632;font-size:20px;font-weight:700}
+.ppb-shift-modal-close{background:transparent;border:0;cursor:pointer;color:#666;font-size:26px;line-height:1;min-width:40px;min-height:40px}
+.ppb-shift-modal-frame{display:block;flex:1 1 auto;min-height:0;width:100%;border:0;background:#fff}
+@media(max-width:640px){
+ /* Exact old shift.tpl search-card behavior; add button remains available for authorized users. */
+ .ppb-shift-page .ppb-shift-search-card{display:none!important}
+ .ppb-shift-page .ppb-shift-mobile-add{display:flex;justify-content:flex-end;margin-bottom:8px}
+ .ppb-shift-modal{width:calc(100vw - 20px);height:calc(100dvh - 20px);max-height:calc(100dvh - 20px);border-radius:10px}
+ .ppb-shift-modal-header{flex-basis:52px;font-size:18px;padding:10px 15px}
+}
+
+/* PPB UI6 2026-11-04 | Zero-layout-shift gap insertion; retain every old card dimension. */
+.ppb-shift-page .ppb-shift-card{position:relative}
+.ppb-shift-page .ppb-shift-insert{position:absolute;z-index:5;top:-14px;left:50%;transform:translateX(-50%);display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-width:95px;height:24px;padding:0 8px;border:1px solid #d6deec;border-radius:999px;background:#fff;color:#586985;font-size:11px;line-height:1;white-space:nowrap;cursor:pointer;opacity:.23;transition:opacity .12s,background-color .12s;box-shadow:0 1px 3px rgba(26,42,68,.06)}
+.ppb-shift-page .ppb-shift-card:hover .ppb-shift-insert,.ppb-shift-page .ppb-shift-insert:hover,.ppb-shift-page .ppb-shift-insert:focus-visible{opacity:1;background:#f4f7fc;color:#304d84;outline-offset:2px}
+@media(max-width:640px){.ppb-shift-page .ppb-shift-insert{opacity:.65;top:-13px;min-width:82px;height:26px;font-size:10px}}
+
+
+/* PPB PG2 | 2026-11-05 | Scoped old shift.tpl pagination style; cards/search untouched. */
+.ppb-shift-page .ppb-shift-pagination{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:12px;margin:16px 0 0;padding-bottom:10px}
+.ppb-shift-page .ppb-shift-pagination-info{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;font-size:15px;font-weight:600;color:#445;background:#fff;border:1px solid #e3e6ea;border-radius:8px;white-space:nowrap}
+.ppb-shift-page .ppb-shift-pagination-links{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.ppb-shift-page .ppb-shift-pagination-links a,.ppb-shift-page .ppb-shift-pagination-links span{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:40px;box-sizing:border-box;padding:0 14px;border-radius:8px;border:1px solid #e3e6ea;background:#fff;color:#445;font-size:15px;font-weight:600;text-decoration:none}
+.ppb-shift-page .ppb-shift-pagination-links .current{background:#2f66c9;color:#fff;border-color:#2f66c9}
+.ppb-shift-page .ppb-shift-pagination-links [aria-disabled=true]{color:#aab4c0;background:#f8fafc;cursor:default}
+.ppb-shift-page .ppb-shift-pagination-links .ppb-shift-pagination-ellipsis{min-width:20px;padding:0;border:0;background:transparent}
+@media(max-width:640px){.ppb-shift-page .ppb-shift-pagination{justify-content:center;gap:8px}.ppb-shift-page .ppb-shift-pagination-info{font-size:13px;min-height:34px}.ppb-shift-page .ppb-shift-pagination-links{gap:5px;justify-content:center}.ppb-shift-page .ppb-shift-pagination-links a,.ppb-shift-page .ppb-shift-pagination-links span{min-width:34px;min-height:34px;padding:0 8px;font-size:12px}}
+
+/* PPB OP1 2026-11-05 | Compact per-card manage overlay; zero card/row/gap changes. */
+.ppb-shift-page .ppb-shift-card:has(.ppb-shift-manage[open]){z-index:18}
+.ppb-shift-page .ppb-shift-manage{position:relative;display:block}
+.ppb-shift-page .ppb-shift-manage-toggle{list-style:none;cursor:pointer;user-select:none;font-weight:800;line-height:1}
+.ppb-shift-page .ppb-shift-manage-toggle::-webkit-details-marker{display:none}
+.ppb-shift-page .ppb-shift-manage-toggle::marker{content:''}
+.ppb-shift-page .ppb-shift-manage-menu{position:absolute;z-index:90;right:0;top:calc(100% + 5px);box-sizing:border-box;width:212px;max-width:calc(100vw - 36px);padding:6px;border:1px solid #dfe5ee;border-radius:8px;background:#fff;box-shadow:0 8px 26px rgba(15,30,54,.18);font-size:13px;font-weight:500}
+.ppb-shift-page .ppb-shift-manage-menu a,.ppb-shift-page .ppb-shift-manage-menu button{box-sizing:border-box;display:block;width:100%;margin:0;padding:10px 10px;background:transparent;border:0;border-radius:5px;text-align:left;text-decoration:none;color:#253653;font:inherit;cursor:pointer;line-height:1.3}
+.ppb-shift-page .ppb-shift-manage-menu a:hover,.ppb-shift-page .ppb-shift-manage-menu button:hover{background:#eef3fb;color:#203f78}
+.ppb-shift-page .ppb-shift-manage-menu small{display:block;border-top:1px solid #e7eaf1;margin-top:5px;padding:8px 7px 3px;color:#6b7280;line-height:1.45;font-size:11px}
+.ppb-shift-cancel-dialog{box-sizing:border-box;width:min(420px,calc(100vw - 30px));max-width:none;margin:auto;padding:22px;border:0;border-radius:10px;background:#fff;color:#273242;box-shadow:0 14px 44px rgba(0,0,0,.25)}
+.ppb-shift-cancel-dialog::backdrop{background:rgba(0,0,0,.42)}
+.ppb-shift-cancel-dialog h2{font-size:19px;margin:0 0 16px}
+.ppb-shift-cancel-dialog label{display:block;font-size:14px;font-weight:700;margin-bottom:7px}
+.ppb-shift-cancel-dialog textarea{box-sizing:border-box;width:100%;padding:10px;font:inherit;border-radius:6px;border:1px solid #ccd5e0;resize:vertical}
+.ppb-shift-cancel-dialog .ppb-shift-cancel-notice{color:#7c4e3f;font-size:12px;line-height:1.45;background:#fff8f2;padding:8px;border-radius:5px}
+.ppb-shift-cancel-dialog .ppb-shift-cancel-buttons{display:flex;gap:10px;justify-content:flex-end;margin-top:17px}
+.ppb-shift-cancel-dialog .ppb-shift-cancel-buttons button{border:1px solid #dce3ee;border-radius:6px;padding:8px 14px;background:#f4f6fb;color:#344055;cursor:pointer}
+.ppb-shift-cancel-dialog .ppb-shift-cancel-buttons .ppb-shift-cancel-confirm{background:#b83f43;color:#fff;border-color:#b83f43}
+@media(max-width:640px){.ppb-shift-page .ppb-shift-manage-menu{width:200px}.ppb-shift-cancel-dialog{padding:16px}}
+
+/* PPB INS2 2026-11-05 | Insert status overlay only: no card height, margin, padding or gap changes. */
+.ppb-shift-page .ppb-shift-insert-hold{border-color:#d7dce5;color:#717c8d;background:#fafbfc}
+.ppb-shift-page .ppb-shift-insert-hold:hover,.ppb-shift-page .ppb-shift-insert-hold:focus-visible{color:#45546b;background:#f1f3f6}
+.ppb-insert-hold-dialog p{font-size:13px;line-height:1.6;color:#525e71;margin:9px 0}
+.ppb-insert-hold-dialog #ppbInsertHoldReason{font-weight:650;color:#374c6a}

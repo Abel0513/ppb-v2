@@ -1,0 +1,23 @@
+{{-- PPB U2 | SOURCE: CSDA Application/Admin/View/Public/topbar.tpl | auth kept on ppb guard. --}}
+<header class="admin-topbar">
+  <div class="admin-topbar-left">
+    <button class="admin-mobile-menu-button" id="adminMobileMenuButton" type="button" aria-label="開啟後台選單">☰</button>
+    {{-- PPB_UI3_20261104 | Keep the real page title, remove redundant subtitle. --}}
+    <div class="admin-page-heading"><h1 class="admin-page-title">@yield('title', '排班管理')</h1></div>
+  </div>
+  <div class="admin-topbar-right" id="adminProfileWrapper">
+    @if(auth('ppb')->check())
+      <button class="admin-profile-button" id="adminProfileButton" type="button" aria-haspopup="true" aria-expanded="false">
+        <div class="admin-profile-info"><p class="admin-profile-name">{{ auth('ppb')->user()->name }}</p></div>
+        <div class="admin-profile-avatar">P</div><span class="admin-profile-arrow">⌄</span>
+      </button>
+      <div class="admin-profile-dropdown" id="adminProfileDropdown">
+        <div class="admin-profile-dropdown-header"><p class="admin-profile-dropdown-name">{{ auth('ppb')->user()->name }}</p><p class="admin-profile-dropdown-account">{{ auth('ppb')->user()->username }}</p></div>
+        <div class="admin-profile-dropdown-menu"><form method="POST" action="{{ route('ppb.logout') }}">@csrf<button class="admin-profile-menu-item logout" type="submit"><span class="admin-profile-menu-icon">↪</span><span>安全登出</span></button></form></div>
+      </div>
+    @else
+      <span class="admin-topbar-preview">介面預覽</span>
+    @endif
+  </div>
+</header>
+<div class="admin-topbar-spacer" aria-hidden="true"></div>
