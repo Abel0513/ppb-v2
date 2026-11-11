@@ -20,7 +20,7 @@ jobs:
       AWS_PAGER: ''
       PPB_BUCKET: ppb-v2-release-artifacts-429724121147-use1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
       - uses: shivammathur/setup-php@v2
