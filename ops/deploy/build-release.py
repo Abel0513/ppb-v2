@@ -6,6 +6,7 @@ Does not execute PHP, connect to DB or invoke any external service.
 """
 import argparse
 import gzip
+import io
 import json
 import pathlib
 import re
@@ -57,7 +58,7 @@ def application_files(root):
         if is_protected(rel):
             raise ReleaseError('protected tracked application path: ' + rel)
         path = root / rel
-        if path.is_symlink() or not path.is_file() or path.resolve().is_relative_to(root.resolve()) is False:
+        if path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(root):
             raise ReleaseError('unsafe tracked application file: ' + rel)
         names.append((rel, path))
     return names
@@ -116,8 +117,8 @@ def build(root, output):
     try:
         with output.open('xb') as stream:
             with gzip.GzipFile(filename='', fileobj=stream, mode='wb', mtime=commit_timestamp) as compressed:
-                with tarfile.open(fileobj=compressed, mode='w', format=tarfile.USTAR_FORMAT) as tar:
-                    with __import__('io').BytesIO(manifest) as data:
+                with tarfile.open(fileobj=compressed, mode='w', format=tarfile.PAX_FORMAT) as tar:
+                    with io.BytesIO(manifest) as data:
                         tar.addfile(tarinfo('.ppb-release.json', len(manifest), commit_timestamp), data)
                     for rel, path in files:
                         with path.open('rb') as src:
