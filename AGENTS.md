@@ -11,22 +11,23 @@ Effective: 2026-11-12 (Asia/Taipei). This repository is a **source-code snapshot
 
 ## First Codex task: READ-ONLY audit
 
-Until the user explicitly approves a **specific implementation batch**, your job is to inspect and report only. Do not edit repository files (including this file), install dependencies, generate or modify lock files, make commits, push, merge, create PRs, or deploy. A read-only task does not authorize writing a report into the repository; deliver it in the task response.
+**Only the first onboarding/audit task is read-only.** Before the user approves a specific implementation batch, inspect and report only: no edits, dependency installation, lockfile generation, commits, pushes, merges, PRs or deployment. Deliver the first audit in the task response, not as a new repository file. **This is NOT a permanent ban on coding or V2 database work.** After the user approves an implementation batch, Codex may independently modify V2 code, run appropriate tests, adjust V2-owned schema/data, and prepare a PR within that approved scope, without asking for permission for every file or row. Production application rollout and destructive or irreversible changes still require a separate acceptance gate.
 
 Safe actions for this first audit: read and search source, inspect Git history and diffs, inspect configuration keys without secrets, check installed tool versions, use non-mutating static inspection such as `php -l` on identified files. Do not boot Laravel or run framework commands whose effects are uncertain.
 
 **Do not automatically run Laravel Boost setup** (`composer require laravel/boost --dev`, `php artisan boost:install`), curl-to-shell installers, Composer/NPM installs, migrations, seeders, tests that write data, or any scripts that alter application state. If a tool or dependency is missing, report it rather than changing the environment during this audit.
 
-The Cloud environment must not be given production DB, WP, LINE, SSH or API credentials. Do not call external WP/LINE endpoints, update Cron, or attempt production server access.
+For the **first read-only audit**, do not connect any production DB or external WP/LINE endpoint, provide credentials to Cloud, update Cron or access the production host. For approved future implementation batches, use only explicitly provisioned and scoped access to V2-owned resources; never paste secrets into tasks or GitHub. Codex Cloud does not automatically have access to the V2 production database.
 
 ## Non-negotiable project safeguards
 
-- Preserve all existing **legacy production** entry points and workflows. V2 is an additive/compatible modernization; never change the old system, production database, published WordPress behavior, LINE Bot or Cron without separately approved deployment steps.
-- Batch related changes, batch testing and a **single consolidated acceptance**. Do not create a new test database or persistent test tables; never insert fake data into the production database.
-- Keep GitHub work in isolated branches for approved development. Produce diff, verification evidence, observed limitations and rollback plan; **no direct main modification, merge, push to production or release** without the user's express approval.
+- **Legacy data is protected:** do not INSERT/UPDATE/DELETE or migrate data in any legacy-system table or legacy production database, even when the legacy and V2 tables share one MySQL server/schema. Legacy code and data may be inspected read-only with authorized access; preserve legacy entry points and workflows. Do not change the old production code, WordPress/LINE production publishing or Cron as part of V2 changes.
+- **V2-owned data is writable in an approved implementation batch:** reads, CRUD operations and schema migrations affecting **confirmed V2-owned** tables are allowed. Before executing writes against deployed V2, verify exact target database and table ownership, affected records and dependencies, backup/recovery plan, and scope of authorization; do not assume a database name or `ppb_` prefix proves ownership. For data copied from the legacy system, protect the source legacy records and assess shared-table/linked-record effects. Never write legacy tables by accident.
+- Batch related changes, batch testing and a **single consolidated acceptance**. Do not create a new test database or persistent test tables. Do not seed fake or test records in the deployed V2 database; use non-destructive checks or specifically approved isolated test data with cleanup and evidence.
+- Keep GitHub development work in isolated branches. Within an **approved batch**, Codex may edit code, execute permitted V2 tests, create commits, push its development branch and open a PR. Produce a diff, verification evidence, observed limitations and a rollback plan. Do not directly modify `main`, merge, or deploy to production without the user's final acceptance. Destructive V2 production data changes need explicit approval after impact review.
 - Read on-site current files and versions before proposing deployment. GitHub code may diverge from deployed PHP files.
 - Never request, print or commit `.env`, `db.php`, `line.php`, passwords, credentials, tokens, certificates, private JSON or production DB backups. Review changes for accidental hard-coded credentials.
-- `app/Console/Commands/PpbBatchVerify.php` contains account/game creation and save calls despite using a transaction and rollback. Do not run it against production or presume every failure path is safe.
+- `app/Console/Commands/PpbBatchVerify.php` contains account/game creation and save calls despite using a transaction and rollback. Do not run it against either legacy or deployed V2 production data unless fully redesigned/audited and explicitly approved; do not presume every failure path is safe.
 
 ## Fixed business meanings
 
