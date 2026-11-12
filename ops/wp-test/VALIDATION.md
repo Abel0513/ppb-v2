@@ -17,3 +17,12 @@
   依賴人工核准的私有 evidence；本 PR 不虛構此證據。
 
 正式 EC2 修改、WP 新建、V2／legacy DB 寫入、LINE、Cron、公開發布均為 0。
+
+## 2026-11-13 P2 修正
+
+- 既有 PR13 分支續修，未建立新 PR。
+- 新增 Image Array、URL、media不存在、URL不符、缺 ID、額外image欄位與編輯URL測試。
+- WP 離線測試目前 26/26 PASS；mock 不代表 WP 實際建立。
+- Cloud provider=cloud，AWS身分/環境認證為空；無AWS CLI與可呼叫SSM工具，無EC2正式路徑。
+- 直接終端模式只使用現場已存在的私有 evidence/auth，無自動安裝、無IAM/SSM變更。
+- 真實 NEW_WP_EXPERT_ID、HTTP、43/43 本批尚未取得；不得宣稱完成實測。

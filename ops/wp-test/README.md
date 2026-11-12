@@ -1,3 +1,21 @@
+## 2026-11-13 更新：單次 EC2 終端優先
+
+本次直接沿用既有授權，不以建立 SSM／IAM／新 Runner 為前置。
+`runner.direct_main()` 可在記憶體執行同一組 POST／GET 邏輯，不安裝程式、不改 approved.json。
+使用已存在的 `/www/ppb-v2-deploy/wp-test/evidence.json` 與 `credentials.json`；
+若已存在 approved.json，仍核對 evidence 雜湊。不會自動創造真實 ACF／身份 evidence 或認證。
+若現場不是此私有設定格式，必須先唯讀確認既有介面，不能推測其他程式的設定格式。
+
+P2 已修正：`standard` 值作為讀回比對，圖片寫入值獨立轉為 attachment ID；
+Image Array 讀取 ID/id，Image URL 另讀相同 reference 的 `acf_format=light` 取得 ID。
+每個 ID 必須 GET media 確認 image attachment 與原 source_url 相符，不能由 URL 猜 ID。
+六位分析師照片欄位自動處理；其餘圖片欄位須在已核准 evidence 的 `image_fields` 明列。
+照片、作者、真實43欄或安全hooks證據缺失，全部在 POST/journal 前停止。
+
+輸出新增 `WP_EDIT_URL`，只有實際新ID獨立讀回通過才產生。
+既有 issue-12-state.json／flock 完全沿用，不另建每次執行的去重空間。
+逾時／不明 journal 永不清除或自動重送。
+
 # Issue 12：受控 Expert 草稿測試
 
 本批只有離線開發。未安裝至 EC2、未建立 SSM／IAM、未呼叫 WP。

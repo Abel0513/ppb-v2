@@ -19,6 +19,7 @@ def fixture():
 class Fake:
     def __init__(self,c):
         self.ref=dict(id=30436,type='expert',status='draft',author=9,acf=copy.deepcopy(c['acf'])); self.posts=[]; self.calls=[]; self.fail=None; self.bad=None
+    def media_info(self, media_id): return 200,dict(id=media_id,type='attachment',mime_type='image/jpeg',source_url='https://example.invalid/photo/'+str(media_id)+'.jpg')
     def type_info(self): return 200,dict(slug='expert',rest_namespace='wp/v2',rest_base='expert')
     def request(self,m,suffix='',payload=None):
         self.calls.append((m,suffix))
@@ -27,9 +28,17 @@ class Fake:
             if self.fail=='timeout': raise TimeoutError()
             if self.fail=='http': return 500,None
             return 201,self.posts[0]
-        if suffix.startswith('/30436'): return 200,copy.deepcopy(self.ref)
+        if suffix.startswith('/30436'):
+            ref=copy.deepcopy(self.ref)
+            if 'acf_format=light' in suffix:
+                for k,v in ref['acf'].items():
+                    if k.endswith('_photo'):
+                        ref['acf'][k]=v['ID'] if isinstance(v,dict) else (int(v.rsplit('/',1)[1].split('.')[0]) if isinstance(v,str) else v)
+            return 200,ref
         if suffix.startswith('?'): return 200,copy.deepcopy(self.posts)
         p=copy.deepcopy(self.posts[0])
+        for k,v in self.ref['acf'].items():
+            if k.endswith('_photo'): p['acf'][k]=copy.deepcopy(v)
         if self.bad=='status': p['status']='publish'
         if self.bad=='acf': p['acf']['other1']='wrong'
         return 200,p
@@ -109,3 +118,49 @@ class Tests(unittest.TestCase):
             self.assertIn(guard,workflow)
     def test_redirects_refused(self):
         self.assertIsNone(r.NoRedirect().redirect_request(None,None,302,'',{},'https://elsewhere.invalid'))
+
+    def image_format(self,kind):
+        for a in self.c['analysts']:
+            field=a['photo_field']; number=a['expected_photo']
+            value={'ID':number,'url':'https://example.invalid/photo/'+str(number)+'.jpg'} if kind=='object' else 'https://example.invalid/photo/'+str(number)+'.jpg'
+            self.c['acf'][field]=value; a['expected_photo']=value
+            self.c['fields'][field]['type']='object' if kind=='object' else 'string'
+        self.wp=Fake(self.c)
+    def test_image_array_payload_uses_ids_readback_uses_objects(self):
+        self.image_format('object'); result=self.go()
+        self.assertEqual(result['ACF_MATCHED'],43)
+        for a in self.c['analysts']:
+            self.assertIs(type(self.wp.posts[0]['acf'][a['photo_field']]),int)
+            self.assertIsInstance(self.c['acf'][a['photo_field']],dict)
+    def test_image_url_payload_uses_raw_reference_ids(self):
+        self.image_format('url'); result=self.go()
+        self.assertEqual(result['ACF_MATCHED'],43)
+        self.assertTrue(any('acf_format=light' in s for m,s in self.wp.calls))
+        self.assertEqual(self.wp.posts[0]['acf']['pick1_photo'],102)
+    def test_image_url_wrong_media_stops_before_post(self):
+        self.image_format('url')
+        self.wp.media_info=lambda i:(200,dict(id=i,type='attachment',mime_type='image/jpeg',source_url='https://example.invalid/wrong'))
+        with self.assertRaisesRegex(r.Stop,'IMAGE_URL_MEDIA_MISMATCH'): self.go()
+        self.assertEqual(self.wp.posts,[]); self.assertFalse(self.path.exists())
+    def test_image_object_missing_id_stops_before_post(self):
+        self.image_format('object')
+        self.c['acf']['pick1_photo'].pop('ID'); self.wp=Fake(self.c)
+        with self.assertRaisesRegex(r.Stop,'INVALID_IMAGE_OBJECT_ID'): self.go()
+        self.assertEqual(self.wp.posts,[])
+    def test_media_unavailable_stops_before_journal(self):
+        self.wp.media_info=lambda i:(404,None)
+        with self.assertRaisesRegex(r.Stop,'IMAGE_MEDIA_NOT_VERIFIED'): self.go()
+        self.assertFalse(self.path.exists()); self.assertEqual(self.wp.posts,[])
+    def test_edit_url_has_new_id(self):
+        result=self.go(); self.assertEqual(result['WP_EDIT_URL'],'https://example.invalid/wp-admin/post.php?post=40000&action=edit')
+    def test_additional_image_field_converted(self):
+        self.c['acf']['other1']={'ID':202,'url':'https://example.invalid/photo/202.jpg'}
+        self.c['fields']['other1']['type']='object'; self.c['image_fields']=['other1']; self.wp=Fake(self.c)
+        # Simulate standard return-format expansion also for this extra field.
+        original=self.wp.request
+        def request(method,suffix='',payload=None):
+            code,p=original(method,suffix,payload)
+            if method=='GET' and suffix.startswith('/40000'):p['acf']['other1']=copy.deepcopy(self.c['acf']['other1'])
+            return code,p
+        self.wp.request=request
+        self.go();self.assertEqual(self.wp.posts[0]['acf']['other1'],202)
