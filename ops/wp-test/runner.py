@@ -220,6 +220,8 @@ def direct_main():
     require(os.geteuid() == 0, 'ROOT_REQUIRED_FOR_EXISTING_PRIVATE_CONFIGURATION')
     require(ROOT.is_dir() and not ROOT.is_symlink(), 'EXISTING_WP_AUTHORIZATION_AND_EVIDENCE_DIRECTORY_MISSING')
     require(ROOT.stat().st_uid == 0 and ROOT.stat().st_mode & 0o022 == 0, 'UNSAFE_PRIVATE_CONFIGURATION')
+    require((ROOT / 'evidence.json').is_file(), 'EXISTING_VERIFIED_ACF_EVIDENCE_MISSING')
+    require((ROOT / 'credentials.json').is_file(), 'EXISTING_WP_AUTHORIZATION_MISSING')
     c = private_json(ROOT / 'evidence.json')
     auth = private_json(ROOT / 'credentials.json')
     if (ROOT / 'approved.json').exists():
