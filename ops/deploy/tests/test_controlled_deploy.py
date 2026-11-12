@@ -91,6 +91,8 @@ class DeploymentFixture(unittest.TestCase):
         self.filelist['app/NewController.php'] = b'<?php return 2;\n'
         self.build()
         candidate, names, actions = self.plan()
+        (self.live / 'routes/web.php').chmod(0o640)
+        original_stat = (self.live / 'routes/web.php').stat()
         self.deploy.apply(candidate, names, actions, self.sha, COMMIT)
         self.assertEqual((self.live / 'routes/web.php').read_bytes(), self.filelist['routes/web.php'])
         self.assertTrue((self.live / 'app/NewController.php').is_file())
@@ -104,6 +106,9 @@ class DeploymentFixture(unittest.TestCase):
             self.assertEqual((self.live / rel).read_bytes(), data)
         self.deploy.rollback_latest()
         self.assertEqual((self.live / 'routes/web.php').read_bytes(), REQUIRED['routes/web.php'])
+        restored = (self.live / 'routes/web.php').stat()
+        self.assertEqual(stat.S_IMODE(restored.st_mode), stat.S_IMODE(original_stat.st_mode))
+        self.assertEqual((restored.st_uid, restored.st_gid), (original_stat.st_uid, original_stat.st_gid))
         self.assertFalse((self.live / 'app/NewController.php').exists())
         self.assertFalse((self.private / 'current-release.json').exists())
         self.assertFalse((self.private / 'pending-deployment.json').exists())
