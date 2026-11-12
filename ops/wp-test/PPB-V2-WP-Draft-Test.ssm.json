@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "2.2",
+  "description": "Issue 12 single approved Expert draft only",
+  "parameters": {
+    "Commit": {
+      "type": "String",
+      "allowedPattern": "^[a-f0-9]{40}$",
+      "interpolationType": "ENV_VAR"
+    },
+    "RunnerSha256": {
+      "type": "String",
+      "allowedPattern": "^[a-f0-9]{64}$",
+      "interpolationType": "ENV_VAR"
+    },
+    "Approval": {
+      "type": "String",
+      "allowedValues": [
+        "CREATE-ONE-EXPERT-DRAFT"
+      ],
+      "interpolationType": "ENV_VAR"
+    }
+  },
+  "mainSteps": [
+    {
+      "action": "aws:runShellScript",
+      "name": "expertDraftTest",
+      "inputs": {
+        "timeoutSeconds": "180",
+        "runCommand": [
+          "set -eu",
+          "umask 077",
+          "test \"$(id -u)\" = 0",
+          "cd /www/ppb-v2-deploy/wp-test",
+          "test ! -L runner.py",
+          "test \"$(stat -c %u runner.py)\" = 0",
+          "test \"$(stat -c %a runner.py)\" = 600",
+          "printf '%s  runner.py\\n' \"$SSM_RunnerSha256\" | sha256sum -c - >/dev/null",
+          "exec /usr/bin/python3 -I runner.py \"$SSM_Commit\" \"$SSM_RunnerSha256\" \"$SSM_Approval\""
+        ]
+      }
+    }
+  ]
+}
