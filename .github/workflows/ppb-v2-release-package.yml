@@ -150,35 +150,63 @@ jobs:
             --comment "ppb-v2 $PPB_OPERATION git=$GITHUB_SHA run=$GITHUB_RUN_ID" \
             --query Command.CommandId --output text)"
           echo "SSM command: $command_id"
+          # Multi-step SSM documents require --plugin-name to fetch actual output.
+          # Poll the final fixed step, not the document-level (Output=null) response.
           status=Pending
-          for attempt in $(seq 1 195); do
+          for poll in $(seq 1 195); do
             status="$(aws ssm get-command-invocation \
               --region "$AWS_REGION" \
               --command-id "$command_id" \
               --instance-id "$PPB_INSTANCE_ID" \
+              --plugin-name controlledRelease \
               --query Status --output text 2>/dev/null || echo Pending)"
             case "$status" in
-              Success|Failed|Cancelled|TimedOut|Cancelling) break ;;
+              Success|Failed|Cancelled|TimedOut|Cancelling|DeliveryTimedOut|ExecutionTimedOut) break ;;
             esac
             sleep 10
           done
-          aws ssm get-command-invocation \
+          invocation="$(aws ssm get-command-invocation \
             --region "$AWS_REGION" \
             --command-id "$command_id" \
             --instance-id "$PPB_INSTANCE_ID" \
-            --query '{Status:Status,Code:ResponseCode,Output:StandardOutputContent,Error:StandardErrorContent}' \
-            --output json
+            --plugin-name controlledRelease \
+            --output json)"
+          status="$(jq -r .Status <<<"$invocation")"
+          code="$(jq -r .ResponseCode <<<"$invocation")"
+          step_output="$(jq -r '.StandardOutputContent // ""' <<<"$invocation")"
+          step_error="$(jq -r '.StandardErrorContent // ""' <<<"$invocation")"
+          echo "SSM final step: controlledRelease; status=$status; response_code=$code"
+          if [[ -n "$step_output" ]]; then printf '%s\n' "$step_output"; fi
+          if [[ -n "$step_error" ]]; then printf '%s\n' "$step_error" >&2; fi
           {
             echo '## PPB V2 controlled AWS delivery'
             printf -- '- Operation: %s\n' "$PPB_OPERATION"
             printf -- '- Git commit: %s\n' "$GITHUB_SHA"
             printf -- '- Archive SHA256: %s\n' "$RELEASE_SHA256"
             printf -- '- SSM Command ID: %s\n' "$command_id"
-            printf -- '- SSM result: %s\n' "$status"
-            echo '- No database migrations, WP writes, or legacy modifications.'
+            printf -- '- SSM final step: %s (exit %s)\n' "$status" "$code"
+            echo '### Verified execution output'
+            echo '```text'
+            printf '%s\n' "$step_output" | grep -E '^(PHP_LINT_PASSED|COMMIT|RELEASE_FILES|REPLACE_FILES|ADD_FILES|DELETE_FILES|PRESERVED|DATABASE_MIGRATIONS_EXECUTED|LIVE_APPLICATION_DEPLOYED|RESULT)=' || true
+            echo '```'
+            echo '- No database migrations are run by this workflow. Application health requires separate functional validation.'
           } >> "$GITHUB_STEP_SUMMARY"
-          if [[ "$status" != Success ]]; then
-            echo "::error::Controlled SSM $PPB_OPERATION failed: $command_id"
+          if [[ "$status" != Success || "$code" != 0 ]]; then
+            echo "::error::SSM controlledRelease step failed: command=$command_id status=$status code=$code"
+            exit 1
+          fi
+          expected_marker=RESULT=PPB_V2_CONTROLLED_AUDIT_PASS
+          if [[ "$PPB_OPERATION" == deploy ]]; then
+            expected_marker=RESULT=PPB_V2_CONTROLLED_DEPLOY_PASS
+            if ! grep -Fxq "LIVE_APPLICATION_DEPLOYED=YES" <<<"$step_output"; then
+              echo "::error::SSM returned success without live deployment confirmation"
+              exit 1
+            fi
+          fi
+          if ! grep -Fxq "$expected_marker" <<<"$step_output" || \
+             ! grep -Fxq "DATABASE_MIGRATIONS_EXECUTED=NO" <<<"$step_output" || \
+             ! grep -Fxq "COMMIT=$GITHUB_SHA" <<<"$step_output"; then
+            echo "::error::SSM response is missing expected result/commit/no-migration markers"
             exit 1
           fi
           echo "RESULT=PPB_V2_SSM_${PPB_OPERATION^^}_PASS"
