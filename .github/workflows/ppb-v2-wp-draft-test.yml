@@ -1,7 +1,7 @@
 name: PPB V2 Expert draft test (manual approval required)
 on:
   pull_request:
-    paths: ['ops/wp-test/**', '.github/workflows/ppb-v2-wp-draft-test.yml']
+    paths: ['tools/wpn2/**', 'ops/wp-test/**', '.github/workflows/ppb-v2-wp-draft-test.yml']
   workflow_dispatch:
     inputs:
       confirmation:
@@ -18,6 +18,9 @@ jobs:
         with:
           persist-credentials: false
       - run: python3 -m unittest discover -s ops/wp-test/tests -v
+      - run: php tools/wpn2/test.php
+      - run: python3 tools/wpn2/build-package.py --check
+      - run: bash -n ops/wp-test/ppb_wpn2_verified.sh
       - run: python3 -m json.tool ops/wp-test/PPB-V2-WP-Draft-Test.ssm.json >/dev/null
   execute:
     needs: offline

@@ -1,3 +1,22 @@
+## 2026-11-13 WPN2：沿用 WPF6，一個檔案直接執行
+
+本次現場 WPN1 的 #30436 draft 前置條件與預檢不留 journal 已修正。
+新入口為 `ops/wp-test/ppb_wpn2_verified.sh`，由 `tools/wpn2/` 可重建與審查。
+它不依賴本頁下方舊 runner 的 evidence.json／credentials.json／approved.json、SSM 或 IAM。
+只讀解析現場原始 connector 的現有授權與映射，不執行舊控制器或舊 WPF6 更新入口。
+
+把此單一檔案下載並上傳到既有 `/www/wwwroot/ppbaos.com/` 後，唯一命令：
+
+```sh
+bash /www/wwwroot/ppbaos.com/ppb_wpn2_verified.sh
+```
+
+固定 journal 與報告在 `/var/tmp/ppb-codex-issue12-new-expert-v1/`。
+journal 從 PREFLIGHT 就存在；create intent 寫入後絕不再送第二個 create。
+#30436 僅唯讀診斷與可用時前後比對，任何狀態都不構成新稿的 draft 前置條件。
+只有新稿自己必須是 expert／draft、43 欄及六推薦通過獨立 GET，才輸出新 ID 與編輯網址。
+細節、驗證範圍與未實測限制見 `tools/wpn2/README.md`。下方是保留的先前 Python／SSM 方案，不是此次前置條件。
+
 ## 2026-11-13 更新：單次 EC2 終端優先
 
 本次直接沿用既有授權，不以建立 SSM／IAM／新 Runner 為前置。
