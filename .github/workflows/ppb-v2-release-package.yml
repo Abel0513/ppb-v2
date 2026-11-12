@@ -192,7 +192,7 @@ jobs:
             printf -- '- SSM final step: %s (exit %s)\n' "$status" "$code"
             echo '### Verified execution output'
             echo '```text'
-            printf '%s\n' "$step_output" | grep -E '^(PHP_LINT_PASSED|COMMIT|RELEASE_FILES|REPLACE_FILES|ADD_FILES|DELETE_FILES|PRESERVED|DATABASE_MIGRATIONS_EXECUTED|LIVE_APPLICATION_DEPLOYED|RESULT)=' || true
+            printf '%s\n' "$step_output" | grep -E '^(APPROVED_DIFF_FILE|PHP_LINT_PASSED|COMMIT|RELEASE_FILES|REPLACE_FILES|ADD_FILES|DELETE_FILES|PRESERVED|DATABASE_MIGRATIONS_EXECUTED|LIVE_APPLICATION_DEPLOYED|RESULT)=' || true
             echo '```'
             echo '- No database migrations are run by this workflow. Application health requires separate functional validation.'
           } >> "$GITHUB_STEP_SUMMARY"
