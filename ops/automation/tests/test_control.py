@@ -90,8 +90,10 @@ class Documents(unittest.TestCase):
         w=(ROOT.parents[1]/'.github/workflows/ppb-codex-automation.yml').read_text()
         develop=w.split('  develop:')[1].split('  publish:')[0]
         self.assertNotIn('CODEX_GITHUB_TOKEN',develop);self.assertNotIn('id-token: write',develop)
-        self.assertIn('safety-strategy: drop-sudo',develop)
-        self.assertIn('permission-profile:',develop)
+        self.assertIn('ppb-codex-subscription',develop)
+        self.assertIn('forced_login_method=chatgpt',develop)
+        self.assertIn('--sandbox workspace-write',develop)
+        self.assertIn('API_KEY_AUTH_DISALLOWED',develop)
         self.assertNotIn('danger-full-access',w)
         self.assertNotIn('pull_request_target',w)
 class Lifecycle(unittest.TestCase):
