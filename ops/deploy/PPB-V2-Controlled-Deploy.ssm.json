@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.2",
-  "description": "PPB V2 pinned S3 delivery, pre-write live provider-cache compatibility and first-deploy six-file restriction",
+  "description": "PPB V2 S3 delivery; live provider-cache gate; first deploy exactly 3 differences within 6 approved Composer metadata files",
   "parameters": {
     "Commit": {
       "type": "String",
@@ -123,15 +123,17 @@
           "if [ \"$SSM_Operation\" = deploy ] && [ ! -e \"$state\" ]; then",
           "  echo \"FIRST_DEPLOYMENT_STRICT_SCOPE_CHECK=START\"",
           "  printf \"%s\\n\" \"$audit_output\" | grep -Fxq \"COMMIT=$SSM_Commit\" || { echo \"STOP=AUDITED_COMMIT_MISMATCH\"; exit 1; }",
-          "  for required in \"REPLACE_FILES=6\" \"ADD_FILES=0\" \"DELETE_FILES=0\" \"RESULT=PPB_V2_CONTROLLED_AUDIT_PASS\"; do",
+          "  for required in \"REPLACE_FILES=3\" \"ADD_FILES=0\" \"DELETE_FILES=0\" \"RESULT=PPB_V2_CONTROLLED_AUDIT_PASS\"; do",
           "    printf \"%s\\n\" \"$audit_output\" | grep -Fxq \"$required\" || { echo \"STOP=FIRST_DEPLOYMENT_SCOPE_MISMATCH:$required\"; exit 1; }",
           "  done",
+          "  approved_diff_count=0",
           "  for rel in vendor/composer/autoload_classmap.php vendor/composer/autoload_files.php vendor/composer/autoload_psr4.php vendor/composer/autoload_static.php vendor/composer/installed.json vendor/composer/installed.php; do",
           "    test -f \"$candidate/$rel\" && test ! -L \"$candidate/$rel\" || { echo \"STOP=FIRST_DEPLOYMENT_CANDIDATE_MISSING:$rel\"; exit 1; }",
           "    test -f \"$live/$rel\" && test ! -L \"$live/$rel\" || { echo \"STOP=FIRST_DEPLOYMENT_LIVE_FILE_MISSING:$rel\"; exit 1; }",
-          "    if cmp -s \"$candidate/$rel\" \"$live/$rel\"; then echo \"STOP=FIRST_DEPLOYMENT_EXPECTED_DIFF_NOT_PRESENT:$rel\"; exit 1; fi",
+          "    if ! cmp -s \"$candidate/$rel\" \"$live/$rel\"; then approved_diff_count=$((approved_diff_count + 1)); echo \"APPROVED_DIFF_FILE=$rel\"; fi",
           "  done",
-          "  echo \"RESULT=PPB_V2_FIRST_DEPLOYMENT_SIX_FILES_SCOPE_PASS\"",
+          "  test \"$approved_diff_count\" -eq 3 || { echo \"STOP=FIRST_DEPLOYMENT_DIFFERENCES_OUTSIDE_APPROVED_SIX\"; exit 1; }",
+          "  echo \"RESULT=PPB_V2_FIRST_DEPLOYMENT_THREE_OF_SIX_SCOPE_PASS\"",
           "fi",
           "if [ \"$SSM_Operation\" = audit ]; then echo \"RESULT=PPB_V2_SSM_AUDIT_CACHE_COMPAT_PASS\"; exit 0; fi",
           "exec python3 /www/ppb-v2-deploy/scripts/controlled-deploy.py --operation \"$SSM_Operation\" --archive \"$f\" --sha256 \"$SSM_Sha256\" --commit \"$SSM_Commit\" --run-id \"$SSM_RunId\" --run-attempt \"$SSM_RunAttempt\" --confirmation \"$SSM_Approval\""
