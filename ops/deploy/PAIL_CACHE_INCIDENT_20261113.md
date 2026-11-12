@@ -16,7 +16,7 @@
 
 1. 暫時使 GitHub build 和**現有正式站依賴模式一致**：從 `composer install --no-dev` 改為 `composer install`，保留 `--no-scripts --no-plugins` 與 `composer.lock`、PHP 平台需求比對；明確驗證 `class_exists("Laravel\\Pail\\PailServiceProvider")`。**不等於建議未來永久在正式站安裝開發依賴**。
 2. SSM 固定文件 `PPB-V2-Controlled-Deploy` 的 `controlledRelease` 現在先跑完整唯讀 Audit 與 SHA256，再使用**候選版本的 Composer autoload**，檢查現場 `bootstrap/cache/packages.php`、`services.php` 中所有已註冊的 Service Provider 均能成功載入。缺少 Pail 或任何其他 provider、快取缺失／無法讀取時，**在任何 live 寫入前 STOP**；audit 也會失敗，不會假 PASS。
-3. 首次正式部署仍保留第 52 步核准的**六個 Composer 特定檔案白名單**：`REPLACE_FILES=6`、`ADD_FILES=0`、`DELETE_FILES=0`，其他差異不得自動越權部署。如果新建包的差異量或檔名改變，需要取得新的明確核准並同步更新白名單，**不能直接再次按 deploy**。
+3. 首次正式部署維持第 52 步核准的**六個 Composer 特定檔案白名單**。2026-11-13 修復後 Audit 已確認新候選只需 `REPLACE_FILES=3`、`ADD_FILES=0`、`DELETE_FILES=0`，因此首次部署的 SSM guard 必須同時驗證 Audit 數量正好 3、且三個實際不一致檔案全屬原核准的六個路徑（不可要求六個都變更，亦不可接受清單外差異），其他情形寫入前 STOP。若差異數量或範圍改變，需要重新核准，不可盲目重試。
 4. 離線測試在 TempDirectory 模擬兩種狀態：候選缺 Pail 必須拒絕；候選具 Pail 才通過；另測 live provider cache 缺失與 POSIX Shell 語法。
 5. 不修改 EC2 固定 `controlled-deploy.py`、DB、舊系統、Nginx、WordPress、LINE、排程。S3 與 IAM 設定完全沿用。
 
