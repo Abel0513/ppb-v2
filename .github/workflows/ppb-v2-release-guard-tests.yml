@@ -17,6 +17,27 @@ jobs:
       - name: Validate scripts without side effects
         run: |
           set -euo pipefail
-          bash -n ops/deploy/check-live.sh
-          python3 -m py_compile ops/deploy/check-release.py ops/deploy/tests/test_release_guard.py
+          bash -n ops/deploy/check-live.sh ops/deploy/install-fixed-tools.sh
+          python3 -m py_compile ops/deploy/check-release.py ops/deploy/stage-release.py ops/deploy/controlled-deploy.py
+          python3 -m json.tool ops/deploy/PPB-V2-Controlled-Deploy.ssm.json >/dev/null
           python3 -m unittest discover -s ops/deploy/tests -p 'test_*.py' -v
+      - name: Assemble one-time fixed-script bootstrap ZIP (no AWS)
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/ppb-v2-fixed-tools"
+          mkdir -p "$out"
+          cp ops/deploy/{check-release.py,stage-release.py,controlled-deploy.py,install-fixed-tools.sh} "$out/"
+          (cd "$out" && sha256sum check-release.py stage-release.py controlled-deploy.py > SHA256SUMS)
+          bash -n "$out/install-fixed-tools.sh"
+          (cd "$out" && zip -q "$RUNNER_TEMP/ppb-v2-fixed-tools.zip" SHA256SUMS check-release.py stage-release.py controlled-deploy.py install-fixed-tools.sh)
+          echo "## Fixed private deploy tool bootstrap (not executed on EC2)" >> "$GITHUB_STEP_SUMMARY"
+          printf 'ZIP SHA256: `%s`\n' "$(sha256sum "$RUNNER_TEMP/ppb-v2-fixed-tools.zip" | cut -d' ' -f1)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Attach 3-day bootstrap artifact for single EC2 installation
+        uses: actions/upload-artifact@v7
+        with:
+          name: ppb-v2-fixed-tools
+          path: ${{ runner.temp }}/ppb-v2-fixed-tools.zip
+          if-no-files-found: error
+          retention-days: 3

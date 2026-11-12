@@ -1,0 +1,105 @@
+{
+  "schemaVersion": "2.2",
+  "description": "PPB V2 pinned release delivery: exact private S3 path, SHA256 and fixed local deploy script; no arbitrary shell parameters",
+  "parameters": {
+    "Commit": {
+      "type": "String",
+      "interpolationType": "ENV_VAR",
+      "allowedPattern": "^[0-9a-f]{40}$",
+      "description": "Approved Git commit"
+    },
+    "Sha256": {
+      "type": "String",
+      "interpolationType": "ENV_VAR",
+      "allowedPattern": "^[0-9a-f]{64}$",
+      "description": "Pinned release tarball SHA256"
+    },
+    "RunId": {
+      "type": "String",
+      "interpolationType": "ENV_VAR",
+      "allowedPattern": "^[1-9][0-9]{0,19}$",
+      "description": "GitHub Actions run number"
+    },
+    "RunAttempt": {
+      "type": "String",
+      "interpolationType": "ENV_VAR",
+      "allowedPattern": "^[1-9][0-9]{0,19}$",
+      "description": "GitHub Actions attempt"
+    },
+    "Operation": {
+      "type": "String",
+      "interpolationType": "ENV_VAR",
+      "allowedValues": [
+        "audit",
+        "deploy"
+      ],
+      "description": "Audit by default; deploy requires separate approval",
+      "default": "audit"
+    },
+    "Approval": {
+      "type": "String",
+      "interpolationType": "ENV_VAR",
+      "allowedValues": [
+        "NONE",
+        "DEPLOY-PPB-V2"
+      ],
+      "default": "NONE"
+    }
+  },
+  "mainSteps": [
+    {
+      "action": "aws:runShellScript",
+      "name": "prepareIsolatedDownload",
+      "precondition": {
+        "StringEquals": [
+          "platformType",
+          "Linux"
+        ]
+      },
+      "inputs": {
+        "timeoutSeconds": "30",
+        "runCommand": [
+          "set -euo pipefail",
+          "for n in Commit Sha256 RunId RunAttempt Operation Approval; do v=\"SSM_${n}\"; [ \"${!v+x}\" = x ] || { echo \"STOP=UPGRADE_SSM_AGENT_FOR_ENV_VAR\"; exit 1; }; done",
+          "root=/www/ppb-v2-deploy/releases",
+          "test -d \"$root\" && test ! -L \"$root\"",
+          "download=\"$root/ssm-incoming-${SSM_RunId}-${SSM_RunAttempt}\"",
+          "test ! -L \"$download\"",
+          "install -d -m 700 \"$download\"",
+          "test ! -e \"$download/run-${SSM_RunId}-attempt-${SSM_RunAttempt}.tar.gz\"",
+          "echo 'ISOLATED_DOWNLOAD_READY=YES'"
+        ]
+      }
+    },
+    {
+      "action": "aws:downloadContent",
+      "name": "downloadPrivatePinnedArtifact",
+      "inputs": {
+        "sourceType": "S3",
+        "sourceInfo": "{\"path\":\"https://s3.us-east-1.amazonaws.com/ppb-v2-release-artifacts-429724121147-use1/releases/{{Commit}}/run-{{RunId}}-attempt-{{RunAttempt}}.tar.gz\"}",
+        "destinationPath": "/www/ppb-v2-deploy/releases/ssm-incoming-{{RunId}}-{{RunAttempt}}"
+      }
+    },
+    {
+      "action": "aws:runShellScript",
+      "name": "controlledRelease",
+      "precondition": {
+        "StringEquals": [
+          "platformType",
+          "Linux"
+        ]
+      },
+      "inputs": {
+        "timeoutSeconds": "1800",
+        "runCommand": [
+          "set -euo pipefail",
+          "for n in Commit Sha256 RunId RunAttempt Operation Approval; do v=\"SSM_${n}\"; [ \"${!v+x}\" = x ] || { echo \"STOP=UPGRADE_SSM_AGENT_FOR_ENV_VAR\"; exit 1; }; done",
+          "case \"$SSM_Operation:$SSM_Approval\" in audit:NONE|deploy:DEPLOY-PPB-V2) ;; *) echo 'STOP=INVALID_OPERATION_APPROVAL'; exit 1;; esac",
+          "f=\"/www/ppb-v2-deploy/releases/ssm-incoming-${SSM_RunId}-${SSM_RunAttempt}/run-${SSM_RunId}-attempt-${SSM_RunAttempt}.tar.gz\"",
+          "test -f \"$f\" && test ! -L \"$f\"",
+          "exec python3 /www/ppb-v2-deploy/scripts/controlled-deploy.py --operation \"$SSM_Operation\" --archive \"$f\" --sha256 \"$SSM_Sha256\" --commit \"$SSM_Commit\" --run-id \"$SSM_RunId\" --run-attempt \"$SSM_RunAttempt\" --confirmation \"$SSM_Approval\""
+        ]
+      }
+    }
+  ]
+}
