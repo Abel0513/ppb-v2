@@ -34,12 +34,13 @@ jobs:
         with:
           ref: main
           persist-credentials: false
-      - name: Require one-time Secrets before reserving a task
+      - name: Require subscription runner readiness and publisher token
         env:
-          HAS_API_KEY: ${{ secrets.OPENAI_API_KEY != '' }}
+          RUNNER_READY: ${{ vars.PPB_SUBSCRIPTION_RUNNER_READY == 'true' }}
           HAS_PUBLISH_TOKEN: ${{ secrets.CODEX_GITHUB_TOKEN != '' }}
         run: |
-          test "$HAS_API_KEY:$HAS_PUBLISH_TOKEN" = true:true || { echo 'STOP=Configure OPENAI_API_KEY and CODEX_GITHUB_TOKEN in repository Secrets'; exit 1; }
+          set -euo pipefail
+          test "$RUNNER_READY:$HAS_PUBLISH_TOKEN" = true:true || { echo 'STOP=Configure trusted ChatGPT Codex runner and CODEX_GITHUB_TOKEN before reserving a task'; exit 1; }
       - id: plan
         env:
           GH_TOKEN: ${{ github.token }}
@@ -51,8 +52,10 @@ jobs:
           retention-days: 3
   develop:
     needs: prepare
-    if: needs.prepare.outputs.ready == 'true'
-    runs-on: ubuntu-24.04
+    if: needs.prepare.outputs.ready == 'true' && vars.PPB_SUBSCRIPTION_RUNNER_READY == 'true'
+    # Persistent, isolated runner using the operator's ChatGPT-signed-in Codex CLI.
+    # NEVER label a production root runner or expose legacy site/database mounts.
+    runs-on: [self-hosted, linux, x64, ppb-codex-subscription]
     timeout-minutes: 35
     permissions:
       contents: read
@@ -66,28 +69,27 @@ jobs:
         with:
           name: trusted-task
           path: .task
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-          tools: composer:v2
-          coverage: none
+      - name: Verify dedicated subscription runner tools and login
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v codex
+          command -v php
+          command -v composer
+          # No API-based authentication may be injected through runner defaults.
+          test -z "${OPENAI_API_KEY:-}${CODEX_API_KEY:-}" || { echo 'STOP=API_KEY_AUTH_DISALLOWED'; exit 1; }
+          codex -c forced_login_method=chatgpt login status >/dev/null
       - name: Prepare locked dependencies without scripts or plugins
         run: composer install --prefer-dist --no-interaction --no-progress --no-scripts --no-plugins
-      - name: Require configured API key
-        env:
-          HAS_API_KEY: ${{ secrets.OPENAI_API_KEY != '' }}
-        run: test "$HAS_API_KEY" = true || { echo 'STOP=Configure OPENAI_API_KEY in repository Secrets'; exit 1; }
       - name: Save trusted exporter before agent edits
         run: git show origin/main:ops/automation/control.py > "$RUNNER_TEMP/export.py"
-      - uses: openai/codex-action@1d82a3dba7c7988ec71ecae1ed5b8e8db96495c5 # v1
-        with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          permission-profile: ':workspace'
-          safety-strategy: drop-sudo
-          allow-bots: true
-          allow-bot-users: 'chatgpt-codex-connector[bot]'
-          prompt-file: .task/prompt.txt
-          output-file: agent-summary.txt
+      - name: Run Codex with ChatGPT subscription (no API key)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Force ChatGPT auth even if someone previously logged in with an API key.
+          test -z "${OPENAI_API_KEY:-}${CODEX_API_KEY:-}" || { echo 'STOP=API_KEY_AUTH_DISALLOWED'; exit 1; }
+          codex -c forced_login_method=chatgpt exec --sandbox workspace-write --ask-for-approval never "$(cat .task/prompt.txt)" > agent-summary.txt
       - name: Export candidate patch (no GitHub write token)
         env:
           BASE: ${{ needs.prepare.outputs.base }}

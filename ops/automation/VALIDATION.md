@@ -20,3 +20,11 @@
 GitHub 實際 CI（首個提交 bb30d38）：automation-tests 與既有離線 release guard 均 success。
 執行紀錄：https://github.com/Abel0513/ppb-v2/actions/runs/43305971503 、https://github.com/Abel0513/ppb-v2/actions/runs/43305971107 。
 已發出 PR15 @codex review，尚未收到完成結果；不視為 AI review PASS。
+
+## 2026-11-13 ChatGPT 訂閱授權替代方案（待驗收）
+
+- 這是 PR #15 合併後的最小改動，切換 `develop` 工作至受信任、專用 `ppb-codex-subscription` 自架 runner，以 `codex -c forced_login_method=chatgpt exec` 使用 ChatGPT 帳號。
+- 移除 `openai/codex-action` 與 `OPENAI_API_KEY` Secret 需求；`CODEX_GITHUB_TOKEN` 仍是提交 PR 的限定 repo 憑證。
+- 在 `PPB_SUBSCRIPTION_RUNNER_READY` 啟用前，不保留新 Issue 任務；Agent 工作仍不含 GitHub 寫入／AWS 憑證。
+- 新增訂閱模式 workflow 靜態回歸測試；完整 GitHub CI 結果以實際 PR Actions 為準。
+- 尚未進行受限 runner 的安裝、Codex ChatGPT 登入、Issue 實跑或 EC2 真實發布；沒有任何正式資料寫入。

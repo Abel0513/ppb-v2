@@ -1,103 +1,44 @@
-# Issue #14：可重複使用的 V2 自動開發
+# Issue #14：V2 自動開發（ChatGPT Codex 訂閱授權版）
 
-狀態：程式／離線驗證已實作；尚未配置 GitHub Secrets、啟動 AI 或呼叫 EC2。
-基準 main：2b03fcc6351b26513ccf6ead0b9e448c38a692be。
-PR #13 及 WP 43/43 歷史成果不變，不包含／重做 ops/wp-test。
+**本版本不使用 OpenAI Platform API Key 或 `openai/codex-action`。** Codex 執行於使用者以 ChatGPT 登入的固定、受信任 Codex CLI runner；仍受 ChatGPT 方案用量限制（可能耗盡、要求重新登入或補充點數）。不代表免費無上限。此版本尚未實際完成 runner 登入／Issue→PR 端到端驗收。
 
-## 實作流程
+## 保留的既有流程
 
-信任的 write/maintain/admin 使用者給 open Issue `codex-run` 標籤 → main 版 controller
-驗證操作者權限 → 一次性 task reservation → 官方 openai/codex-action（固定 v1 SHA）
-在無 GitHub 寫入／AWS／正式憑證的 hosted runner sandbox 寫碼及測試 → patch artifact →
-全新 publisher job 重新查 main/PR head 是否相同、路徑／mode／大小檢查 → scoped PAT
-推至 `codex/issue-N` 並建立單一 PR → 發出 `@codex review`，每次改碼重新請求 review。
-原生 Automatic review 可另外開啟；本批不自製第二套審查模型。
+可信 GitHub 使用者為 open Issue 加 `codex-run` 標籤 → GitHub hosted `prepare` 驗證身分、GitHub 權限和限次任務 → **獨立自架 runner 的 `codex exec`（ChatGPT 帳號登入）** 修改 V2 source、測試 → 只產生 patch artifact → GitHub hosted `publish` 驗證 patch／SHA／路徑後用限定 repo 的 PAT 建立一個 PR → `@codex review` → 自動分析 CI／P0-P2 審查問題，最多兩次修正 → **人工 merge** → 沿用既有 S3／SSM／EC2 受控部署。
 
-CI 失敗：只接受指定兩個 workflow、同 repository、同 PR 當前 SHA；由 GitHub API
-讀取失敗 job/step 和最多三個 bounded job logs，交由 Codex 重現／修復。
-Review：只接受 `chatgpt-codex-connector[bot]` 當前 SHA 的 P0/P1/P2 問題。
-CI/review **共用最多兩次修復**，由 github-actions[bot] 的 reservation comments 計數，
-同 head 不重試；失敗／無 diff 也消耗一次。跨事件依分支 concurrency 序列化。
-達上限留 STOP comment。所有 event task data 都是非可信輸入，不是額外授權。
+原 `ops/automation/control.py` 的白名單、任務保留紀錄、兩輪修復計數、PR 保護及人工合併條件都保持不變；`PPB_AUTO_DEPLOY` 預設不啟用，沒有真實部署驗收前不能設成 true。
 
-只有人工 merge 且 merger 仍有 write 權限、main head 正確、兩個必要 CI 綠燈、
-`PPB_AUTO_DEPLOY=true`，才進入原發版 workflow；固定 S3 bucket／role／SSM 文件不重建。
-工作流／控制管道變更、DB／Composer 變更、自動範圍外檔案停止自動部署。
-**本整合 PR 自身屬控制管道變更，即使開啟變數也不會自動部署。**
+## 為什麼需要一個常駐的受信任 runner？
 
-Agent 可修改 app/routes/resources/tests/docs/database（migration 只能提交審查）；
-不能改 workflows、ops、AGENTS、憑證、symlink、binary 或 legacy 目錄。
-控制管道功能需求仍由人工授權的 Codex 互動開發，避免 agent 自行擴權。
-沒有自動 Merge API。必須用 branch protection 防止 PAT/使用者誤推 main；prompt 不是權限隔離。
+Codex Cloud 不會自動接受 GitHub 的 `issues.labeled` webhook。GitHub-hosted runner 每次是臨時環境，不能安全地共用 ChatGPT 的持久登入。官方文件支援進階情境下 `codex exec` 重用 CLI 帳號登入，須自行維護受信任執行器與重新登入。這是**無另外 API 計費且保持 GitHub Issue 全自動觸發**所需的一次性基礎。
 
-## 唯一一次啟用清單（管理者在設定頁完成，不在聊天貼憑證）
+**禁止直接在正式 EC2 root 身分啟動 GitHub self-hosted runner。** 如使用既有 EC2，必須用另一個無 sudo 的 Linux 使用者，且以隔離容器或等效作業系統隔離排除舊網站程式／DB／WP 私有憑證；不能把正式 `/www/wwwroot`、`/www/ppb-v2-deploy`、root home、MySQL socket 或 Docker socket 掛進 worker。優先使用獨立、可信任的長開機器／VM 或現有電腦；電腦離線時 Issue 只會排隊。GitHub 官方指出自架 runner 在惡意程式下可能持久遭入侵，因此不可視為與 GitHub hosted runner 等效的沙盒。
 
-本清單是一次性啟用，不是每個 Issue 重建服務。先審核合併此 PR，尚不 dispatch 或 deploy。
+## 一次性啟用（切勿把憑證貼在聊天或 GitHub）
 
-1. Repository Settings → Secrets and variables → Actions → Secrets：
-   - `OPENAI_API_KEY`：OpenAI Platform 專案 API key。僅用官方 action；Platform API **另計用量費用**，不是 ChatGPT OAuth／訂閱 Token。請在 Platform 設 budget／告警。
-   - `CODEX_GITHUB_TOKEN`：限定此 repository 的 fine-grained PAT，Contents read/write、
-     Pull requests read/write、Issues read/write；不給 Workflows、Administration、Merge bypass。
-     使用者須能在此 repo 建立 PR。publisher 獨立 job 才取得它。採 PAT 是因 GITHUB_TOKEN
-     推送/開 PR 不會觸發大多數後續 CI event；若組織限制 PAT，需換既有 GitHub App token
-     （可另行審查），不能悄悄改成 GITHUB_TOKEN 並宣稱鏈路有效。
-2. GitHub 建立 `codex-run` label。建議保護 main：禁止直接 push／force push，禁止 PAT bypass，
-   人工決定 Merge；required checks 為 `Offline release guards (no DB, no AWS)`、`automation-tests`。
-   私有 repo 方案若不支援 protection/review 必須如實記錄限制；不可宣稱已有強制門檻。
-   Codex GitHub integration 開啟 repository Automatic review，或確認 PAT 發出的 `@codex review`
-   可呼叫既有 bot；bot username 必須與 controller 精確一致。
-3. 一次性 EC2 接入：沿用既有管理管道，審核後只安裝本批固定驗收器：
+1. 在獨立、受限的 Linux runner（x64）安裝 PHP 8.4 CLI、Composer v2、Codex CLI 與 GitHub Actions runner。可使用既有 EC2 的**完全隔離**工作環境，但不得由 root 執行 runner。安裝 runner 時依 GitHub Repository → **Settings → Actions → Runners → New self-hosted runner** 顯示的官方命令操作，並增加**唯一標籤** `ppb-codex-subscription`。此標籤只分配給可信任且已隔離的 runner。
+2. 以**實際執行 GitHub runner 的同一個使用者**在該工作環境執行：
+   ```sh
+   codex login --device-auth
+   codex -c forced_login_method=chatgpt login status
+   ```
+   在自己的瀏覽器完成 ChatGPT 登入，不要使用 `--with-api-key`。認證快取是高敏感憑證，需保持該使用者私有、在重開機後可用；不能加入 Git、Actions Secrets、CI artifact 或公開日誌。當 ChatGPT 工作階段失效時，需要重新登入一次。不要在自架 runner 上執行第三方／fork PR 的任意工作流程。
+3. GitHub Repo → **Settings → Secrets and variables → Actions → Repository secrets**，只建立一項：`CODEX_GITHUB_TOKEN`。使用限定 `Abel0513/ppb-v2` 的 fine-grained PAT：Contents／Pull requests／Issues 為 Read and write；不要授予 Administration、Workflows、Actions、Merge bypass、AWS 或舊系統權限。**不需要建立 `OPENAI_API_KEY`。** 此 token 僅在 GitHub-hosted `publish` job 讀取，Codex 開發 job 不接觸。
+4. GitHub Repo → Actions variables 先把 `PPB_SUBSCRIPTION_RUNNER_READY` 留空（或 `false`）。在固定 runner 已 Online、完成 ChatGPT 登入、PHP／Composer／CLI 可用且隔離邊界驗收後，才設成 `true`。新 Issue 若在此前貼 `codex-run`，會在 **reservation 前 STOP**。
+5. 建立 `codex-run` label。建議保護 `main`（限制 push／force push，required checks 為 `Offline release guards (no DB, no AWS)`、`automation-tests`，維持人工 merge）；Codex GitHub Review 保留已有的 `@codex review` 呼叫方式，不必等待網站的自動審查偏好設定錯誤修復。
+6. 實測流程：由 Repo write 使用者建立一個低風險 V2 Issue 並加 `codex-run`，確認 `prepare → develop → publish`、Codex PR、兩種 CI、自動 review；如果失敗，由 Actions/Issue 給出結果，不重設限次計數。**未實跑成功前不可宣稱已完全自動化。**
+7. EC2 發版另外沿用已驗收的固定 S3／SSM 部署管道；新增功能基準驗收器 `ops/automation/accept-v2.py` 仍需人工安裝、升級同一 SSM 文件並設定 `PPB_DEPLOY_DOCUMENT_VERSION`、`PPB_DEPLOY_DOCUMENT_SHA256`。等上述與一次實際 EC2 baseline 都確認後，最後才設 `PPB_AUTO_DEPLOY=true`。**本次切換 Codex 認證不做 EC2 寫入或部署。**
 
-```sh
-# 從已核准 commit 的可信副本執行，先核對 sha256sum 與 PR：
-install -o root -g root -m 600 ops/automation/accept-v2.py /www/ppb-v2-deploy/scripts/accept-v2.py
-```
+## 安全與功能範圍
 
-   原三個固定部署腳本、S3／IAM 不重建。SSM JSON 在 controlledRelease 寫入前驗證
-   驗收器固定 SHA256，缺少或不同就停止，不會先部署才發現缺失。
-   由管理者更新**同一個**文件一次、留下版本：
+- agent 只能匯出 `app/routes/resources/tests/docs/database` 的安全文字程式差異；不能自動修改 workflows、ops、AGENTS、憑證、symlink 或 legacy。
+- V2 程式與**確認屬於 V2 的**資料表在核准的批次內可修改，但 DB/schema 變更須另行審核；不能透過本工作流自動修改 legacy DB 或現有 WP 正式文章。
+- 不建立測試 DB 或持久測試表，不對舊站／LINE／Cron 執行寫入。
+- `codex exec` 使用 `workspace-write` 沙盒，開發階段網路操作與檔案權限仍受 worker 作業系統隔離；不能把 sandbox 當 root 保護。
+- 同一 PR 的 CI＋重要 Codex Review 修復共用最多兩輪。使用者人工 merge 後，原發版 gate 決定能否自動部署；V2／WP／DB／LIFF 業務功能仍需真實驗收。
+- 隨時可以將 `PPB_SUBSCRIPTION_RUNNER_READY=false` 停止新 AI 任務；關閉 `PPB_AUTO_DEPLOY` 停止自動部署；撤銷 PAT 或停用 runner 停止提交。保留已建立的 PR 與交易備份。
+- **替代的零伺服器作法：** 若不想維護 runner，直接透過 Codex Cloud（ChatGPT 登入）輸入 Issue URL，Codex 可開發、測試、PR；但每個 Issue 仍需人工啟動一次，不能假稱 GitHub Label 自動啟動。AI Review、CI 與 Merge 後部署仍沿用相同系統。
 
-```sh
-aws ssm update-document --region us-east-1 --name PPB-V2-Controlled-Deploy --document-version '$LATEST' --document-format JSON --content file://ops/deploy/PPB-V2-Controlled-Deploy.ssm.json
-aws ssm describe-document --region us-east-1 --name PPB-V2-Controlled-Deploy --document-version '$LATEST' --query 'Document.{Version:DocumentVersion,Hash:Hash,HashType:HashType}'
-```
+## 歷史與驗收基準
 
-   不必重建 role；若現有權限有 document version 額外限制，管理者審查差異才改，Codex 不執行 IAM 寫入。
-4. Repository Actions Variables：設定 `PPB_DEPLOY_DOCUMENT_VERSION`、`PPB_DEPLOY_DOCUMENT_SHA256`
-   為步驟 3 查到的數字版號與 Hash（HashType 必須 Sha256）。原手動 audit/deploy 也改用固定版本。
-   先確認這兩項與 EC2 runner 已安裝；**最後才**設 `PPB_AUTO_DEPLOY=true`。
-   此開關是未來人工合併的一次性持續部署授權；不是讓 AI 合併或跳過影響檢查。
-
-下一個任務：owner/write 使用者建立 Issue 並加 codex-run（純 open 未貼標籤不會執行）。
-先用小型 V2 程式變更跑通一次並查 Actions/PR；在真正成功之前不可稱全鏈驗收完成。
-Secrets 未設定會在 reservation 前 STOP，可設定後 rerun。
-若初始開發失敗後需重開任務，由管理者查明原因再刪除該 Issue 的 ppb-task-start reservation
-並重貼標籤；不自動反覆花費 API。不得刪除 PR 的 repair reservations 重置兩輪上限。
-
-## EC2 驗收的實際界線
-
-新增 functionalAcceptance 是**同一 SSM command** 中的固定 plugin；Actions 獨立取得它的輸出，
-要求正確 deployed commit、登入頁真實 HTML（username/password）、三個管理入口 guest 302
-指向登入頁。透過 127.0.0.1 TLS + 正式 SNI 驗證，無 redirect follow、無外部 host，
-無 SQL／Artisan／WP／LINE／Cron。會碰到現場 Laravel GET/session 行為；本批沒有執行。
-這比 `/` HTTP 健康檢查多了路由／頁面驗證，但**不是登入後 CRUD／稿件發布／DB／LIFF 業務測試**。
-後者必須有確認屬 V2 的測資與權限契約，擴充同一受限驗收管道，不能用任意 root shell 代替。
-PR #13 的專用新 WP draft 驗收仍需另行合併與核准，本批不觸發、不重做。
-
-原受控部署的備份、PHP lint、健康檢查失敗自動回復全部保留。
-新增功能驗收失敗會把 Actions/PR 報告標為失敗，**不自動重送 deploy 或盲目 rollback**；
-功能驗收在檔案交易之後，不能把失敗說成已回復。管理者依該 command／commit／transaction
-查核後沿用既有 rollback 指令；檔案回復不等於 DB 回復。DB/schema 變更禁止走自動發版。
-
-## 證據與停止方式
-
-Issue/PR 留 Actions URL、commit、修復輪數與 review request；Actions summary 留 S3 SHA、SSM command、
-部署 marker 及獨立 EC2 baseline。失敗 logs 由 workflow 自動擷取，使用者無需搬運終端日誌。
-關閉 `PPB_AUTO_DEPLOY` 可停自動部署；移除 codex-run／停用 Issue workflow 可停新任務；
-撤銷 PAT/API key 可關閉開發。保留既有部署備份，不清 journal，不更動正式資料。
-
-離線命令：
-```sh
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s ops/automation/tests -v
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s ops/deploy/tests -v
-```
+先前 PR #15 使用 OpenAI Platform API Key 的程式已合併，現在只替換 Codex 執行區段。首次部署 Commit `2b03fcc6351b26513ccf6ead0b9e448c38a692be` 與合併 PR #15 `90d1bf99fe6978dda02662f4749bdc341931dd64` 是歷史證據，不代表本方案的新 runner 已實跑。PR #13 及 WP 43/43 歷史進度不更動。
