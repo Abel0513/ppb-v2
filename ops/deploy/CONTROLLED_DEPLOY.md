@@ -16,6 +16,7 @@
 - `ops/deploy/controlled-deploy.py`：僅能覆寫 Git 管理的 Laravel 程式範圍；驗證完整 SHA256、Git commit、tar 安全、候選逐檔雜湊；先做 PHP syntax check，逐項列出差異，再備份受影響的原檔至私人 transaction journal。HTTPS 透過本機 `127.0.0.1:443` + SNI + 原網域驗證。異常時回復本次更動，且下一次部署遇到未完成 journal 會停止。
 - `ops/deploy/tests/test_controlled_deploy.py`：**TemporaryDirectory** 離線模擬，包含安全維護、失敗時回復、惡意 symlink、私有權限、SHA/commit 錯誤及未核准刪除。
 - `ops/deploy/PPB-V2-Controlled-Deploy.ssm.json`：正式 SSM Command 文件（需要手動在 AWS 建立一次），只有固定 S3 key 組合、固定腳本、不接受任意 shell/URL。
+- `ops/deploy/install-fixed-tools.sh` 與 PR offline workflow 的 `ppb-v2-fixed-tools` Artifact：將三個受版本控制的固定腳本（帶 SHA256SUMS）只安裝到私人部署工作區一次，不碰正式網站。
 - 原 `.github/workflows/ppb-v2-release-package.yml`：同一個工作流程的三種操作，預設 **package_only**；另有 **audit** 或 **deploy**，deploy 必須手動填 `DEPLOY-PPB-V2`；完成編譯、所有離線測試、S3 SHA256 上傳後，才會呼叫 SSM；部署結果寫入 GitHub Job Summary。無任何自動 `push` 部署。
 - 現有 PR 測試 workflow 增加新腳本與 SSM 文件的基本語法檢查。
 
@@ -34,7 +35,7 @@
 ## 啟用（一次性，按順序）
 
 1. PR 的所有離線 CI 通過，使用者核准並合併 **單一**整合 PR。PR 合併不部署。
-2. 將固定可信版本的 `controlled-deploy.py`、既有 `stage-release.py`、`check-release.py` 安裝為 `/www/ppb-v2-deploy/scripts/` 下 root 擁有、不可供 web 使用者修改的檔案（安全通道人工部署**一次**即可）。**不要由正式 S3 程式包自動覆寫固定部署腳本**。
+2. 從 PR #7 已通過的 GitHub Actions `PPB V2 offline release guard tests` 下載 3 天有效的 `ppb-v2-fixed-tools` Artifact，解開外層 ZIP 後取得內層 `ppb-v2-fixed-tools.zip`，上傳到 EC2 的 `/www/ppb-v2-deploy/`。先對照 Actions summary 內的 ZIP SHA256，再在 root 私人暫存目錄解壓，執行 `bash install-fixed-tools.sh`。此工具會驗證 SHA256SUMS，**僅**在 `/www/ppb-v2-deploy/scripts/` 安裝三個固定腳本；如果已存在的腳本不同則拒絕覆寫。**只需做一次**，不得由正式 S3 Laravel 程式包自動覆寫固定部署腳本。
 3. 在 AWS Systems Manager → Documents → Create document → Command，名稱固定 `PPB-V2-Controlled-Deploy`，JSON 貼上同名檔案內容。此文件不接受 shell 命令文字參數；沿用既有 IAM。
 4. 先用寶塔終端機 **唯讀**驗證 EC2 的 SSM Agent 版本、`curl --resolve v2.csdatw.xyz:443:127.0.0.1 https://v2.csdatw.xyz/` 預期回應、private 目錄權限，並確認備份可復原。若健康檢查目前不返回 200/301/302/307/308，不得直接 deploy，應先處理而非放寬預設。
 5. GitHub → Actions → `PPB V2 build, private S3 package and optional controlled delivery` → Run workflow → `operation=audit`：驗證新的固定 S3 下載、候選與 live 差異，不修改 live；審核輸出及異常。
