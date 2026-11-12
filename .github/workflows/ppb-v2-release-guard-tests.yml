@@ -14,6 +14,12 @@ jobs:
     timeout-minutes: 4
     steps:
       - uses: actions/checkout@v5
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, intl, pdo_mysql, xml, zip
+          tools: composer:v2
+          coverage: none
       - name: Validate scripts without side effects
         run: |
           set -euo pipefail
@@ -21,6 +27,18 @@ jobs:
           python3 -m py_compile ops/deploy/check-release.py ops/deploy/stage-release.py ops/deploy/controlled-deploy.py
           python3 -m json.tool ops/deploy/PPB-V2-Controlled-Deploy.ssm.json >/dev/null
           python3 -m unittest discover -s ops/deploy/tests -p 'test_*.py' -v
+      - name: Build and validate live-cache-compatible Composer release offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          composer validate --no-check-publish
+          composer install --prefer-dist --no-interaction --no-progress --no-scripts --no-plugins --optimize-autoloader
+          composer check-platform-reqs
+          php -r 'require "vendor/autoload.php"; if (!class_exists("Laravel\\Pail\\PailServiceProvider")) { fwrite(STDERR, "STOP=PAIL_PROVIDER_NOT_LOADABLE\\n"); exit(1); } echo "PAIL_PROVIDER_LOADABLE=YES\\n";'
+          archive="$RUNNER_TEMP/ppb-v2-pr-compat.tar.gz"
+          python3 ops/deploy/build-release.py --root "$GITHUB_WORKSPACE" --output "$archive"
+          python3 ops/deploy/check-release.py "$archive"
+          echo 'COMPATIBLE_RELEASE_PACKAGING_OFFLINE=PASS' >> "$GITHUB_STEP_SUMMARY"
       - name: Assemble one-time fixed-script bootstrap ZIP (no AWS)
         shell: bash
         run: |

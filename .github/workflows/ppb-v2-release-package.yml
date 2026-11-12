@@ -55,13 +55,18 @@ jobs:
           extensions: mbstring, intl, pdo_mysql, xml, zip
           tools: composer:v2
           coverage: none
-      - name: Install PHP production dependencies without scripts or plugins
+      - name: Install dependencies compatible with existing live Laravel provider cache
         run: |
           set -euo pipefail
+          # Temporary compatibility mode: live V2 has require-dev providers
+          # (laravel/pail) in bootstrap/cache/packages.php and services.php.
+          # Do NOT silently replace its autoloader with a --no-dev one.
+          # A future production-only transition must also transactionally
+          # rebuild/roll back Laravel provider caches under separate approval.
           composer validate --no-check-publish
-          composer install --no-dev --prefer-dist --no-interaction --no-progress --no-scripts --no-plugins --optimize-autoloader
-          composer check-platform-reqs --no-dev
-          php -r 'require "vendor/autoload.php"; echo "AUTOLOAD=PASS\n";'
+          composer install --prefer-dist --no-interaction --no-progress --no-scripts --no-plugins --optimize-autoloader
+          composer check-platform-reqs
+          php -r 'require "vendor/autoload.php"; if (!class_exists("Laravel\\Pail\\PailServiceProvider")) { fwrite(STDERR,"STOP=PAIL_PROVIDER_NOT_LOADABLE\\n"); exit(1); } echo "AUTOLOAD_AND_PAIL=PASS\\n";'
       - name: Run all offline guard tests
         run: |
           set -euo pipefail

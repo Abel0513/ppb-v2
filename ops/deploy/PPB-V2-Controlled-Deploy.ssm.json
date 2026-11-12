@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.2",
-  "description": "PPB V2 pinned S3 delivery; first production deploy STRICT six-composer-files allowlist; no migration",
+  "description": "PPB V2 pinned S3 delivery, pre-write live provider-cache compatibility and first-deploy six-file restriction",
   "parameters": {
     "Commit": {
       "type": "String",
@@ -108,19 +108,24 @@
           "case \"$SSM_Operation:$SSM_Approval\" in audit:NONE|deploy:DEPLOY-PPB-V2) ;; *) echo \"STOP=INVALID_APPROVAL\"; exit 1 ;; esac",
           "f=\"/www/ppb-v2-deploy/releases/ssm-incoming-${SSM_RunId}-${SSM_RunAttempt}/run-${SSM_RunId}-attempt-${SSM_RunAttempt}.tar.gz\"",
           "test -f \"$f\" && test ! -L \"$f\"",
+          "echo \"=== LIVE PROVIDER CACHE COMPATIBILITY CHECK ===\"",
+          "audit_output=\"$(python3 /www/ppb-v2-deploy/scripts/controlled-deploy.py --operation audit --archive \"$f\" --sha256 \"$SSM_Sha256\" --commit \"$SSM_Commit\" --run-id \"$SSM_RunId\" --run-attempt \"$SSM_RunAttempt\" --confirmation NONE)\" || { echo \"STOP=DEPLOYMENT_AUDIT_FAILED\"; exit 1; }",
+          "printf \"%s\\n\" \"$audit_output\"",
+          "printf \"%s\\n\" \"$audit_output\" | grep -Fxq \"RESULT=PPB_V2_CONTROLLED_AUDIT_PASS\" || { echo \"STOP=DEPLOYMENT_AUDIT_MARKER_MISSING\"; exit 1; }",
+          "printf \"%s\\n\" \"$audit_output\" | grep -Fxq \"COMMIT=$SSM_Commit\" || { echo \"STOP=DEPLOYMENT_COMMIT_MISMATCH\"; exit 1; }",
+          "short=\"$(printf \"%s\" \"$SSM_Commit\" | cut -c1-12)\"",
+          "candidate=\"/www/ppb-v2-deploy/releases/candidate-$short\"",
+          "live=/www/wwwroot/ppbaos.com",
+          "test -f \"$candidate/vendor/autoload.php\" && test ! -L \"$candidate/vendor/autoload.php\" || { echo \"STOP=CANDIDATE_AUTOLOAD_MISSING\"; exit 1; }",
+          "php -r '$candidate = $argv[1];\n$live = $argv[2];\n$autoload = $candidate.\"/vendor/autoload.php\";\nif (!is_file($autoload)) { fwrite(STDERR, \"STOP=CANDIDATE_AUTOLOAD_MISSING\\n\"); exit(1); }\nrequire $autoload;\n$count = 0;\nforeach ([\"packages.php\", \"services.php\"] as $name) {\n  $path = $live.\"/bootstrap/cache/\".$name;\n  if (!is_file($path) || is_link($path)) { fwrite(STDERR, \"STOP=LIVE_PROVIDER_CACHE_MISSING_OR_LINK:\".$name.\"\\n\"); exit(1); }\n  $data = require $path;\n  if (!is_array($data)) { fwrite(STDERR, \"STOP=LIVE_PROVIDER_CACHE_NOT_ARRAY:\".$name.\"\\n\"); exit(1); }\n  $providers = [];\n  if ($name === \"packages.php\") {\n    foreach ($data as $package => $config) {\n      if (!is_array($config)) { continue; }\n      foreach ($config[\"providers\"] ?? [] as $provider) { $providers[] = $provider; }\n    }\n  } else {\n    foreach ($data[\"providers\"] ?? [] as $provider) { $providers[] = $provider; }\n  }\n  foreach ($providers as $provider) {\n    if (!is_string($provider) || $provider === \"\") { fwrite(STDERR, \"STOP=INVALID_CACHED_PROVIDER\\n\"); exit(1); }\n    try { $exists = class_exists($provider, true); }\n    catch (Throwable $ex) { $exists = false; }\n    if (!$exists) { fwrite(STDERR, \"STOP=CANDIDATE_MISSING_CACHED_PROVIDER:\".$provider.\"\\n\"); exit(1); }\n    $count++;\n  }\n}\nif ($count === 0) { fwrite(STDERR, \"STOP=NO_CACHED_PROVIDERS_FOUND\\n\"); exit(1); }\necho \"PROVIDER_CLASSES_CHECKED=\".$count.\"\\n\";\necho \"RESULT=PPB_V2_PROVIDER_CACHE_COMPAT_PASS\\n\";' \"$candidate\" \"$live\"",
           "state=/www/ppb-v2-deploy/current-release.json",
           "if [ -L \"$state\" ]; then echo \"STOP=UNSAFE_RELEASE_STATE\"; exit 1; fi",
           "if [ \"$SSM_Operation\" = deploy ] && [ ! -e \"$state\" ]; then",
           "  echo \"FIRST_DEPLOYMENT_STRICT_SCOPE_CHECK=START\"",
-          "  audit_output=\"$(python3 /www/ppb-v2-deploy/scripts/controlled-deploy.py --operation audit --archive \"$f\" --sha256 \"$SSM_Sha256\" --commit \"$SSM_Commit\" --run-id \"$SSM_RunId\" --run-attempt \"$SSM_RunAttempt\" --confirmation NONE)\" || { echo \"STOP=FIRST_DEPLOYMENT_AUDIT_FAILED\"; exit 1; }",
-          "  printf \"%s\\n\" \"$audit_output\"",
           "  printf \"%s\\n\" \"$audit_output\" | grep -Fxq \"COMMIT=$SSM_Commit\" || { echo \"STOP=AUDITED_COMMIT_MISMATCH\"; exit 1; }",
           "  for required in \"REPLACE_FILES=6\" \"ADD_FILES=0\" \"DELETE_FILES=0\" \"RESULT=PPB_V2_CONTROLLED_AUDIT_PASS\"; do",
           "    printf \"%s\\n\" \"$audit_output\" | grep -Fxq \"$required\" || { echo \"STOP=FIRST_DEPLOYMENT_SCOPE_MISMATCH:$required\"; exit 1; }",
           "  done",
-          "  short=\"$(printf \"%s\" \"$SSM_Commit\" | cut -c1-12)\"",
-          "  candidate=\"/www/ppb-v2-deploy/releases/candidate-$short\"",
-          "  live=/www/wwwroot/ppbaos.com",
           "  for rel in vendor/composer/autoload_classmap.php vendor/composer/autoload_files.php vendor/composer/autoload_psr4.php vendor/composer/autoload_static.php vendor/composer/installed.json vendor/composer/installed.php; do",
           "    test -f \"$candidate/$rel\" && test ! -L \"$candidate/$rel\" || { echo \"STOP=FIRST_DEPLOYMENT_CANDIDATE_MISSING:$rel\"; exit 1; }",
           "    test -f \"$live/$rel\" && test ! -L \"$live/$rel\" || { echo \"STOP=FIRST_DEPLOYMENT_LIVE_FILE_MISSING:$rel\"; exit 1; }",
@@ -128,6 +133,7 @@
           "  done",
           "  echo \"RESULT=PPB_V2_FIRST_DEPLOYMENT_SIX_FILES_SCOPE_PASS\"",
           "fi",
+          "if [ \"$SSM_Operation\" = audit ]; then echo \"RESULT=PPB_V2_SSM_AUDIT_CACHE_COMPAT_PASS\"; exit 0; fi",
           "exec python3 /www/ppb-v2-deploy/scripts/controlled-deploy.py --operation \"$SSM_Operation\" --archive \"$f\" --sha256 \"$SSM_Sha256\" --commit \"$SSM_Commit\" --run-id \"$SSM_RunId\" --run-attempt \"$SSM_RunAttempt\" --confirmation \"$SSM_Approval\""
         ]
       }
