@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.2",
-  "description": "PPB V2 pinned release delivery: exact private S3 path, SHA256 and fixed local deploy script; no arbitrary shell parameters",
+  "description": "PPB V2 pinned private S3 delivery, validated SHA256, explicit manual deploy approval; no arbitrary shell input",
   "parameters": {
     "Commit": {
       "type": "String",
@@ -59,15 +59,21 @@
       "inputs": {
         "timeoutSeconds": "30",
         "runCommand": [
-          "set -euo pipefail",
-          "for n in Commit Sha256 RunId RunAttempt Operation Approval; do v=\"SSM_${n}\"; [ \"${!v+x}\" = x ] || { echo \"STOP=UPGRADE_SSM_AGENT_FOR_ENV_VAR\"; exit 1; }; done",
+          "set -eu",
+          ": \"${SSM_Commit:?Commit not available}\"",
+          ": \"${SSM_Sha256:?Sha256 not available}\"",
+          ": \"${SSM_RunId:?RunId not available}\"",
+          ": \"${SSM_RunAttempt:?RunAttempt not available}\"",
+          ": \"${SSM_Operation:?Operation not available}\"",
+          ": \"${SSM_Approval:?Approval not available}\"",
           "root=/www/ppb-v2-deploy/releases",
           "test -d \"$root\" && test ! -L \"$root\"",
+          "case \"$SSM_Operation:$SSM_Approval\" in audit:NONE|deploy:DEPLOY-PPB-V2) ;; *) echo \"STOP=INVALID_APPROVAL\"; exit 1 ;; esac",
           "download=\"$root/ssm-incoming-${SSM_RunId}-${SSM_RunAttempt}\"",
           "test ! -L \"$download\"",
           "install -d -m 700 \"$download\"",
           "test ! -e \"$download/run-${SSM_RunId}-attempt-${SSM_RunAttempt}.tar.gz\"",
-          "echo 'ISOLATED_DOWNLOAD_READY=YES'"
+          "echo \"RESULT=PPB_V2_SSM_PREPARE_PASS\""
         ]
       }
     },
@@ -92,9 +98,14 @@
       "inputs": {
         "timeoutSeconds": "1800",
         "runCommand": [
-          "set -euo pipefail",
-          "for n in Commit Sha256 RunId RunAttempt Operation Approval; do v=\"SSM_${n}\"; [ \"${!v+x}\" = x ] || { echo \"STOP=UPGRADE_SSM_AGENT_FOR_ENV_VAR\"; exit 1; }; done",
-          "case \"$SSM_Operation:$SSM_Approval\" in audit:NONE|deploy:DEPLOY-PPB-V2) ;; *) echo 'STOP=INVALID_OPERATION_APPROVAL'; exit 1;; esac",
+          "set -eu",
+          ": \"${SSM_Commit:?Commit not available}\"",
+          ": \"${SSM_Sha256:?Sha256 not available}\"",
+          ": \"${SSM_RunId:?RunId not available}\"",
+          ": \"${SSM_RunAttempt:?RunAttempt not available}\"",
+          ": \"${SSM_Operation:?Operation not available}\"",
+          ": \"${SSM_Approval:?Approval not available}\"",
+          "case \"$SSM_Operation:$SSM_Approval\" in audit:NONE|deploy:DEPLOY-PPB-V2) ;; *) echo \"STOP=INVALID_APPROVAL\"; exit 1 ;; esac",
           "f=\"/www/ppb-v2-deploy/releases/ssm-incoming-${SSM_RunId}-${SSM_RunAttempt}/run-${SSM_RunId}-attempt-${SSM_RunAttempt}.tar.gz\"",
           "test -f \"$f\" && test ! -L \"$f\"",
           "exec python3 /www/ppb-v2-deploy/scripts/controlled-deploy.py --operation \"$SSM_Operation\" --archive \"$f\" --sha256 \"$SSM_Sha256\" --commit \"$SSM_Commit\" --run-id \"$SSM_RunId\" --run-attempt \"$SSM_RunAttempt\" --confirmation \"$SSM_Approval\""
