@@ -69,6 +69,10 @@ class LiveProviderCacheCompatibility(unittest.TestCase):
         self.assertEqual((self.live / 'bootstrap/cache/services.php').read_bytes(), previous)
 
     def test_missing_live_services_cache_fails_closed(self):
+        # Make Pail loadable so the test reaches the missing-services guard.
+        (self.candidate / 'vendor/autoload.php').write_text(
+            r'<?php namespace Laravel\Pail; class PailServiceProvider {}' + '\n'
+        )
         (self.live / 'bootstrap/cache/services.php').unlink()
         p = self.invoke()
         self.assertNotEqual(p.returncode, 0)
