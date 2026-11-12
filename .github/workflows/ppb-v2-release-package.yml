@@ -1,6 +1,9 @@
 name: PPB V2 build, private S3 package and optional controlled delivery
 
 on:
+  pull_request:
+    types: [closed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       operation:
@@ -26,8 +29,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  merge-gate:
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true && vars.PPB_AUTO_DEPLOY == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    outputs:
+      approved: ${{ steps.gate.outputs.approved }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          persist-credentials: false
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ops/automation/control.py deploy-gate
   package:
-    if: github.ref == 'refs/heads/main' && github.repository == 'Abel0513/ppb-v2' && github.repository_id == '1454285732' && github.repository_owner_id == '55256582'
+    needs: merge-gate
+    if: always() && (github.event_name == 'workflow_dispatch' || needs.merge-gate.outputs.approved == 'true') && github.ref == 'refs/heads/main' && github.repository == 'Abel0513/ppb-v2' && github.repository_id == '1454285732' && github.repository_owner_id == '55256582'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -37,8 +59,8 @@ jobs:
       - name: Verify manual production approval before running any build
         shell: bash
         env:
-          PPB_OPERATION: ${{ inputs.operation }}
-          PPB_CONFIRMATION: ${{ inputs.confirmation }}
+          PPB_OPERATION: ${{ github.event_name == 'pull_request' && 'deploy' || inputs.operation }}
+          PPB_CONFIRMATION: ${{ github.event_name == 'pull_request' && 'DEPLOY-PPB-V2' || inputs.confirmation }}
         run: |
           set -euo pipefail
           case "$PPB_OPERATION:$PPB_CONFIRMATION" in
@@ -126,14 +148,18 @@ jobs:
           echo 'RESULT=PPB_V2_PRIVATE_RELEASE_UPLOAD_PASS'
 
       - name: Audit or deploy pinned version through fixed SSM document
-        if: ${{ inputs.operation == 'audit' || inputs.operation == 'deploy' }}
+        if: ${{ github.event_name == 'pull_request' || inputs.operation == 'audit' || inputs.operation == 'deploy' }}
         shell: bash
         env:
           AWS_REGION: us-east-1
           PPB_INSTANCE_ID: i-0135d6b2fac7a54c2
-          PPB_OPERATION: ${{ inputs.operation }}
+          PPB_DOCUMENT_VERSION: ${{ vars.PPB_DEPLOY_DOCUMENT_VERSION }}
+          PPB_DOCUMENT_SHA256: ${{ vars.PPB_DEPLOY_DOCUMENT_SHA256 }}
+          PPB_OPERATION: ${{ github.event_name == 'pull_request' && 'deploy' || inputs.operation }}
         run: |
           set -euo pipefail
+          [[ "$PPB_DOCUMENT_VERSION" =~ ^[1-9][0-9]*$ ]]
+          [[ "$PPB_DOCUMENT_SHA256" =~ ^[a-f0-9]{64}$ ]]
           approval=NONE
           if [[ "$PPB_OPERATION" == deploy ]]; then approval=DEPLOY-PPB-V2; fi
           parameters="$(jq -nc \
@@ -147,6 +173,8 @@ jobs:
           command_id="$(aws ssm send-command \
             --region "$AWS_REGION" \
             --document-name PPB-V2-Controlled-Deploy \
+            --document-version "$PPB_DOCUMENT_VERSION" \
+            --document-hash "$PPB_DOCUMENT_SHA256" --document-hash-type Sha256 \
             --instance-ids "$PPB_INSTANCE_ID" \
             --parameters "$parameters" \
             --timeout-seconds 1800 \
@@ -155,6 +183,7 @@ jobs:
             --comment "ppb-v2 $PPB_OPERATION git=$GITHUB_SHA run=$GITHUB_RUN_ID" \
             --query Command.CommandId --output text)"
           echo "SSM command: $command_id"
+          echo "PPB_SSM_COMMAND_ID=$command_id" >> "$GITHUB_ENV"
           # Multi-step SSM documents require --plugin-name to fetch actual output.
           # Poll the final fixed step, not the document-level (Output=null) response.
           status=Pending
@@ -215,3 +244,25 @@ jobs:
             exit 1
           fi
           echo "RESULT=PPB_V2_SSM_${PPB_OPERATION^^}_PASS"
+
+      - name: Collect independent EC2 functional acceptance
+        if: ${{ github.event_name == 'pull_request' || inputs.operation == 'deploy' }}
+        env:
+          AWS_REGION: us-east-1
+        run: |
+          set -euo pipefail
+          python3 ops/automation/collect-acceptance.py
+
+  acceptance-report:
+    needs: [merge-gate, package]
+    if: always() && github.event_name == 'pull_request' && needs.merge-gate.outputs.approved == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          RELEASE_RESULT: ${{ needs.package.result }}
+        with:
+          script: |
+            await github.rest.issues.createComment({...context.repo,issue_number:context.payload.pull_request.number,body:`V2 release/acceptance job: ${process.env.RELEASE_RESULT}. Actual SSM IDs, commit, backup/deploy evidence and functional baseline are in ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}. WP/DB/LIFF business acceptance is not implied. Failure requires inspection of the recorded transaction; no automatic retry or DB rollback.`});

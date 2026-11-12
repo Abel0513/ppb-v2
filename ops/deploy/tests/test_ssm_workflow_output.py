@@ -46,7 +46,7 @@ esac
         workflow = WORKFLOW.read_text()
         self.assertIn(ANCHOR, workflow)
         step = workflow.split(ANCHOR, 1)[1].split('        run: |\n', 1)[1]
-        self.script = textwrap.dedent(step)
+        self.script = textwrap.dedent(step.split('      - name:', 1)[0])
         self.assertTrue(self.script.startswith('set -euo pipefail'))
         doc = json.loads(SSM_DOC.read_text())
         self.assertIn('controlledRelease', [step['name'] for step in doc['mainSteps']])
@@ -81,6 +81,9 @@ esac
             'RELEASE_SHA256': SHA,
             'GITHUB_STEP_SUMMARY': str(self.summary),
             'PPB_OPERATION': operation,
+            'PPB_DOCUMENT_VERSION': '2',
+            'PPB_DOCUMENT_SHA256': SHA,
+            'GITHUB_ENV': str(self.temp / 'github-env'),
             'AWS_REGION': 'us-east-1',
             'PPB_INSTANCE_ID': 'i-0135d6b2fac7a54c2',
         })
