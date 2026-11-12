@@ -18,5 +18,6 @@ jobs:
         run: |
           set -euo pipefail
           bash -n ops/deploy/check-live.sh
-          python3 -m py_compile ops/deploy/check-release.py ops/deploy/tests/test_release_guard.py
+          python3 -m py_compile ops/deploy/check-release.py ops/deploy/stage-release.py ops/deploy/controlled-deploy.py
+          python3 -m json.tool ops/deploy/PPB-V2-Controlled-Deploy.ssm.json >/dev/null
           python3 -m unittest discover -s ops/deploy/tests -p 'test_*.py' -v
