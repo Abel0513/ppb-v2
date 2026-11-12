@@ -22,6 +22,7 @@ import sys
 import tarfile
 import tempfile
 import time
+from types import SimpleNamespace
 from datetime import datetime, timezone
 import fcntl
 
@@ -294,13 +295,17 @@ class ControlledDeploy:
 
     def restore(self, txn, journal):
         original = txn / 'original'
-        # Restore original files first, then remove files that were new.
+        # Restore original file modes AND uid/gid recorded before deployment.
+        metadata = journal.get('original_metadata', {})
         for a in journal['actions']:
             rel = a['path']
             dest = checked_path(self.live, rel)
             if a['kind'] in ('replace', 'delete'):
                 backup_file = checked_path(original, rel, allow_missing=False)
-                clone_file_atomic(backup_file, dest, backup_file.stat())
+                m = metadata.get(rel)
+                if not isinstance(m, dict) or set(m) != {'st_mode', 'st_uid', 'st_gid'}:
+                    fail('rollback metadata missing: ' + rel)
+                clone_file_atomic(backup_file, dest, SimpleNamespace(**m))
         for a in reversed(journal['actions']):
             if a['kind'] == 'add':
                 dest = checked_path(self.live, a['path'])
@@ -343,10 +348,15 @@ class ControlledDeploy:
             'had_prior_state': had_prior_state, 'actions': actions,
             'timestamp_utc': now, 'health_before': before,
         }
-        # Back up ALL prior live files before touching any live application file.
+        # Back up ALL prior live files and original ownership before any write.
+        journal['original_metadata'] = {}
         for a in actions:
             if a['kind'] in ('replace', 'delete'):
                 source = checked_path(self.live, a['path'], allow_missing=False)
+                st = source.stat()
+                journal['original_metadata'][a['path']] = {
+                    'st_mode': st.st_mode, 'st_uid': st.st_uid, 'st_gid': st.st_gid,
+                }
                 dest = original / a['path']
                 dest.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 shutil.copy2(source, dest, follow_symlinks=False)
