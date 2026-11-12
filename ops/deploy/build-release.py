@@ -113,7 +113,7 @@ def build(root, output):
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists() or output.is_symlink():
         raise ReleaseError('refusing to overwrite an existing release file')
-    manifest = (json.dumps({'format': 'ppb-v2-release-v1', 'commit': sha, 'builder': 'git-tracked-source-plus-composer-prod-vendor'}, sort_keys=True) + '\n').encode()
+    manifest = (json.dumps({'format': 'ppb-v2-release-v1', 'commit': sha, 'builder': 'git-tracked-source-plus-composer-cache-compatible-vendor'}, sort_keys=True) + '\n').encode()
     try:
         with output.open('xb') as stream:
             with gzip.GzipFile(filename='', fileobj=stream, mode='wb', mtime=commit_timestamp) as compressed:
