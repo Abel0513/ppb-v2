@@ -104,11 +104,11 @@ esac
         commands = '\n'.join(release['inputs']['runCommand'])
         self.assertIn('if [ "$SSM_Operation" = deploy ] && [ ! -e "$state" ]; then', commands)
         self.assertIn('FIRST_DEPLOYMENT_STRICT_SCOPE_CHECK=START', commands)
-        self.assertIn('REPLACE_FILES=6', commands)
+        self.assertIn('REPLACE_FILES=3', commands)
         self.assertIn('ADD_FILES=0', commands)
         self.assertIn('DELETE_FILES=0', commands)
         self.assertIn('RESULT=PPB_V2_CONTROLLED_AUDIT_PASS', commands)
-        self.assertIn('RESULT=PPB_V2_FIRST_DEPLOYMENT_SIX_FILES_SCOPE_PASS', commands)
+        self.assertIn('RESULT=PPB_V2_FIRST_DEPLOYMENT_THREE_OF_SIX_SCOPE_PASS', commands)
         expected = (
             'vendor/composer/autoload_classmap.php',
             'vendor/composer/autoload_files.php',
@@ -121,7 +121,10 @@ esac
             self.assertIn(rel, commands)
         self.assertLess(commands.index('FIRST_DEPLOYMENT_STRICT_SCOPE_CHECK=START'),
                         commands.index('exec python3 /www/ppb-v2-deploy/scripts/controlled-deploy.py'))
-        self.assertIn('if cmp -s "$candidate/$rel" "$live/$rel"', commands)
+        self.assertIn('if ! cmp -s "$candidate/$rel" "$live/$rel"', commands)
+        self.assertIn('approved_diff_count=$((approved_diff_count + 1))', commands)
+        self.assertIn('test "$approved_diff_count" -eq 3', commands)
+        self.assertIn('STOP=FIRST_DEPLOYMENT_DIFFERENCES_OUTSIDE_APPROVED_SIX', commands)
 
     def test_audit_step_output_visible_and_verified(self):
         p = self.run_step()
