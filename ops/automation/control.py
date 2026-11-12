@@ -59,7 +59,7 @@ def allowed(path):
     return (not p.is_absolute() and '..' not in p.parts and
         p.parts[0] in {'app','routes','resources','tests','docs','database'} and
         not any(x.startswith('.') for x in p.parts) and
-        not path.endswith(('.sql','.sqlite','.pem','.key')) and
+        not path.lower().endswith(('.sql','.sqlite','.pem','.key')) and
         not any(x.lower() in {'line.php','db.php','credentials.json'} for x in p.parts))
 
 def changed_paths(base):
@@ -113,8 +113,8 @@ def prepare(event, kind):
             review=event['review']; need(review['user']['login']==REVIEW_BOT, 'UNTRUSTED_REVIEWER')
             pr=api('pulls/'+str(event['pull_request']['number'])); branch=pr['head']['ref']; sha=review['commit_id']
             comments=pages(f"pulls/{pr['number']}/comments")
-            findings=[c['body'] for c in comments if c['user']['login']==REVIEW_BOT and c.get('commit_id')==sha and re.search(r'\[P[012]\]',c['body'])]
-            if re.search(r'\[P[012]\]',review.get('body') or ''): findings.append(review['body'])
+            findings=[c['body'] for c in comments if c['user']['login']==REVIEW_BOT and c.get('commit_id')==sha and re.search(r'\[P[012](?: Badge)?\]',c['body'])]
+            if re.search(r'\[P[012](?: Badge)?\]',review.get('body') or ''): findings.append(review['body'])
             need(bool(findings),'NO_IMPORTANT_FINDINGS'); reason=json.dumps(findings)
         need(BRANCH.fullmatch(branch) is not None,'NOT_MANAGED_BRANCH')
         need(pr['head']['repo']['full_name']==REPO and pr['base']['ref']=='main' and pr['state']=='open', 'UNTRUSTED_PR')

@@ -137,3 +137,10 @@ class Lifecycle(unittest.TestCase):
                 subprocess.run(['git','add','.'],check=True)
                 with self.assertRaisesRegex(RuntimeError,'PROTECTED_PATH'):c.changed_paths(base)
             finally:os.chdir(old)
+    def test_native_codex_badge_enters_repair(self):
+        event={'repository':{'full_name':c.REPO},'action':'submitted','review':{'user':{'login':c.REVIEW_BOT},'commit_id':SHA,'body':'Summary'},'pull_request':{'number':16}}
+        pr={'number':16,'head':{'ref':'codex/issue-15','sha':SHA,'repo':{'full_name':c.REPO}},'base':{'ref':'main'},'state':'open'}
+        finding={'user':{'login':c.REVIEW_BOT},'commit_id':SHA,'body':'**![P1 Badge](https://img.shields.io/badge/P1-orange) Fix this**'}
+        with patch.object(c,'api',return_value=pr),patch.object(c,'pages',side_effect=[[finding],[]]),patch.object(c,'output') as out,patch.object(c.Path,'write_text'):
+            c.prepare(event,'pull_request_review')
+            self.assertEqual(out.call_args[0][0]['mode'],'repair')
