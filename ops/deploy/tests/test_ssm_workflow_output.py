@@ -89,6 +89,40 @@ esac
             env=env, cwd=ROOT, timeout=12
         )
 
+    def test_ssm_document_shell_and_first_deploy_guard(self):
+        """The first live deployment must be limited to the six audited files."""
+        doc = json.loads(SSM_DOC.read_text())
+        for step in doc['mainSteps']:
+            if step['action'] != 'aws:runShellScript':
+                continue
+            script = '\n'.join(step['inputs']['runCommand']) + '\n'
+            parsed = subprocess.run(['sh', '-n'], input=script, text=True,
+                                    capture_output=True, timeout=5)
+            self.assertEqual(parsed.returncode, 0, parsed.stderr)
+        release = next(s for s in doc['mainSteps']
+                       if s['name'] == 'controlledRelease')
+        commands = '\n'.join(release['inputs']['runCommand'])
+        self.assertIn('if [ "$SSM_Operation" = deploy ] && [ ! -e "$state" ]; then', commands)
+        self.assertIn('FIRST_DEPLOYMENT_STRICT_SCOPE_CHECK=START', commands)
+        self.assertIn('REPLACE_FILES=6', commands)
+        self.assertIn('ADD_FILES=0', commands)
+        self.assertIn('DELETE_FILES=0', commands)
+        self.assertIn('RESULT=PPB_V2_CONTROLLED_AUDIT_PASS', commands)
+        self.assertIn('RESULT=PPB_V2_FIRST_DEPLOYMENT_SIX_FILES_SCOPE_PASS', commands)
+        expected = (
+            'vendor/composer/autoload_classmap.php',
+            'vendor/composer/autoload_files.php',
+            'vendor/composer/autoload_psr4.php',
+            'vendor/composer/autoload_static.php',
+            'vendor/composer/installed.json',
+            'vendor/composer/installed.php',
+        )
+        for rel in expected:
+            self.assertIn(rel, commands)
+        self.assertLess(commands.index('FIRST_DEPLOYMENT_STRICT_SCOPE_CHECK=START'),
+                        commands.index('exec python3 /www/ppb-v2-deploy/scripts/controlled-deploy.py'))
+        self.assertIn('if cmp -s "$candidate/$rel" "$live/$rel"', commands)
+
     def test_audit_step_output_visible_and_verified(self):
         p = self.run_step()
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
