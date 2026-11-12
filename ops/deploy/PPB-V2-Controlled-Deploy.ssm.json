@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.2",
-  "description": "PPB V2 pinned private S3 delivery, validated SHA256, explicit manual deploy approval; no arbitrary shell input",
+  "description": "PPB V2 pinned S3 delivery; first production deploy STRICT six-composer-files allowlist; no migration",
   "parameters": {
     "Commit": {
       "type": "String",
@@ -108,6 +108,26 @@
           "case \"$SSM_Operation:$SSM_Approval\" in audit:NONE|deploy:DEPLOY-PPB-V2) ;; *) echo \"STOP=INVALID_APPROVAL\"; exit 1 ;; esac",
           "f=\"/www/ppb-v2-deploy/releases/ssm-incoming-${SSM_RunId}-${SSM_RunAttempt}/run-${SSM_RunId}-attempt-${SSM_RunAttempt}.tar.gz\"",
           "test -f \"$f\" && test ! -L \"$f\"",
+          "state=/www/ppb-v2-deploy/current-release.json",
+          "if [ -L \"$state\" ]; then echo \"STOP=UNSAFE_RELEASE_STATE\"; exit 1; fi",
+          "if [ \"$SSM_Operation\" = deploy ] && [ ! -e \"$state\" ]; then",
+          "  echo \"FIRST_DEPLOYMENT_STRICT_SCOPE_CHECK=START\"",
+          "  audit_output=\"$(python3 /www/ppb-v2-deploy/scripts/controlled-deploy.py --operation audit --archive \"$f\" --sha256 \"$SSM_Sha256\" --commit \"$SSM_Commit\" --run-id \"$SSM_RunId\" --run-attempt \"$SSM_RunAttempt\" --confirmation NONE)\" || { echo \"STOP=FIRST_DEPLOYMENT_AUDIT_FAILED\"; exit 1; }",
+          "  printf \"%s\\n\" \"$audit_output\"",
+          "  printf \"%s\\n\" \"$audit_output\" | grep -Fxq \"COMMIT=$SSM_Commit\" || { echo \"STOP=AUDITED_COMMIT_MISMATCH\"; exit 1; }",
+          "  for required in \"REPLACE_FILES=6\" \"ADD_FILES=0\" \"DELETE_FILES=0\" \"RESULT=PPB_V2_CONTROLLED_AUDIT_PASS\"; do",
+          "    printf \"%s\\n\" \"$audit_output\" | grep -Fxq \"$required\" || { echo \"STOP=FIRST_DEPLOYMENT_SCOPE_MISMATCH:$required\"; exit 1; }",
+          "  done",
+          "  short=\"$(printf \"%s\" \"$SSM_Commit\" | cut -c1-12)\"",
+          "  candidate=\"/www/ppb-v2-deploy/releases/candidate-$short\"",
+          "  live=/www/wwwroot/ppbaos.com",
+          "  for rel in vendor/composer/autoload_classmap.php vendor/composer/autoload_files.php vendor/composer/autoload_psr4.php vendor/composer/autoload_static.php vendor/composer/installed.json vendor/composer/installed.php; do",
+          "    test -f \"$candidate/$rel\" && test ! -L \"$candidate/$rel\" || { echo \"STOP=FIRST_DEPLOYMENT_CANDIDATE_MISSING:$rel\"; exit 1; }",
+          "    test -f \"$live/$rel\" && test ! -L \"$live/$rel\" || { echo \"STOP=FIRST_DEPLOYMENT_LIVE_FILE_MISSING:$rel\"; exit 1; }",
+          "    if cmp -s \"$candidate/$rel\" \"$live/$rel\"; then echo \"STOP=FIRST_DEPLOYMENT_EXPECTED_DIFF_NOT_PRESENT:$rel\"; exit 1; fi",
+          "  done",
+          "  echo \"RESULT=PPB_V2_FIRST_DEPLOYMENT_SIX_FILES_SCOPE_PASS\"",
+          "fi",
           "exec python3 /www/ppb-v2-deploy/scripts/controlled-deploy.py --operation \"$SSM_Operation\" --archive \"$f\" --sha256 \"$SSM_Sha256\" --commit \"$SSM_Commit\" --run-id \"$SSM_RunId\" --run-attempt \"$SSM_RunAttempt\" --confirmation \"$SSM_Approval\""
         ]
       }
