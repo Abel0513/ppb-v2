@@ -174,7 +174,7 @@ esac
 
         # An unapproved path is changed, but the six approved paths only show 2
         # differences. Audit count 3 must NOT authorize such a plan.
-        (candidate / approved[2]).write_bytes(b'same')
+        (candidate / approved[2]).write_bytes(b'old')
         p = call()
         self.assertNotEqual(p.returncode, 0)
         self.assertIn('STOP=FIRST_DEPLOYMENT_DIFFERENCES_OUTSIDE_APPROVED_SIX', p.stdout)
