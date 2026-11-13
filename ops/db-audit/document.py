@@ -11,7 +11,7 @@ def document():
     source=(ROOT/'probe.php').read_text().replace('EXPECTED_PROCEDURE_CRLF_SHA256',hashlib.sha256(body.replace('\n','\r\n').encode()).hexdigest()).replace('EXPECTED_PROCEDURE_SHA256',hashlib.sha256(body.encode()).hexdigest())
     php=base64.b64encode(source.encode().split(b'<?php',1)[1]).decode()
     # Existing reviewed .env parser only; never source or include app PHP.
-    code='''import base64,hashlib,importlib.util,json,os,stat,subprocess
+    code=r'''import base64,hashlib,importlib.util,json,os,stat,subprocess
 from pathlib import Path
 assert os.geteuid()==0
 root=Path('/www/ppb-v2-deploy')
