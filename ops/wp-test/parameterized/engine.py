@@ -10,8 +10,6 @@ import re
 import stat
 import tempfile
 
-TARGET = 30460
-FIELDS = {'Bonus推薦投注'}  # Current grant; new fields/Experts require reviewed policy.
 OPS = {'read', 'update_acf', 'verify'}
 
 def need(ok, code):
@@ -28,10 +26,10 @@ def validate(req):
     need(set(req) == {'operation', 'expert_id', 'request_id', 'fields'}, 'REQUEST_KEYS_INVALID')
     if req['operation'] == 'create': raise RuntimeError('CREATE_REQUIRES_SEPARATE_AUTHORIZATION')
     need(req['operation'] in OPS, 'OPERATION_DENIED')
-    need(type(req['expert_id']) is int and req['expert_id'] == TARGET, 'EXPERT_NOT_AUTHORIZED')
+    need(type(req['expert_id']) is int and 0 < req['expert_id'] < 2147483648 and req['expert_id'] != 30436, 'EXPERT_NOT_AUTHORIZED')
     need(isinstance(req['request_id'], str) and re.fullmatch('[a-zA-Z0-9][a-zA-Z0-9_-]{7,79}', req['request_id']), 'REQUEST_ID_INVALID')
     fields=req['fields']
-    need(isinstance(fields, dict) and not set(fields)-FIELDS, 'FIELD_NOT_AUTHORIZED')
+    need(isinstance(fields, dict) and len(fields)<=43 and all(isinstance(k,str) and 1<=len(k.encode())<=150 and not re.search(r'[\x00-\x1f\x7f]',k) for k in fields), 'FIELD_NOT_AUTHORIZED')
     if req['operation'] != 'read': need(bool(fields), 'EMPTY_FIELDS')
     else: need(not fields, 'READ_FIELDS_FORBIDDEN')
     for value in fields.values():
@@ -89,18 +87,20 @@ def process(req, state_dir, rpc):
 def locked(req, root, rpc):
     operation=req['operation'];fields=req['fields']
     path=root/(req['request_id']+'.json')
-    intent=dict(expert_id=TARGET, request_id=req['request_id'], fields=fields)
+    intent=dict(expert_id=req['expert_id'], request_id=req['request_id'], fields=fields)
     record=load(path) if path.exists() or path.is_symlink() else None
     if record and operation!='read':
         need(record['intent']==intent, 'REQUEST_ID_CONFLICT')
     before=rpc('read', {})
+    need(before.get('expert_id')==req['expert_id'],'RECEIPT_TARGET_MISMATCH')
+    need(not set(fields)-set(before.get('writable_fields',[])),'FIELD_NOT_AUTHORIZED')
     if operation=='read':
-        return dict(result='READ_VERIFIED',expert_id=TARGET,request_id=req['request_id'],
-                    fields=before['fields'],readback_http=before['readback_http'],create_http=before['create_http'],journal_sha256=before['journal_sha256'],fingerprint=before['fingerprint'],wp_write_requests=0)
+        return dict(result='READ_VERIFIED',expert_id=req['expert_id'],request_id=req['request_id'],
+                    fields=before['fields'],writable_fields=before['writable_fields'],readback_http=before['readback_http'],create_http=before['create_http'],journal_sha256=before['journal_sha256'],fingerprint=before['fingerprint'],wp_write_requests=0)
     if operation=='verify':
         need(record is not None, 'UPDATE_RECEIPT_REQUIRED')
         checks=compare(record['before'],before,fields)
-        return dict(result='PASS',expert_id=TARGET,request_id=req['request_id'],fields=fields,checks=checks,wp_write_requests=0)
+        return dict(result='PASS',expert_id=req['expert_id'],request_id=req['request_id'],fields=fields,checks=checks,wp_write_requests=0)
     # One in-flight mutation per Expert across request IDs; an ambiguous operation
     # must be reconciled before another request can change the baseline.
     for other in root.glob('*.json'):
@@ -111,15 +111,18 @@ def locked(req, root, rpc):
         # Intent was durable before POST. Any repeat is GET-only, even after crash.
         checks=compare(record['before'],before,fields)
         record.update(phase='VERIFIED',checks=checks);save(path,record)
-        return dict(result='PASS',expert_id=TARGET,request_id=req['request_id'],fields=fields,checks=checks,wp_write_requests=0,reconciled=True)
+        return dict(result='PASS',expert_id=req['expert_id'],request_id=req['request_id'],fields=fields,checks=checks,wp_write_requests=0,reconciled=True)
     record=dict(intent=intent,phase='INTENT',before=before)
     save(path,record)  # Includes private 43-field baseline; never returned in logs.
     writes=0
     if any(before['fields'].get(k)!=v for k,v in fields.items()):
         writes=1
-        try:rpc('update_acf',fields)
+        try:
+            receipt=rpc('update_acf',fields)
+            record['update_receipt']=receipt
+            save(path,record)
         except Exception:pass  # Ambiguous POST is followed by GET, never resent.
     after=rpc('read',{})
     checks=compare(before,after,fields)
     record.update(phase='VERIFIED',checks=checks);save(path,record)
-    return dict(result='PASS',expert_id=TARGET,request_id=req['request_id'],fields=fields,checks=checks,wp_write_requests=writes,reconciled=False)
+    return dict(result='PASS',expert_id=req['expert_id'],request_id=req['request_id'],fields=fields,checks=checks,wp_write_requests=writes,reconciled=False,update_http=record.get('update_receipt',{}).get('http'))

@@ -36,7 +36,7 @@ def main(bundle):
                         (root/n).write_bytes(z.read(n));(root/n).chmod(0o600)
                 def rpc(op,fields):
                     p=subprocess.run(['/www/server/php/84/bin/php',str(root/'worker.php')],
-                        input=json.dumps(dict(operation=op,fields=fields),ensure_ascii=False),
+                        input=json.dumps(dict(operation=op,expert_id=req['expert_id'],fields=fields),ensure_ascii=False),
                         capture_output=True,text=True,timeout=240)
                     data=json.loads(p.stdout)
                     e.need(p.returncode==0 and data.get('ok') is True,data.get('stop_code','WORKER_FAILED'))
@@ -46,7 +46,7 @@ def main(bundle):
                 if not state.exists():state.mkdir(mode=0o700)
                 value=e.process(req,state,rpc)
                 if 'fields' in value:
-                    value['fields']={k:v for k,v in value['fields'].items() if k in e.FIELDS}
+                    value['fields']={k:v for k,v in value['fields'].items() if k in value.get('writable_fields',req['fields'])}
                 result.update(value)
         finally:os.close(lock)
     except Exception as exc:

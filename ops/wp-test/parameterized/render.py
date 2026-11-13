@@ -23,7 +23,7 @@ def document():
         'Commit':'^[a-f0-9]{40}$','RunId':'^[1-9][0-9]{0,19}$','RunAttempt':'^[1-9][0-9]{0,19}$',
         'RequestId':'^[a-zA-Z0-9][a-zA-Z0-9_-]{7,79}$'}.items()}
     p['Operation']=dict(type='String',interpolationType='ENV_VAR',allowedValues=['read','update_acf','verify'])
-    return dict(schemaVersion='2.2',description='Fixed WP ACF operations; one authorized Expert, one field, separate idempotency ledger; no create',parameters=p,mainSteps=[
+    return dict(schemaVersion='2.2',description='Fixed WP ACF operations; receipt-authorized Expert, source-schema text fields, separate idempotency ledger; no create',parameters=p,mainSteps=[
         dict(action='aws:runShellScript',name='prepareParameterized',inputs=dict(timeoutSeconds='30',runCommand=[
             'set -eu','umask 077','test "$(id -u)" = 0',
             'test -d /www/ppb-v2-deploy && test ! -L /www/ppb-v2-deploy',

@@ -15,7 +15,7 @@ def invoke(req,call=r.aws,pause=time.sleep):
     e.validate(req)
     execution=dict(operation=req['operation'],commit=os.environ['GITHUB_SHA'],run_id=os.environ['GITHUB_RUN_ID'],run_attempt=os.environ['GITHUB_RUN_ATTEMPT'],request_id=req['request_id'])
     r.initial(execution['commit'],execution['run_id'],execution['run_attempt'])
-    result=dict(result='STOP',execution=execution,ssm_command_id=None,expert_id=30460)
+    result=dict(result='STOP',execution=execution,ssm_command_id=None,expert_id=req['expert_id'])
     def save():r.persist(Path('wp-result/parameterized-result.json'),result)
     save()
     try:
@@ -47,21 +47,21 @@ def invoke(req,call=r.aws,pause=time.sleep):
             e.need(len(lines)==1,'PARAM_RESULT_MISSING');data=json.loads(lines[0]);result['remote']=data
             e.need(data.get('execution')==execution,'FOREIGN_RESULT')
             e.need(inv['Status']=='Success' and plugins[0].get('ResponseCode')==0,'REMOTE_STOP')
-            e.need(data.get('expert_id')==30460 and data.get('request_id')==req['request_id'],'TARGET_MISMATCH')
+            e.need(data.get('expert_id')==req['expert_id'] and data.get('request_id')==req['request_id'],'TARGET_MISMATCH')
             if req['operation']!='read':
                 checks=data.get('checks',{})
                 e.need(data.get('result')=='PASS' and data.get('fields')==req['fields'] and checks=={
-                    'readback_http':200,'create_http':201,'acf_matched':43,'untouched_acf_matched':42,'analysts_verified':6,'media_verified':6,
+                    'readback_http':200,'create_http':201,'acf_matched':43,'untouched_acf_matched':43-len(req['fields']),'analysts_verified':6,'media_verified':6,
                     'reference_30436_unchanged':True,'journal_unchanged':True,'fingerprint_unchanged':True},'VERIFICATION_INCOMPLETE')
             else:e.need(data.get('result')=='READ_VERIFIED' and data.get('wp_write_requests')==0 and data.get('readback_http')==200 and data.get('create_http')==201,'READ_NOT_VERIFIED')
-            result.update(result=data['result'],stage='VERIFIED');save();return result
+            result.update(result=data['result'],stage='VERIFIED',wp_edit_url=f"https://csdatw.com/wp-admin/post.php?post={req['expert_id']}&action=edit");save();return result
         raise RuntimeError('OUTCOME_UNKNOWN_DO_NOT_RESEND')
     except (r.Stop,RuntimeError,ValueError,KeyError,OSError) as exc:
         result['stop_code']=str(exc) if isinstance(exc,(r.Stop,RuntimeError)) else 'CLIENT_FAILED';save();return result
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('operation',choices=['read','update_acf','verify']);args=p.parse_args()
-    req=json.loads((ROOT/'bonus-request.json').read_text());req['operation']=args.operation
+    p=argparse.ArgumentParser();p.add_argument('operation',choices=['read','update_acf','verify']);p.add_argument('--request',type=Path,required=True);args=p.parse_args()
+    req=json.loads(args.request.read_text());req['operation']=args.operation
     if args.operation=='read':req['fields']={}
     result=invoke(req)
     print(json.dumps(result,ensure_ascii=False))

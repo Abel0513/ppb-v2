@@ -15,7 +15,7 @@ def req(op='update_acf',rid='bonus30460-request01',value='Codex測試123'):
     return dict(operation=op,expert_id=30460,request_id=rid,fields={} if op=='read' else {'Bonus推薦投注':value})
 
 def snapshot():
-    return dict(readback_http=200,create_http=201,fields={**{f'field{i}':i for i in range(42)},'Bonus推薦投注':'Codex測試'},
+    return dict(expert_id=30460,writable_fields=['Bonus推薦投注','分析師1推薦投注'],readback_http=200,create_http=201,fields={**{f'field{i}':i for i in range(42)},'Bonus推薦投注':'Codex測試'},
                 journal_sha256='a'*64,fingerprint='b'*64,core={'id':30460},reference={'id':30436},
                 identities=list(range(6)),media=list(range(6)))
 
@@ -70,10 +70,22 @@ class Engine(unittest.TestCase):
             # Reset a different isolated ledger after the intentional failure.
             for p in self.root.glob('*.json'):p.unlink()
             self.state=snapshot()
+    def test_receipt_bound_id_and_multiple_source_fields_are_parameters(self):
+        self.state['expert_id']=98765
+        q=dict(req(),expert_id=98765,fields={'Bonus推薦投注':'new bonus','分析師1推薦投注':'new analyst'})
+        self.state['fields'].pop('field0');self.state['fields']['分析師1推薦投注']='old analyst'
+        first=e.process(q,self.root,self.rpc)
+        self.assertEqual(first['expert_id'],98765)
+        self.assertEqual(first['checks']['untouched_acf_matched'],41)
+        self.assertEqual(e.process(q,self.root,self.rpc)['wp_write_requests'],0)
+        self.assertEqual(sum(op=='update_acf' for op,_ in self.calls),1)
+    def test_request_id_does_not_authorize_a_different_expert(self):
+        with self.assertRaisesRegex(RuntimeError,'RECEIPT_TARGET'):e.process(dict(req(),expert_id=98765),self.root,self.rpc)
+        self.assertFalse(any(op=='update_acf' for op,_ in self.calls))
     def test_old_expert_create_extra_fields_and_malicious_requests_denied(self):
         for q in [dict(req(),expert_id=30436),dict(req(),operation='create'),dict(req(),fields={'分析師1':'fake'}),dict(req(),request_id='../escape'),dict(req(),fields={'Bonus推薦投注':'x\n'}),dict(req(),shell='id')]:
             with self.assertRaises(RuntimeError):e.process(q,self.root,self.rpc)
-        self.assertEqual(self.calls,[])
+        self.assertTrue(all(op=='read' for op,_ in self.calls))
     def test_untouched_field_type_changes_are_not_accepted_as_equal(self):
         before=snapshot();after=copy.deepcopy(before)
         after['fields']['field1']=True
@@ -100,20 +112,21 @@ $initial=array_fill_keys($keys,'fixture');
 foreach(array_values($people) as $i=>$p){$name=$i<5?'分析師'.($i+1):'分析師Bonus';$photo=$i<5?$name.'照片':'分析師bonus照片';$initial[$name]=$p['name'];$initial[$photo]=(int)$p['photo'];}
 $initial['Bonus推薦投注']='Codex測試';
 $file=__DIR__.'/server.json';$db=is_file($file)?json_decode(file_get_contents($file),true):['fields'=>$initial,'calls'=>[]];
-$core=['id'=>30460,'type'=>'expert','status'=>'draft','slug'=>SLUG,'title'=>['raw'=>TITLE],'content'=>['raw'=>'<!-- '.MARKER.' -->']];
-$fixture=['definition'=>['all_keys'=>$keys,'url'=>'https://csdatw.com','user'=>'fixture','password'=>'fixture'],'people'=>$people,
-'journal'=>['id'=>30460,'phase'=>'VERIFIED','create_http'=>201,'slug'=>SLUG,'marker'=>MARKER,'fingerprint'=>str_repeat('b',64),'author'=>41]];
-$GLOBALS['transport']=function($ctx,$path,$method,$payload)use(&$db,$core){
+$fixtureId=(int)(getenv('FIXTURE_EXPERT_ID')?:30460);
+$core=['id'=>$fixtureId,'type'=>'expert','status'=>'draft','slug'=>SLUG,'title'=>['raw'=>TITLE],'content'=>['raw'=>'<!-- '.MARKER.' -->']];
+$fixture=['definition'=>['groups'=>$groups,'static'=>array_slice($keys,0,13),'all_keys'=>$keys,'url'=>'https://csdatw.com','user'=>'fixture','password'=>'fixture'],'people'=>$people,
+'journal'=>['id'=>$fixtureId,'phase'=>'VERIFIED','create_http'=>201,'slug'=>SLUG,'marker'=>MARKER,'fingerprint'=>str_repeat('b',64),'author'=>41]];
+$GLOBALS['transport']=function($ctx,$path,$method,$payload)use(&$db,$core,$fixtureId){
 $db['calls'][]=[$path,$method];$body=null;
 if($path==='/wp-json/wp/v2/users/me?context=edit')$body=['id'=>41];
 elseif($path==='/wp-json/wp/v2/types/expert?context=edit')$body=['slug'=>'expert','rest_base'=>'expert','rest_namespace'=>'wp/v2','supports'=>['author'=>false,'editor'=>true]];
 elseif(preg_match('~/users/(\d+)~',$path,$m))$body=['id'=>(int)$m[1]];
 elseif(preg_match('~/media/(\d+)~',$path,$m))$body=['id'=>(int)$m[1],'media_type'=>'image','source_url'=>'https://csdatw.com/wp-content/uploads/'.$m[1].'.jpg'];
 elseif($path===lookupPath())$body=[$core];
-elseif($path==='/wp-json/wp/v2/expert/30460?context=edit')$body=$core;
-elseif($path==='/wp-json/acf/v3/expert/30460'){
+elseif($path==='/wp-json/wp/v2/expert/'.$fixtureId.'?context=edit')$body=$core;
+elseif($path==='/wp-json/acf/v3/expert/'.$fixtureId){
  if($method==='POST'){
-   if(array_keys($payload['fields'])!==['Bonus推薦投注'])throw new RuntimeException('EXTRA_WRITE');
+   if(array_diff(array_keys($payload['fields']),['Bonus推薦投注','分析師1推薦投注']))throw new RuntimeException('EXTRA_WRITE');
    $db['fields']=array_replace($db['fields'],$payload['fields']);
  }
  $body=['acf'=>$db['fields']];
@@ -134,7 +147,7 @@ class RealPHPIntegration(unittest.TestCase):
             for n in ['run.php','legacy.php','parser.php']:shutil.copyfile(ROOT.parent/'interface/runtime'/n,root/n)
             shutil.copyfile(ROOT/'worker.php',root/'worker.php');(root/'bridge.php').write_text(BRIDGE)
             def rpc(op,fields):
-                p=subprocess.run([php,str(root/'bridge.php')],input=json.dumps(dict(operation=op,fields=fields),ensure_ascii=False),capture_output=True,text=True)
+                p=subprocess.run([php,str(root/'bridge.php')],input=json.dumps(dict(operation=op,expert_id=30460,fields=fields),ensure_ascii=False),capture_output=True,text=True)
                 self.assertEqual(p.returncode,0,p.stderr)
                 return json.loads(p.stdout)
             initial=rpc('read',{})
@@ -151,6 +164,31 @@ class RealPHPIntegration(unittest.TestCase):
             writes=[p for p,m in calls if m!='GET']
             self.assertEqual(writes,['/wp-json/acf/v3/expert/30460'])
 
+
+class ParameterizedPHP(unittest.TestCase):
+    def test_source_fields_and_receipt_id_not_compiled_into_worker(self):
+        php=shutil.which('php')
+        if not php:self.skipTest('PHP required in CI')
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);ledger=root/'ledger';ledger.mkdir(mode=0o700)
+            for n in ['run.php','legacy.php','parser.php']:shutil.copyfile(ROOT.parent/'interface/runtime'/n,root/n)
+            shutil.copyfile(ROOT/'worker.php',root/'worker.php');(root/'bridge.php').write_text(BRIDGE)
+            def rpc(op,fields):
+                p=subprocess.run([php,str(root/'bridge.php')],input=json.dumps(dict(operation=op,expert_id=98765,fields=fields),ensure_ascii=False),capture_output=True,text=True,env=dict(os.environ,FIXTURE_EXPERT_ID='98765'))
+                self.assertEqual(p.returncode,0,p.stderr)
+                return json.loads(p.stdout)
+            q=dict(req(),expert_id=98765,fields={'Bonus推薦投注':'parameter bonus','分析師1推薦投注':'parameter analyst'})
+            result=e.process(q,ledger,rpc)
+            self.assertEqual(result['checks']['untouched_acf_matched'],41)
+            self.assertEqual(e.process(q,ledger,rpc)['wp_write_requests'],0)
+            self.assertEqual(e.process(dict(q,operation='verify'),ledger,rpc)['result'],'PASS')
+            with self.assertRaisesRegex(RuntimeError,'FIELD_NOT_AUTHORIZED'):e.process(dict(q,request_id='denied-identity01',fields={'分析師1':'replacement'}),ledger,rpc)
+            calls=json.loads((root/'server.json').read_text())['calls']
+            self.assertEqual([path for path,method in calls if method!='GET'],['/wp-json/acf/v3/expert/98765'])
+        for name in ['engine.py','worker.php','entry.py','client.py']:
+            source=(ROOT/name).read_text()
+            self.assertNotIn('30460',source)
+            self.assertNotIn('Codex測試',source)
 
 class CandidateClient(unittest.TestCase):
     def test_uninstalled_candidate_never_uploads_or_sends_command(self):
@@ -181,3 +219,22 @@ class CandidateClient(unittest.TestCase):
         self.assertNotIn('create',d['parameters']['Operation']['allowedValues'])
         self.assertIn('request.json',d['mainSteps'][1]['inputs']['sourceInfo'])
         self.assertLess(len(json.dumps(d).encode()),64000)
+
+class AuthorityProbe(unittest.TestCase):
+    def test_denied_document_update_probe_does_not_change_code_or_send_commands(self):
+        from unittest.mock import patch
+        s=importlib.util.spec_from_file_location('wp_authority',ROOT/'authority.py');a=importlib.util.module_from_spec(s);s.loader.exec_module(a)
+        calls=[]
+        def call(*args):
+            calls.append(args)
+            if args[:2]==('sts','get-caller-identity'):return {'Account':a.r.ACCOUNT,'Arn':'arn:aws:sts::'+a.r.ACCOUNT+':assumed-role/PPB-V2-GitHub-WP-Draft-Test-Role/GitHubActions'}
+            if args[:2]==('ssm','get-document'):return {'Content':'{"schemaVersion":"2.2"}','DocumentVersion':'2'}
+            if args[:2]==('ssm','update-document'):
+                self.assertEqual(Path(args[-1][7:]).read_text(),'{"schemaVersion":"2.2"}')
+                raise a.r.Stop('AWS_AccessDeniedException')
+            self.fail('Unexpected authority operation')
+        with tempfile.TemporaryDirectory() as tmp,patch.object(a.r,'persist'):
+            result=a.probe(call)
+        self.assertEqual(result['result'],'BLOCKED')
+        self.assertFalse(result['document_changed'])
+        self.assertEqual([x[0:2] for x in calls],[('sts','get-caller-identity'),('ssm','get-document'),('ssm','update-document'),('ssm','get-document')])
