@@ -5,7 +5,7 @@ on:
     paths: ['ops/deploy/isolation/**', 'ops/deploy/PPB-V2-Controlled-Deploy.*.ssm.json', 'ops/deploy/activate-isolation.py', '.github/workflows/ppb-v2-activate-isolation.yml']
   workflow_dispatch:
 permissions: {contents: read}
-concurrency: {group: ppb-v2-private-release, cancel-in-progress: false}
+concurrency: {group: ppb-v2-reviewed-isolation, cancel-in-progress: false}
 jobs:
   activate:
     if: github.repository_id == '1454285732' && github.repository_owner_id == '55256582' && github.ref == 'refs/heads/main'
