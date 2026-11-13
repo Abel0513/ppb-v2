@@ -22,7 +22,11 @@ operation document. A future new-draft grant must specify its own identity,
 marker/receipt and new-create idempotency policy; this change does not authorize
 another draft or pretend to implement unrestricted new-draft creation.
 
-The installed v1 journal/resume document is unchanged. `document.json` here is a
+The installed v1 journal/resume document is unchanged. After a user authorizes
+a data request, a same-branch push marked [wp-update-acf] or [wp-verify-acf]
+invokes that bounded operation; ordinary pushes request read only. This is an
+operation selector, not code approval: every call still requires the installed
+reviewed document to match exactly, then passes only the manifest data. `document.json` here is a
 candidate replacement of the same WP-only SSM document, not a new architecture.
 The client pins the installed version/hash and requires exact candidate content
 before any S3 upload or SendCommand. It never installs anything or uses the V2

@@ -53,7 +53,7 @@ jobs:
         run: python3 ops/wp-test/audit-v2-capabilities.py
       - name: Invoke reviewed installed operation only if document matches
         env:
-          OPERATION: ${{ github.event_name == 'workflow_dispatch' && inputs.operation || 'read' }}
+          OPERATION: ${{ github.event_name == 'workflow_dispatch' && inputs.operation || contains(github.event.head_commit.message, '[wp-update-acf]') && 'update_acf' || contains(github.event.head_commit.message, '[wp-verify-acf]') && 'verify' || 'read' }}
         run: python3 ops/wp-test/parameterized/client.py "$OPERATION"
       - uses: actions/upload-artifact@v4
         if: always()
