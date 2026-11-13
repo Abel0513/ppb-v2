@@ -12,7 +12,7 @@ def collect(command, sha, call, pause):
         if response['Status']!='Success' or response['ResponseCode']!=0:
             raise RuntimeError('STOP=EC2_FUNCTIONAL_ACCEPTANCE_FAILED_REVIEW_BACKUP_BEFORE_MANUAL_ROLLBACK')
         result=json.loads(response['StandardOutputContent'])
-        if result.get('RESULT')!='PPB_V2_FUNCTIONAL_BASELINE_PASS' or result.get('COMMIT')!=sha or result.get('CHECKS')!=4:
+        if result.get('RESULT')!='PPB_V2_FUNCTIONAL_BASELINE_PASS' or result.get('COMMIT')!=sha or type(result.get('CHECKS')) is not int or result.get('CHECKS',0)<4:
             raise RuntimeError('STOP=INVALID_FUNCTIONAL_EVIDENCE')
         return result
     raise RuntimeError('STOP=EC2_ACCEPTANCE_TIMEOUT_NO_AUTOMATIC_REDEPLOY')

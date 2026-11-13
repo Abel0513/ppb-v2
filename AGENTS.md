@@ -9,6 +9,29 @@ Effective: 2026-11-12 (Asia/Taipei). This repository is a **source-code snapshot
 3. The complete ThinkPHP legacy system, WP receiver / plugins, LINE integration, production database and host logs are **not** included here. Report missing evidence explicitly; do not invent legacy behavior.
 4. Do not overwrite prior approved work merely because it lacks an obvious test in this snapshot. Separate confirmed, historically reported, and still-unverified states.
 
+
+## Standing owner authorization — 2026-11-13 (supersedes earlier V2 approval gates)
+
+The owner explicitly authorized autonomous V2 development, CI, PR creation,
+CI-gated merge, deployment, V2-only migrations/data/cleanup, dependencies,
+configuration and V2-specific queues/services/schedules. Do not ask again for
+routine V2 feature/file/row approvals. A user-started Codex Cloud task is the
+primary development entrypoint; do not create another CLI Runner.
+
+This does NOT grant technical AWS/SQL/OS privileges. Verify exact V2 filesystem,
+effective SQL grants and dedicated nonroot service identity before live writes.
+Old ThinkPHP code, legacy DB/schema/data, old WP content, LINE/LIFF/Bot, old Cron,
+Nginx and credentials remain strictly protected. Test Expert 30460 is a separate
+explicit WP grant, never general old-WP authority. No shared high-privilege DB
+account or general EC2 root shell; no test DB or persistent test tables.
+
+Use separate feature PRs based on latest main; keep WP PR 13 separate. Fixed
+privileged control-plane changes require explicit code review/tests and a scoped
+management identity, not automatic application-file auto-merge. Ordinary V2
+features use the reviewed fixed executor and data manifests, not per-release AWS
+IAM/SSM installation. Report genuine missing technical authority without pretending
+that user authorization changed IAM. Never claim unperformed deployment/DB checks.
+
 ## First Codex task: READ-ONLY audit
 
 **Only the first onboarding/audit task is read-only.** Before the user approves a specific implementation batch, inspect and report only: no edits, dependency installation, lockfile generation, commits, pushes, merges, PRs or deployment. Deliver the first audit in the task response, not as a new repository file. **This is NOT a permanent ban on coding or V2 database work.** After the user approves an implementation batch, Codex may independently modify V2 code, run appropriate tests, adjust V2-owned schema/data, and prepare a PR within that approved scope, without asking for permission for every file or row. Production application rollout and destructive or irreversible changes still require a separate acceptance gate.

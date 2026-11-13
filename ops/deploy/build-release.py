@@ -113,7 +113,18 @@ def build(root, output):
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists() or output.is_symlink():
         raise ReleaseError('refusing to overwrite an existing release file')
-    manifest = (json.dumps({'format': 'ppb-v2-release-v1', 'commit': sha, 'builder': 'git-tracked-source-plus-composer-cache-compatible-vendor'}, sort_keys=True) + '\n').encode()
+    plan = {'migrate': False, 'cache': [], 'queue_restart': False}
+    plan_file = root / 'resources/ppb/release.json'
+    if plan_file.exists():
+        if plan_file.is_symlink() or 'resources/ppb/release.json' not in names:
+            raise ReleaseError('release plan must be a tracked regular data file')
+        plan = json.loads(plan_file.read_text())
+        if (not isinstance(plan, dict) or set(plan) != {'migrate','cache','queue_restart'}
+                or type(plan['migrate']) is not bool or type(plan['queue_restart']) is not bool
+                or not isinstance(plan['cache'], list) or not all(isinstance(x,str) for x in plan['cache'])
+                or len(plan['cache']) != len(set(plan['cache'])) or set(plan['cache']) - {'config','routes','views'}):
+            raise ReleaseError('invalid data-only lifecycle plan')
+    manifest = (json.dumps({'format': 'ppb-v2-release-v1', 'commit': sha, 'builder': 'git-tracked-source-plus-composer-cache-compatible-vendor', 'operations': plan}, sort_keys=True) + '\n').encode()
     try:
         with output.open('xb') as stream:
             with gzip.GzipFile(filename='', fileobj=stream, mode='wb', mtime=commit_timestamp) as compressed:
