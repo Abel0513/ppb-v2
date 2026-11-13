@@ -150,7 +150,7 @@ def v2_extension_files():
     if directory.exists():
         st=directory.lstat();need(stat.S_ISDIR(st.st_mode) and st.st_uid==0 and st.st_mode&0o022==0,'V2_EXTENSION_DIRECTORY_NOT_PROTECTED')
     result={}
-    for path in directory.glob('*.conf'):
+    for path in sorted(directory.glob('*.conf')):
         st=path.lstat()
         need(stat.S_ISREG(st.st_mode) and st.st_uid==0 and st.st_mode&0o022==0 and st.st_nlink==1,'V2_EXTENSION_FILE_NOT_ROOT_PROTECTED')
         need(st.st_size<100000 and len(result)<30,'V2_EXTENSION_SIZE_LIMIT')

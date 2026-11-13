@@ -103,7 +103,7 @@
           "test -f /www/ppb-v2-deploy/scripts/isolation/global-metadata.php && test ! -L /www/ppb-v2-deploy/scripts/isolation/global-metadata.php",
           "printf '%s  %s\\n' 50644a282986f9386419221d68c6766af0f88eb9abb6ef5ee9ddd55260cf79a9 /www/ppb-v2-deploy/scripts/isolation/global-metadata.php | sha256sum -c - >/dev/null",
           "test -f /www/ppb-v2-deploy/scripts/isolation/boundary.py && test ! -L /www/ppb-v2-deploy/scripts/isolation/boundary.py",
-          "printf '%s  %s\\n' 2eeedc70f3d6b4ead82d9e91310ec249f322cc3c8330f3f9ad0fe62fd21c7bb4 /www/ppb-v2-deploy/scripts/isolation/boundary.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' ddc4f861f4734afe981e42a38e9b186d321973147e7a499da86cc6e1e41e9bfb /www/ppb-v2-deploy/scripts/isolation/boundary.py | sha256sum -c - >/dev/null",
           "test -f /www/ppb-v2-deploy/scripts/isolation/db-probe.php && test ! -L /www/ppb-v2-deploy/scripts/isolation/db-probe.php",
           "printf '%s  %s\\n' bbb5d30264b2ccf1c5dbe715d0727c14e87d617a97232e0cdccbc2c6955d93c4 /www/ppb-v2-deploy/scripts/isolation/db-probe.php | sha256sum -c - >/dev/null",
           "test -f /www/ppb-v2-deploy/scripts/isolation/lifecycle.py && test ! -L /www/ppb-v2-deploy/scripts/isolation/lifecycle.py",

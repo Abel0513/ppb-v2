@@ -14,7 +14,7 @@
           "test \"$(id -u)\" = 0",
           "test -d /www/ppb-v2-deploy && test ! -L /www/ppb-v2-deploy",
           "test ! -L /www/ppb-v2-deploy/bootstrap",
-          "install -d -m 700 /www/ppb-v2-deploy/bootstrap/766d24a4da2ba4b8819ba236e3a077ff11cdc688595de599ff43ff64ec072012"
+          "install -d -m 700 /www/ppb-v2-deploy/bootstrap/ee923a9dfca601f6a98e0ed44e3731d0b0fc52ed8e7bf3c66bc004f9fa3458fd"
         ]
       }
     },
@@ -23,8 +23,8 @@
       "name": "downloadReviewedTools",
       "inputs": {
         "sourceType": "S3",
-        "sourceInfo": "{\"path\": \"https://s3.us-east-1.amazonaws.com/ppb-v2-release-artifacts-429724121147-use1/releases/bootstrap/766d24a4da2ba4b8819ba236e3a077ff11cdc688595de599ff43ff64ec072012/fixed.tar.gz\"}",
-        "destinationPath": "/www/ppb-v2-deploy/bootstrap/766d24a4da2ba4b8819ba236e3a077ff11cdc688595de599ff43ff64ec072012"
+        "sourceInfo": "{\"path\": \"https://s3.us-east-1.amazonaws.com/ppb-v2-release-artifacts-429724121147-use1/releases/bootstrap/ee923a9dfca601f6a98e0ed44e3731d0b0fc52ed8e7bf3c66bc004f9fa3458fd/fixed.tar.gz\"}",
+        "destinationPath": "/www/ppb-v2-deploy/bootstrap/ee923a9dfca601f6a98e0ed44e3731d0b0fc52ed8e7bf3c66bc004f9fa3458fd"
       }
     },
     {
@@ -43,12 +43,12 @@
           "assert not (root/'pending-deployment.json').exists()",
           "lock=os.open(root/'.deployment.lock',os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)",
           "fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)",
-          "archive=root/'bootstrap/766d24a4da2ba4b8819ba236e3a077ff11cdc688595de599ff43ff64ec072012/fixed.tar.gz'",
+          "archive=root/'bootstrap/ee923a9dfca601f6a98e0ed44e3731d0b0fc52ed8e7bf3c66bc004f9fa3458fd/fixed.tar.gz'",
           "assert archive.is_file() and not archive.is_symlink() and archive.stat().st_size<5000000",
-          "assert hashlib.sha256(archive.read_bytes()).hexdigest()=='766d24a4da2ba4b8819ba236e3a077ff11cdc688595de599ff43ff64ec072012'",
-          "expected={'units/metadata-delegation.sql': '16a0fcd9b64bd666b7e2a3fd87f418b9fdffdb583dc2ab89457aeea10fec7fa9', 'units/ppb-v2-php.service': '120782ffe1180eb22a5f3f433e022a62a02efca8cdc3176481203af1c2cba8a1', 'units/php-fpm.conf': '68e97e3977c7beb695d5b5015be077acb817ab4a75761a6606d3bd47610bf357', 'units/ppb-v2-queue.service': '7f60ef49261af6c0b25aedba8376ffb8e3594dc0e9ec0037782656fe806de929', 'units/ppb-v2-scheduler.service': 'd245d2888d5909a7894e6127ff3f190621f37d048a1ade59ae829de2fa49d986', 'units/ppb-v2-scheduler.timer': 'd5a2941358cdcd4a8d09856f4049b9c01cb3378af1c48d9af06966b593bc23f1', 'scripts/isolation/boundary.py': '2eeedc70f3d6b4ead82d9e91310ec249f322cc3c8330f3f9ad0fe62fd21c7bb4', 'scripts/isolation/nginx_lex.py': '708824475e9abc74d52620f4257695511a3808f6db159cb0a50acfdd13e49e1d', 'scripts/isolation/socket-acl.py': '05ddcba530c08e450bf5e92bed114d9a50da9e50defd4f855feb9febe098b49b', 'scripts/isolation/provision.py': '65b37291bfd355a80ed62faac20b972ead9d5927a6b1d9048a081cb6a79b7465', 'scripts/isolation/global-metadata.php': '50644a282986f9386419221d68c6766af0f88eb9abb6ef5ee9ddd55260cf79a9', 'scripts/isolation/prepare-os.py': 'a87f6a495141b8d6bd8a25ecace4aa6843d2df4790f6e4a4284cbec7da46dd16', 'scripts/isolation/inventory-db.php': '53beecd4a57cd3bbc3248063f74705c05cddfd1229bd9ef350030025542ce2b5', 'scripts/isolation/db-probe.php': 'bbb5d30264b2ccf1c5dbe715d0727c14e87d617a97232e0cdccbc2c6955d93c4', 'scripts/isolation/lifecycle.py': 'b7af2415816ae70791ec927383e96199629dd74ea09cb4fc1ffff0a32ae4fcb6', 'scripts/isolation/release.py': '5f6322b002ae5cc276fc7d1b3d906d4f96836ced9dc2dfb161fee8d4d438bd4b', 'scripts/controlled-deploy.py': 'c502f1bffdf259d7d831ff63f14153ab9eff9566ebf937cc37fa73c486fe1678', 'scripts/stage-release.py': 'bb342948784ff102d54a2dcc5faab2ffde1129c5e99ee6fd490d67aa5ea8d4e7', 'scripts/check-release.py': 'e213e522b49c8fc38401623b3f19da44bdf5799a5424cf36a3f244462732d9ee', 'automation/accept-v2.py': 'da1c2c9e5b9eed7fecfbafb01e18e967f2db3d48cc430d5de9117f2002e2ff5d'}",
+          "assert hashlib.sha256(archive.read_bytes()).hexdigest()=='ee923a9dfca601f6a98e0ed44e3731d0b0fc52ed8e7bf3c66bc004f9fa3458fd'",
+          "expected={'units/metadata-delegation.sql': '16a0fcd9b64bd666b7e2a3fd87f418b9fdffdb583dc2ab89457aeea10fec7fa9', 'units/ppb-v2-php.service': '120782ffe1180eb22a5f3f433e022a62a02efca8cdc3176481203af1c2cba8a1', 'units/php-fpm.conf': '68e97e3977c7beb695d5b5015be077acb817ab4a75761a6606d3bd47610bf357', 'units/ppb-v2-queue.service': '7f60ef49261af6c0b25aedba8376ffb8e3594dc0e9ec0037782656fe806de929', 'units/ppb-v2-scheduler.service': 'd245d2888d5909a7894e6127ff3f190621f37d048a1ade59ae829de2fa49d986', 'units/ppb-v2-scheduler.timer': 'd5a2941358cdcd4a8d09856f4049b9c01cb3378af1c48d9af06966b593bc23f1', 'scripts/isolation/boundary.py': 'ddc4f861f4734afe981e42a38e9b186d321973147e7a499da86cc6e1e41e9bfb', 'scripts/isolation/nginx_lex.py': '708824475e9abc74d52620f4257695511a3808f6db159cb0a50acfdd13e49e1d', 'scripts/isolation/socket-acl.py': '05ddcba530c08e450bf5e92bed114d9a50da9e50defd4f855feb9febe098b49b', 'scripts/isolation/provision.py': '65b37291bfd355a80ed62faac20b972ead9d5927a6b1d9048a081cb6a79b7465', 'scripts/isolation/global-metadata.php': '50644a282986f9386419221d68c6766af0f88eb9abb6ef5ee9ddd55260cf79a9', 'scripts/isolation/prepare-os.py': 'a87f6a495141b8d6bd8a25ecace4aa6843d2df4790f6e4a4284cbec7da46dd16', 'scripts/isolation/inventory-db.php': '53beecd4a57cd3bbc3248063f74705c05cddfd1229bd9ef350030025542ce2b5', 'scripts/isolation/db-probe.php': 'bbb5d30264b2ccf1c5dbe715d0727c14e87d617a97232e0cdccbc2c6955d93c4', 'scripts/isolation/lifecycle.py': 'b7af2415816ae70791ec927383e96199629dd74ea09cb4fc1ffff0a32ae4fcb6', 'scripts/isolation/release.py': '5f6322b002ae5cc276fc7d1b3d906d4f96836ced9dc2dfb161fee8d4d438bd4b', 'scripts/controlled-deploy.py': 'c502f1bffdf259d7d831ff63f14153ab9eff9566ebf937cc37fa73c486fe1678', 'scripts/stage-release.py': 'bb342948784ff102d54a2dcc5faab2ffde1129c5e99ee6fd490d67aa5ea8d4e7', 'scripts/check-release.py': 'e213e522b49c8fc38401623b3f19da44bdf5799a5424cf36a3f244462732d9ee', 'automation/accept-v2.py': 'da1c2c9e5b9eed7fecfbafb01e18e967f2db3d48cc430d5de9117f2002e2ff5d'}",
           "assert (root/'backups').is_dir() and not (root/'backups').is_symlink() and (root/'backups').stat().st_uid==0 and (root/'backups').stat().st_mode&0o077==0",
-          "backup=root/'backups/fixed-tools-766d24a4da2ba4b8819ba236e3a077ff11cdc688595de599ff43ff64ec072012'",
+          "backup=root/'backups/fixed-tools-ee923a9dfca601f6a98e0ed44e3731d0b0fc52ed8e7bf3c66bc004f9fa3458fd'",
           "assert not backup.is_symlink()",
           "backup.mkdir(parents=True,mode=0o700,exist_ok=True)",
           "with tarfile.open(archive,'r:gz') as tf:",
@@ -77,7 +77,7 @@
           "subprocess.run(['python3',str(root/'scripts/isolation/provision.py')],check=True,timeout=360)",
           "print('V2_FIXED_TOOLS_INSTALLED=YES')",
           "print('V2_DB_AND_SERVICE_ISOLATION=NOT_YET_VERIFIED')",
-          "p=subprocess.run(['python3',str(root/'scripts/isolation/lifecycle.py'),'inventory','--commit','0000000000000000000000000000000000000000','--request-id','bootstrap-inventory-766d24a4da2ba4b8'],capture_output=True,text=True,timeout=60)",
+          "p=subprocess.run(['python3',str(root/'scripts/isolation/lifecycle.py'),'inventory','--commit','0000000000000000000000000000000000000000','--request-id','bootstrap-inventory-ee923a9dfca601f6'],capture_output=True,text=True,timeout=60)",
           "# The fixed inventory returns only bounded configuration metadata, never secrets.",
           "try:",
           "    value=json.loads(p.stdout)",
