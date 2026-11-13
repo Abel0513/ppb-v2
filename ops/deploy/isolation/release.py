@@ -85,6 +85,9 @@ def release(args):
             return dict(result='PPB_V2_ISOLATED_RELEASE_PASS',commit=args.commit,isolation=isolation,acceptance=accepted,idempotent=True,program_files_written=0,migrations=False,lifecycle=[])
         if plan['migrate']:backup(env,args.commit)
         obj.apply(candidate,names,actions,args.sha256,args.commit)
+        permissions=module('fixed_permissions',HERE/'provision.py')
+        import pwd
+        permissions.normalize_code(permissions.code_snapshot(),pwd.getpwnam('ppb-v2').pw_gid)
         results=[l.run('verify_feature',args.commit,'release-'+args.commit+'-runtime')] 
         if plan['migrate']:results.append(l.run('migrate',args.commit,'release-'+args.commit+'-migrate'))
         for target in plan['cache']:results.append(l.run('cache_'+target,args.commit,'release-'+args.commit+'-cache-'+target))

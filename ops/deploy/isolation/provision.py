@@ -61,6 +61,29 @@ def runtime_permissions(path,uid,gid,mode,root=LIVE):
         os.fchown(fd,uid,gid);os.fchmod(fd,mode)
     finally:os.close(fd)
 
+def code_snapshot(root=LIVE):
+    result={}
+    for name in ['app','bootstrap','config','routes','resources','vendor','public','artisan']:
+        start=root/name
+        if not start.exists() or start.is_symlink():continue
+        for base,dirs,files in os.walk(start,followlinks=False) if start.is_dir() else []:
+            base=Path(base)
+            dirs[:]=[x for x in dirs if not (base/x).is_symlink() and (base/x).relative_to(root).as_posix() not in {'bootstrap/cache','public/uploads','public/storage'}]
+            for path in [base,*[base/x for x in files]]:
+                if path.is_symlink():continue
+                st=path.lstat();b.need(stat.S_ISDIR(st.st_mode) or (stat.S_ISREG(st.st_mode) and st.st_nlink==1),'CODE_PATH_TYPE_OR_LINK_UNSAFE')
+                b.need(len(result)<40000,'CODE_PERMISSION_SNAPSHOT_LIMIT')
+                result[str(path)]=(st.st_mode,st.st_uid,st.st_gid)
+        if start.is_file():
+            st=start.lstat();b.need(st.st_nlink==1,'CODE_HARDLINK_UNSAFE');result[str(start)]=(st.st_mode,st.st_uid,st.st_gid)
+    return result
+
+def normalize_code(snapshot,gid,root=LIVE,owner=0):
+    for name,(mode,uid,oldgid) in snapshot.items():
+        path=Path(name);public=path.relative_to(root).parts[0]=='public'
+        wanted=(0o755 if public else 0o750) if stat.S_ISDIR(mode) else (0o644 if public else 0o640)
+        runtime_permissions(path,owner,gid,wanted,root=root)
+
 def command(args,code,timeout=60):
     p=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
     if p.returncode:
@@ -112,11 +135,12 @@ def provision():
             b.need(stat.S_ISDIR(st.st_mode) or stat.S_ISREG(st.st_mode),'UNEXPECTED_RUNTIME_FILE_TYPE')
             b.need(not stat.S_ISREG(st.st_mode) or st.st_nlink==1,'RUNTIME_HARDLINK_UNSAFE')
             metadata[str(p)]=(st.st_mode,st.st_uid,st.st_gid)
+    code_metadata=code_snapshot()
     old_hosts={str(p):digest(p) for p in Path('/www/server/panel/vhost/nginx').glob('*.conf') if p.is_file() and not p.is_symlink() and p not in VHOSTS}
     backup=PRIVATE/'backups'/('v2-fpm-cutover-'+str(time.time_ns()));backup.mkdir(mode=0o700)
     for i,(p,(data,mode,uid,gid)) in enumerate(originals.items()):
         target=backup/('original-'+str(i));target.write_bytes(data);target.chmod(0o600)
-    (backup/'manifest.json').write_text(json.dumps({'files':{str(p):{'mode':v[1],'uid':v[2],'gid':v[3]} for p,v in originals.items()},'runtime_metadata':metadata,'other_vhost_sha256':old_hosts}))
+    (backup/'manifest.json').write_text(json.dumps({'files':{str(p):{'mode':v[1],'uid':v[2],'gid':v[3]} for p,v in originals.items()},'runtime_metadata':metadata,'code_metadata':code_metadata,'other_vhost_sha256':old_hosts}))
     cached=LIVE/'bootstrap/cache/config.php';old_cache=cached.read_bytes() if cached.is_file() and not cached.is_symlink() else None
     if old_cache is not None:(backup/'inherited-config.php').write_bytes(old_cache)
     created=[];started=False;vhost_changed=False
@@ -133,6 +157,7 @@ def provision():
         text=re.sub(r'^DB_HOST=.*$','DB_HOST=127.0.0.1',text,flags=re.M)
         env_path.write_text(text);os.chown(env_path,0,account.pw_gid);env_path.chmod(0o640)
         cached.unlink(missing_ok=True)
+        normalize_code(code_metadata,account.pw_gid)
         for name,(mode,uid,gid) in metadata.items():
             p=Path(name)
             if p==cached:continue  # Deliberately backed up and removed above.
@@ -176,7 +201,7 @@ def provision():
         l.POLICY.unlink(missing_ok=True)
         for p,(data,mode,uid,gid) in originals.items():p.write_bytes(data);os.chmod(p,stat.S_IMODE(mode));os.chown(p,uid,gid)
         if old_cache is not None:cached.write_bytes(old_cache)
-        for name,(mode,uid,gid) in metadata.items():
+        for name,(mode,uid,gid) in {**code_metadata,**metadata}.items():
             p=Path(name)
             if p.exists() and not p.is_symlink():runtime_permissions(p,uid,gid,stat.S_IMODE(mode))
         if started:subprocess.run(['systemctl','disable','--now','ppb-v2-php.service'],capture_output=True,timeout=30)

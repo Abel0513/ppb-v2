@@ -276,6 +276,22 @@ class FpmCutover(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'HARDLINK'):self.m.runtime_permissions(root/'storage/old.php',os.getuid(),os.getgid(),0o600,root=root)
             self.assertEqual(target.stat().st_mode&0o777,0o644)
 
+    def test_readonly_code_permissions_exclude_credentials_and_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)/'v2';root.mkdir()
+            for rel in ['app','public','bootstrap/cache','resources/views']:(root/rel).mkdir(parents=True,exist_ok=True)
+            for rel in ['app/New.php','public/index.php','bootstrap/cache/config.php','.env']:(root/rel).write_text('fixture')
+            outside=Path(tmp)/'old.php';outside.write_text('legacy');outside.chmod(0o600)
+            (root/'app/old.php').symlink_to(outside)
+            snapshot=self.m.code_snapshot(root)
+            self.assertNotIn(str(root/'.env'),snapshot)
+            self.assertNotIn(str(root/'bootstrap/cache/config.php'),snapshot)
+            self.assertNotIn(str(root/'app/old.php'),snapshot)
+            self.m.normalize_code(snapshot,os.getgid(),root=root,owner=os.getuid())
+            self.assertEqual((root/'app/New.php').stat().st_mode&0o777,0o640)
+            self.assertEqual((root/'public/index.php').stat().st_mode&0o777,0o644)
+            self.assertEqual(outside.stat().st_mode&0o777,0o600)
+
 class SocketAcl(unittest.TestCase):
     def setUp(self):self.m=load('fixed_socket_acl_test',ROOT/'isolation/socket-acl.py')
     def test_named_nginx_acl_round_trip_without_world_access(self):
