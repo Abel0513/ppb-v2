@@ -179,6 +179,10 @@ if __name__=='__main__':
     except Exception as exc:
         import traceback
         reason=str(exc);result={'result':'STOP','reason':reason if re.fullmatch('[A-Z0-9_]{1,160}',reason) else 'V2_PROVISION_NOT_VERIFIED','database_writes':0,'exception_type':type(exc).__name__,'frames':[{'file':Path(x.filename).name,'line':x.lineno,'function':x.name} for x in traceback.extract_tb(exc.__traceback__)[-7:]]}
+    if result.get('reason') in {'V2_FPM_CONFIG_TEST_FAILED','V2_NGINX_CONFIG_TEST_FAILED'}:
+        diagnostic=PRIVATE/'provision-diagnostics.json'
+        if diagnostic.is_file():
+            value=json.loads(diagnostic.read_text());result['fixed_config_diagnostics']={'stage':value['stage'],'stderr':value.get('stderr','')[-6000:]}
     if result.get('reason')=='V2_FPM_START_FAILED':
         p=subprocess.run(['journalctl','-u','ppb-v2-php.service','-n','25','--no-pager'],capture_output=True,text=True,timeout=15);result['startup_journal']=p.stdout[-6000:]
     print('V2_PROVISION='+json.dumps(result));raise SystemExit(0 if result['result']=='PASS' else 2)
