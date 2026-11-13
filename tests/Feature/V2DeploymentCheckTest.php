@@ -17,8 +17,9 @@ final class V2DeploymentCheckTest extends TestCase
             ->assertHeader('X-PPB-V2-Check', 'PPB_V2_AUTOMATION_PROOF_V1')
             ->assertCookieMissing(config('session.cookie'))
             ->assertSee('PPB_V2_AUTOMATION_PROOF_V1')
-            ->assertSee('name="ppb-acceptance" content="isolated-runtime-verified"', false)
-            ->assertSee('lang="zh-Hant"', false);
+            ->assertSee('name="ppb-acceptance" content="lifecycle-receipt-verified"', false)
+            ->assertSee('lang="zh-Hant"', false)
+            ->assertSee('name="robots" content="noindex, nofollow"', false);
         $this->assertFalse($this->app->resolved('session.store'));
     }
 }
