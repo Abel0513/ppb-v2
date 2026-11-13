@@ -120,7 +120,12 @@ def validate_service(properties):
     need({LEGACY,'/www/ppb-v2-deploy','/www/server/panel'} <= set(properties.get('InaccessiblePaths','').split()),'LEGACY_WEB_PATH_NOT_ISOLATED')
     need(properties.get('PrivateTmp')=='yes' and properties.get('PrivateDevices')=='yes','V2_WEB_NAMESPACE_UNVERIFIED')
     need({'169.254.0.0/16','fd00:ec2::254/128'} <= set(properties.get('IPAddressDeny','').split()),'INSTANCE_METADATA_NOT_BLOCKED')
-    need(properties.get('BindReadOnlyPaths')==LIVE+'/.env','ENV_NOT_READONLY_IN_WEB_SANDBOX')
+    import shlex
+    entries=shlex.split(properties.get('BindReadOnlyPaths',''))
+    parts=entries[0].split(':') if len(entries)==1 else []
+    need(bool(parts) and parts[0]==LIVE+'/.env' and len(parts)<=3
+         and (len(parts)==1 or parts[1]==LIVE+'/.env')
+         and (len(parts)<3 or parts[2] in {'rbind','norbind'}),'ENV_NOT_READONLY_IN_WEB_SANDBOX')
     return True
 
 

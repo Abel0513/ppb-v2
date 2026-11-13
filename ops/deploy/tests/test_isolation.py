@@ -246,6 +246,16 @@ class OsPreparation(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'GROUP_SCOPE'):self.m.prepare()
             call.assert_not_called()
 
+class ReadonlyMountFormat(unittest.TestCase):
+    def service(self):
+        return dict(ActiveState='active',User='ppb-v2',ProtectSystem='strict',NoNewPrivileges='yes',CapabilityBoundingSet='',ReadWritePaths=b.LIVE,InaccessiblePaths=b.LEGACY+' /www/ppb-v2-deploy /www/server/panel',PrivateTmp='yes',PrivateDevices='yes',IPAddressDeny='169.254.0.0/16 fd00:ec2::254/128')
+    def test_systemd_expanded_identity_bind_is_readonly(self):
+        for value in [b.LIVE+'/.env',b.LIVE+'/.env:'+b.LIVE+'/.env:rbind',b.LIVE+'/.env:'+b.LIVE+'/.env:norbind']:
+            self.assertTrue(b.validate_service(dict(self.service(),BindReadOnlyPaths=value)))
+    def test_cross_path_and_additional_binds_are_not_accepted(self):
+        for value in [b.LIVE+'/.env:/etc/passwd:rbind',b.LIVE+'/.env '+b.LEGACY+'/db.php',b.LIVE+'/.env:'+b.LIVE+'/.env:rw']:
+            with self.assertRaisesRegex(RuntimeError,'ENV_NOT_READONLY'):b.validate_service(dict(self.service(),BindReadOnlyPaths=value))
+
 class FpmCutover(unittest.TestCase):
     def setUp(self):self.m=load('fpm_provision_test',ROOT/'isolation/provision.py')
     def test_shared_php_include_replaced_with_only_dedicated_socket(self):
