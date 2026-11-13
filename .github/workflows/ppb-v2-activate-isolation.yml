@@ -1,0 +1,39 @@
+name: V2 reviewed isolation activation
+on:
+  push:
+    branches: [main]
+    paths: ['ops/deploy/isolation/**', 'ops/deploy/PPB-V2-Controlled-Deploy.*.ssm.json', 'ops/deploy/activate-isolation.py', '.github/workflows/ppb-v2-activate-isolation.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency: {group: ppb-v2-private-release, cancel-in-progress: false}
+jobs:
+  activate:
+    if: github.repository_id == '1454285732' && github.repository_owner_id == '55256582' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions: {contents: read, id-token: write}
+    steps:
+      - uses: actions/checkout@v5
+        with: {persist-credentials: false}
+      - run: python3 ops/deploy/isolation/render-document.py --check
+      - run: python3 ops/deploy/isolation/bootstrap-document.py --check
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::429724121147:role/PPB-V2-GitHub-Deploy-Role
+          aws-region: us-east-1
+          allowed-account-ids: '429724121147'
+      - name: Store reviewed tools; no application build or arbitrary artifact execution
+        run: |
+          set -euo pipefail
+          python3 ops/deploy/isolation/build-bootstrap.py "$RUNNER_TEMP/fixed.tar.gz"
+          digest="$(sha256sum "$RUNNER_TEMP/fixed.tar.gz" | awk '{print $1}')"
+          aws s3api put-object --region us-east-1 --bucket ppb-v2-release-artifacts-429724121147-use1 --key "releases/bootstrap/$digest/fixed.tar.gz" --body "$RUNNER_TEMP/fixed.tar.gz" --server-side-encryption AES256 --output json > "$RUNNER_TEMP/bootstrap-upload.json"
+      - name: Attempt only the owner-authorized reviewed installation with existing authority
+        run: python3 ops/deploy/activate-isolation.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v2-activation-${{ github.run_id }}
+          path: |
+            v2-result/activation.json
+          retention-days: 14

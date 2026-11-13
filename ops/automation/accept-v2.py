@@ -16,7 +16,7 @@ class LocalHTTPS(http.client.HTTPSConnection):
         raw=socket.create_connection(('127.0.0.1',443),timeout=15)
         self.sock=ssl.create_default_context().wrap_socket(raw,server_hostname=HOST)
 
-def verify(commit, state, get):
+def verify(commit, state, get, manifest=None):
     if not re.fullmatch('[0-9a-f]{40}',commit) or state.get('commit')!=commit:
         raise ValueError('RELEASE_MISMATCH')
     login_status, login_headers, body=get('/admin/login')
@@ -26,7 +26,22 @@ def verify(commit, state, get):
         code, headers, _=get(path)
         if code!=302 or headers.get('location') not in ('/admin/login','https://'+HOST+'/admin/login'):
             raise ValueError('GUEST_ACCESS_BOUNDARY_FAILED')
-    return {'RESULT':'PPB_V2_FUNCTIONAL_BASELINE_PASS','COMMIT':commit,'CHECKS':4,
+    checks=[]
+    if manifest is None:manifest=[]
+    if not isinstance(manifest,list) or len(manifest)>40:raise ValueError('INVALID_ACCEPTANCE_MANIFEST')
+    for row in manifest:
+        if not isinstance(row,dict) or set(row)-{'path','status','contains','location'}:raise ValueError('INVALID_ACCEPTANCE_CHECK')
+        path=row.get('path')
+        if not isinstance(path,str) or not re.fullmatch(r'/(?:admin|v2|health)(?:/[a-zA-Z0-9_/-]*)?',path) or '..' in path:raise ValueError('UNAUTHORIZED_ACCEPTANCE_PATH')
+        if type(row.get('status')) is not int or row['status'] not in {200,204,302,303,401,403,404}:raise ValueError('INVALID_EXPECTED_STATUS')
+        text=row.get('contains','')
+        if not isinstance(text,str) or len(text.encode())>512:raise ValueError('INVALID_EXPECTED_CONTENT')
+        location=row.get('location')
+        if location is not None and (not isinstance(location,str) or not location.startswith('/admin') or '?' in location or '#' in location):raise ValueError('INVALID_EXPECTED_REDIRECT')
+        code,headers,body=get(path)
+        if code!=row['status'] or text.encode() not in body or (location is not None and headers.get('location')!=location):raise ValueError('FEATURE_ACCEPTANCE_FAILED')
+        checks.append({'path':path,'status':code,'matched':True})
+    return {'RESULT':'PPB_V2_FUNCTIONAL_BASELINE_PASS','COMMIT':commit,'CHECKS':4+len(checks),'MANIFEST_CHECKS':checks,
             'BUSINESS_WP_DB_LIFF_ACCEPTANCE':'NOT_RUN'}
 
 def get(path):

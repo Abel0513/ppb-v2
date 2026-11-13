@@ -1,0 +1,37 @@
+name: V2 actual authority and isolation audit
+on:
+  push:
+    branches: [main]
+    paths: ['ops/deploy/**', '.github/workflows/ppb-v2-authority-audit.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  audit:
+    if: github.repository_id == '1454285732' && github.repository_owner_id == '55256582' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: {contents: read, id-token: write}
+    steps:
+      - uses: actions/checkout@v5
+        with: {persist-credentials: false}
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::429724121147:role/PPB-V2-GitHub-Deploy-Role
+          aws-region: us-east-1
+          allowed-account-ids: '429724121147'
+      - name: Publish reviewed fixed-tool bundle to the existing private releases prefix
+        run: |
+          set -euo pipefail
+          python3 ops/deploy/isolation/build-bootstrap.py "$RUNNER_TEMP/fixed.tar.gz"
+          digest="$(sha256sum "$RUNNER_TEMP/fixed.tar.gz" | awk '{print $1}')"
+          aws s3api put-object --region us-east-1 --bucket ppb-v2-release-artifacts-429724121147-use1 --key "releases/bootstrap/$digest/fixed.tar.gz" --body "$RUNNER_TEMP/fixed.tar.gz" --server-side-encryption AES256 --output json > "$RUNNER_TEMP/bootstrap-upload.json"
+          echo "REVIEWED_BOOTSTRAP_S3_KEY=releases/bootstrap/$digest/fixed.tar.gz"
+      - name: Inspect own V2 authority and invoke only the existing read-only preflight
+        env: {PPB_AUTO_DEPLOY: '${{ vars.PPB_AUTO_DEPLOY }}'}
+        run: python3 ops/deploy/authority-audit.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v2-authority-${{ github.run_id }}
+          path: v2-result/
+          retention-days: 14

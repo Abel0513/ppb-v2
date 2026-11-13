@@ -13,10 +13,10 @@ c=module('control','control.py'); a=module('acceptance','accept-v2.py'); collect
 SHA='a'*40
 class Paths(unittest.TestCase):
     def test_allowed(self):
-        for p in ['app/Models/PpbGame.php','tests/Feature/NewTest.php','database/migrations/change.php','docs/feature.md']:
+        for p in ['app/Models/PpbGame.php','tests/Feature/NewTest.php','database/migrations/change.php','docs/feature.md','composer.json','public/app.css','config/app.php']:
             self.assertTrue(c.allowed(p))
     def test_protected(self):
-        for p in ['.github/workflows/a.yml','AGENTS.md','ops/deploy/a.py','../app/a','/app/a','app/../a','.env','app/.env','app/line.php','app/key.pem','Application/Legacy/a.php','storage/logs/a','composer.json']:
+        for p in ['.github/workflows/a.yml','AGENTS.md','ops/deploy/a.py','../app/a','/app/a','app/../a','.env','app/.env','app/line.php','app/key.pem','Application/Legacy/a.php','storage/logs/a']:
             self.assertFalse(c.allowed(p),p)
     def test_modes(self):
         with patch.object(c.subprocess,'check_output',return_value=b'app/a.php\0'),patch.object(c,'git',return_value=':100644 120000 123 456 M\tapp/a.php'):
@@ -82,7 +82,7 @@ class Acceptance(unittest.TestCase):
 class Documents(unittest.TestCase):
     def test_ssm_hash_and_shell(self):
         import hashlib
-        d=json.loads((ROOT.parents[0]/'deploy/PPB-V2-Controlled-Deploy.ssm.json').read_text())
+        d=json.loads((ROOT.parents[0]/'deploy/PPB-V2-Controlled-Deploy.isolated.ssm.json').read_text())
         text='\n'.join('\n'.join(s['inputs']['runCommand']) for s in d['mainSteps'] if 'runCommand' in s['inputs'])
         self.assertIn(hashlib.sha256((ROOT/'accept-v2.py').read_bytes()).hexdigest(),text)
         self.assertEqual(subprocess.run(['sh','-n'],input=text,text=True).returncode,0)

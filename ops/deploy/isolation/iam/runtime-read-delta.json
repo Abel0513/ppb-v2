@@ -1,0 +1,9 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "InspectAndPinOnlyExistingV2ControlledDocument",
+    "Effect": "Allow",
+    "Action": ["ssm:GetDocument", "ssm:DescribeDocument", "ssm:ListDocumentVersions"],
+    "Resource": "arn:aws:ssm:us-east-1:429724121147:document/PPB-V2-Controlled-Deploy"
+  }]
+}

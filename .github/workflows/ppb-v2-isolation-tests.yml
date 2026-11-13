@@ -1,0 +1,53 @@
+name: V2 isolation and lifecycle tests
+on:
+  pull_request:
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  isolation:
+    name: V2 isolation and lifecycle tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with: {persist-credentials: false}
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, intl, pdo_mysql, xml, zip
+          tools: composer:v2
+          coverage: none
+      - run: python3 -m unittest discover -s ops/deploy/tests -v
+      - run: python3 -m unittest discover -s ops/automation/tests -v
+      - run: php -l ops/deploy/isolation/db-probe.php
+      - run: python3 ops/deploy/isolation/render-document.py --check
+      - run: python3 ops/deploy/isolation/bootstrap-document.py --check
+      - name: Build reviewed bootstrap artifact without installing
+        run: python3 ops/deploy/isolation/build-bootstrap.py "$RUNNER_TEMP/v2-fixed-tools.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-v2-isolated-tools
+          path: ${{ runner.temp }}/v2-fixed-tools.tar.gz
+          retention-days: 14
+      - name: Install locked dependencies without application scripts or plugins
+        run: composer install --prefer-dist --no-interaction --no-progress --no-scripts --no-plugins
+      - name: Laravel routes and feature regressions without a database
+        env:
+          APP_ENV: testing
+          APP_KEY: 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: '1'
+          DB_DATABASE: unavailable
+          DB_USERNAME: no_database_access
+          DB_PASSWORD: no_database_access
+          DB_URL: ''
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: |
+          set -euo pipefail
+          mkdir -p bootstrap/cache storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs
+          php artisan route:list --except-vendor --json | tee "$RUNNER_TEMP/v2-routes.json"
+          # No SQLite/test DB, migrations, seeds or persistent tables.
+          vendor/bin/phpunit --do-not-cache-result
