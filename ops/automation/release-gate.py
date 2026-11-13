@@ -24,6 +24,7 @@ def main():
     inputs=event.get('inputs',{})
     if event.get('action')=='closed':pr=event['pull_request']
     elif inputs.get('source_pr'):
+        c.need(os.environ.get('PPB_AUTO_DEPLOY')!='false','AUTOMATIC_RELEASE_DISABLED')
         c.need(str(inputs['source_pr']).isdigit(),'INVALID_SOURCE_PR')
         pr=c.api('pulls/'+str(int(inputs['source_pr'])))
     else:
@@ -37,7 +38,9 @@ def main():
     files=c.pages('pulls/'+str(pr['number'])+'/files')
     # Privileged control-plane PRs are merged/reviewed separately, never treated
     # as an ordinary application release (including this installation PR).
-    try:a.classify(files)
+    try:
+        scope=a.classify(files)
+        if not scope['application']:raise RuntimeError('NO_APPLICATION_CHANGE')
     except RuntimeError:
         with open(os.environ['GITHUB_OUTPUT'],'a') as out:out.write('approved=false\n')
         return

@@ -13,7 +13,7 @@ CHECKS={'Offline release guards (no DB, no AWS)','automation-tests','V2 isolatio
 REPO='Abel0513/ppb-v2'
 
 def classify(files):
-    names=[x['filename'] for x in files]
+    names=[n for x in files for n in [x['filename'],x.get('previous_filename')] if n]
     c.need(0<len(names)<=200,'EMPTY_OR_EXCESSIVE_DIFF')
     for name in names:
         p=Path(name)
@@ -22,7 +22,7 @@ def classify(files):
         c.need(not any(x.lower() in {'line.php','db.php','credentials.json'} for x in p.parts)
                and not name.lower().endswith(('.sql','.sqlite','.pem','.key')),'CREDENTIAL_OR_LEGACY_FILE')
         c.need(not name.startswith(('public/uploads/','public/storage/','.env')),'RUNTIME_OR_SECRET_FILE')
-    return dict(migrations=any(n.startswith('database/') for n in names),dependencies=any(n in {'composer.json','composer.lock','package.json','package-lock.json'} for n in names))
+    return dict(application=any(n.split('/')[0] in {'app','routes','resources','public','config','database'} or n in {'composer.json','composer.lock','package.json','package-lock.json'} for n in names),migrations=any(n.startswith('database/') for n in names),dependencies=any(n in {'composer.json','composer.lock','package.json','package-lock.json'} for n in names))
 
 def validate_pr(pr,files,checks,main_sha):
     c.need(pr.get('state')=='open' and pr['base']['ref']=='main' and pr['head']['repo']['full_name']==REPO,'PR_SCOPE_MISMATCH')
@@ -47,10 +47,12 @@ def main():
     checks=c.api('commits/'+pr['head']['sha']+'/check-runs?per_page=100')['check_runs']
     main_sha=c.api('git/ref/heads/main')['object']['sha']
     pr['_verified_merge_base']=c.api('compare/'+main_sha+'...'+pr['head']['sha'])['merge_base_commit']['sha']
-    validate_pr(pr,files,checks,main_sha)
+    scope=validate_pr(pr,files,checks,main_sha)
     merged=c.api('pulls/'+str(pr['number'])+'/merge','PUT',{'sha':pr['head']['sha'],'merge_method':'squash'})
     c.need(merged.get('merged') is True,'MERGE_NOT_COMPLETED')
     c.need(c.api('commits/'+merged['sha'])['parents'][0]['sha']==main_sha,'MAIN_MOVED_AT_MERGE_DO_NOT_DEPLOY')
+    if not scope['application']:
+        print(json.dumps(dict(result='MERGED_NO_APP_RELEASE_REQUIRED',pr=pr['number'],commit=merged['sha'])));return
     # GITHUB_TOKEN merge events do not start another workflow. Explicit dispatch
     # is required; receipt fixes the merged SHA and source PR for release gate.
     c.api('actions/workflows/ppb-v2-release-package.yml/dispatches','POST',{

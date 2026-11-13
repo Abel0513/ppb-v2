@@ -128,8 +128,9 @@ def validate_web_config(vhost,php_config):
     need(re.search(r'\broot\s+/www/wwwroot/ppbaos\.com/public\s*;',active),'V2_WEB_ROOT_MISMATCH')
     fastcgi=re.findall(r'\bfastcgi_pass\s+([^;]+);',active)
     need(fastcgi==['unix:/www/wwwroot/ppbaos.com/storage/run/php-fpm.sock'],'V2_STILL_USES_SHARED_PHP_POOL')
-    need(not re.search(r'include\s+[^;]*(?:enable-php|php[0-9_-])',active),'HIDDEN_SHARED_PHP_INCLUDE')
+    includes=re.findall(r'\binclude\s+([^;]+);',active)
+    need(all(x in {'fastcgi_params','/www/server/nginx/conf/fastcgi_params','/etc/nginx/fastcgi_params'} for x in includes),'HIDDEN_SHARED_PHP_INCLUDE')
     active_php='\n'.join(line.split(';',1)[0] for line in php_config.splitlines())
-    need(re.search(r'^\s*clear_env\s*=\s*yes\s*$',active_php,re.M) and not re.search(r'env\s*\[',active_php),'FPM_INHERITED_CREDENTIALS_UNVERIFIED')
+    need(re.search(r'^\s*clear_env\s*=\s*yes\s*$',active_php,re.M) and not re.search(r'env\s*\[|^\s*include\s*=',active_php,re.M),'FPM_INHERITED_CREDENTIALS_UNVERIFIED')
     need(re.search(r'^\s*listen\s*=\s*/www/wwwroot/ppbaos\.com/storage/run/php-fpm\.sock\s*$',active_php,re.M),'FPM_SOCKET_MISMATCH')
     return True
