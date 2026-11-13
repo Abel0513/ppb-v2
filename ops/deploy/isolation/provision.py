@@ -72,6 +72,7 @@ def health():
     result=[]
     for path in ['/admin/login','/admin','/admin/games','/admin/accounts']:
         status,headers,body=a.get(path)
+        (PRIVATE/'provision-http.json').write_text(json.dumps({'path':path,'status':status,'body_sha256':hashlib.sha256(body).hexdigest()}))
         if path=='/admin/login':b.need(status==200 and b'password' in body and b'username' in body,'V2_LOGIN_HTTP_CHECK_FAILED')
         else:b.need(status in {301,302,303,307,308} and '/admin/login' in headers.get('location',''),'V2_GUEST_REDIRECT_CHECK_FAILED')
         result.append({'path':path,'status':status})
@@ -184,6 +185,19 @@ if __name__=='__main__':
     except Exception as exc:
         import traceback
         reason=str(exc);result={'result':'STOP','reason':reason if re.fullmatch('[A-Z0-9_]{1,160}',reason) else 'V2_PROVISION_NOT_VERIFIED','database_writes':0,'exception_type':type(exc).__name__,'frames':[{'file':Path(x.filename).name,'line':x.lineno,'function':x.name} for x in traceback.extract_tb(exc.__traceback__)[-7:]]}
+    if result.get('reason') in {'V2_LOGIN_HTTP_CHECK_FAILED','V2_GUEST_REDIRECT_CHECK_FAILED'}:
+        diagnostic=PRIVATE/'provision-http.json'
+        if diagnostic.is_file():result['http_diagnostic']=json.loads(diagnostic.read_text())
+        markers=[]
+        for log in [LIVE/'storage/logs/php-fpm.log',LIVE/'storage/logs/laravel.log']:
+            if log.is_file() and not log.is_symlink():
+                with log.open('rb') as handle:
+                    handle.seek(max(0,log.stat().st_size-16000));text=handle.read().decode(errors='replace')
+                for token in ['Permission denied','open_basedir restriction','Primary script unknown','File not found','No input file specified','failed to open stream','No application encryption key','Unable to create cache directory']:
+                    if token in text:markers.append(token)
+                markers.extend(re.findall(r'Call to undefined function ([A-Za-z0-9_\\]+)\(',text))
+                markers.extend('SQLSTATE['+x+']' for x in re.findall(r'SQLSTATE\[([A-Z0-9]+)\]',text))
+        result['safe_error_markers']=sorted(set(markers))
     if result.get('reason') in {'V2_FPM_CONFIG_TEST_FAILED','V2_NGINX_CONFIG_TEST_FAILED'}:
         diagnostic=PRIVATE/'provision-diagnostics.json'
         if diagnostic.is_file():
