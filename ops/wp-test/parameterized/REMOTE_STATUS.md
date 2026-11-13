@@ -50,3 +50,9 @@
 
 PR13 remains open/unmerged. Legacy code/DB, V2, WP contents and permanent journals
 were not modified by these diagnostics. Offline/CI results are separate evidence.
+
+Latest local consolidated verification:95 WP tests (including real PHP fixtures),
+79 deployment regression tests,46 automation tests passed after synchronizing main.
+These220 local tests do not establish remote ACF update acceptance. The PR merge
+conflict was limited to identical Python cache ignore rules and has been resolved;
+no main merge/deploy or V2 program change is part of this WP PR.
