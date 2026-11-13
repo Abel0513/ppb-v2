@@ -88,6 +88,9 @@ jobs:
       - name: Upload pinned package, execute fixed SSM and retrieve WP acceptance
         if: steps.aws.outcome == 'success'
         run: python3 ops/wp-test/remote.py execute
+      - name: Collect credential-free public Expert schema after remote failure
+        if: failure() && steps.aws.outcome == 'success'
+        run: python3 ops/wp-test/public-schema.py
       - name: Record OIDC blocker without inventing Command ID or Expert ID
         if: always() && steps.aws.outcome == 'failure'
         run: python3 ops/wp-test/remote.py oidc-failed
