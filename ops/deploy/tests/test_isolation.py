@@ -289,8 +289,8 @@ class FpmCutover(unittest.TestCase):
     def test_readonly_code_permissions_exclude_credentials_and_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)/'v2';root.mkdir()
-            for rel in ['app','public','bootstrap/cache','resources/views']:(root/rel).mkdir(parents=True,exist_ok=True)
-            for rel in ['app/New.php','public/index.php','bootstrap/cache/config.php','.env']:(root/rel).write_text('fixture')
+            for rel in ['app','public','bootstrap/cache','resources/views','database/migrations','lang/zh']:(root/rel).mkdir(parents=True,exist_ok=True)
+            for rel in ['app/New.php','public/index.php','bootstrap/cache/config.php','.env','composer.json','composer.lock','database/migrations/v2.php','lang/zh/messages.php']:(root/rel).write_text('fixture')
             outside=Path(tmp)/'old.php';outside.write_text('legacy');outside.chmod(0o600)
             (root/'app/old.php').symlink_to(outside)
             snapshot=self.m.code_snapshot(root)
@@ -300,6 +300,8 @@ class FpmCutover(unittest.TestCase):
             self.m.normalize_code(snapshot,os.getgid(),root=root,owner=os.getuid())
             self.assertEqual((root/'app/New.php').stat().st_mode&0o777,0o640)
             self.assertEqual((root/'public/index.php').stat().st_mode&0o777,0o644)
+            for rel in ['composer.json','composer.lock','database/migrations/v2.php','lang/zh/messages.php']:
+                self.assertEqual((root/rel).stat().st_mode&0o777,0o640)
             self.assertEqual(outside.stat().st_mode&0o777,0o600)
 
 class SocketAcl(unittest.TestCase):
