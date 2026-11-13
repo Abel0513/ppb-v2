@@ -31,7 +31,7 @@ def validate_plan(value):
 def backup(env,commit,call=subprocess.run):
     root=Path(b.PRIVATE)/'db-backups'
     if not root.exists():root.mkdir(mode=0o700)
-    st=root.lstat();b.need(root.is_dir() and not root.is_symlink() and st.st_uid==0 and st.st_mode&0o077==0,'BACKUP_DIRECTORY_UNSAFE')
+    st=root.lstat();b.need(root.is_dir() and not root.is_symlink() and st.st_uid==os.geteuid() and st.st_mode&0o077==0,'BACKUP_DIRECTORY_UNSAFE')
     receipt=root/('receipt-'+commit+'.json')
     destination=root/('before-'+commit+'-'+str(time.time_ns())+'.sql')
     # Credentials stay in a private temporary defaults file, never argv/log/artifact.
@@ -43,9 +43,14 @@ def backup(env,commit,call=subprocess.run):
             for key,value in values.items():
                 b.need('\n' not in value and '\r' not in value and '\x00' not in value,'MYSQL_DEFAULT_VALUE_INVALID')
                 conf.write(key+'="'+value.replace('\\','\\\\').replace('"','\\"')+'"\n')
+        binary=next((x for x in ['/www/server/mysql/bin/mysqldump','/usr/bin/mysqldump'] if Path(x).is_file()),None)
+        b.need(binary is not None,'MYSQL_DUMP_BINARY_MISSING')
+        version=call([binary,'--version'],capture_output=True,text=True,timeout=15)
+        b.need(version.returncode==0,'MYSQL_DUMP_VERSION_UNVERIFIED')
+        extra=[] if 'mariadb' in version.stdout.lower() else ['--set-gtid-purged=OFF']
         with destination.open('xb') as output:
             os.chmod(destination,0o600)
-            p=call(['mysqldump','--defaults-extra-file='+name,'--single-transaction','--skip-lock-tables','--routines','--events','--triggers','--databases',env['DB_DATABASE']],stdout=output,stderr=subprocess.PIPE,timeout=600)
+            p=call([binary,'--defaults-extra-file='+name,'--single-transaction','--skip-lock-tables','--no-tablespaces',*extra,'--routines','--events','--triggers','--databases',env['DB_DATABASE']],stdout=output,stderr=subprocess.PIPE,timeout=600)
             output.flush();os.fsync(output.fileno())
         b.need(p.returncode==0 and destination.stat().st_size>0,'PRIVATE_DATABASE_BACKUP_FAILED')
         digest=hashlib.sha256()

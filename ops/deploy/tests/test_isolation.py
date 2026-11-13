@@ -131,3 +131,18 @@ class IsolatedDocument(unittest.TestCase):
         self.assertEqual(m.validate_plan(dict(migrate=True,cache=['config'],queue_restart=True))['migrate'],True)
         for data in [dict(migrate='yes',cache=[],queue_restart=False),dict(migrate=True,cache=['shell'],queue_restart=False),dict(migrate=True,cache=[],queue_restart=False,sql='DROP')]:
             with self.assertRaises(RuntimeError):m.validate_plan(data)
+
+class BootstrapArtifact(unittest.TestCase):
+    def test_reproducible_allowlisted_tool_archive_contains_no_credentials(self):
+        import hashlib,tarfile
+        m=load('bootstrap_build_test',ROOT/'isolation/build-bootstrap.py')
+        from contextlib import redirect_stdout
+        import io
+        with tempfile.TemporaryDirectory() as tmp,redirect_stdout(io.StringIO()):
+            first=Path(tmp)/'first.tar.gz';second=Path(tmp)/'second.tar.gz';m.build(first);m.build(second)
+            self.assertEqual(first.read_bytes(),second.read_bytes())
+            with tarfile.open(first,'r:gz') as archive:
+                names=archive.getnames();self.assertEqual(set(names),set(m.FILES)|{'SHA256.json'})
+                manifest=json.load(archive.extractfile('SHA256.json'))
+                for name,digest in manifest.items():self.assertEqual(hashlib.sha256(archive.extractfile(name).read()).hexdigest(),digest)
+                self.assertFalse(any(name.endswith(('.env','.sql','.pem','.key')) for name in names))

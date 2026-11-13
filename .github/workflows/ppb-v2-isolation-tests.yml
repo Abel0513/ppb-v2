@@ -21,6 +21,7 @@ jobs:
       - run: python3 -m unittest discover -s ops/automation/tests -v
       - run: php -l ops/deploy/isolation/db-probe.php
       - run: python3 ops/deploy/isolation/render-document.py --check
+      - run: python3 ops/deploy/isolation/bootstrap-document.py --check
       - name: Build reviewed bootstrap artifact without installing
         run: python3 ops/deploy/isolation/build-bootstrap.py "$RUNNER_TEMP/v2-fixed-tools.tar.gz"
       - uses: actions/upload-artifact@v4

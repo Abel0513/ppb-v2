@@ -6,6 +6,7 @@ one-time isolation prerequisites, never silently inferred from DB/table names.
 import hashlib
 import importlib.util
 import json
+import sys
 from pathlib import Path
 import tempfile
 ROOT=Path(__file__).resolve().parent
@@ -63,5 +64,7 @@ except Exception:print('V2_INVENTORY=UNVERIFIED')
         dict(action='aws:downloadContent',name='downloadReviewedTools',inputs=dict(sourceType='S3',sourceInfo=json.dumps(dict(path='https://s3.us-east-1.amazonaws.com/ppb-v2-release-artifacts-429724121147-use1/releases/bootstrap/'+digest+'/fixed.tar.gz')),destinationPath='/www/ppb-v2-deploy/bootstrap/'+digest)),
         dict(action='aws:runShellScript',name='installReviewedTools',inputs=dict(timeoutSeconds='120',runCommand=['set -eu','umask 077',"python3 - <<'FIXED_INSTALL'",*code.splitlines(),'FIXED_INSTALL']))])
 if __name__=='__main__':
-    digest,d=document();(ROOT.parent/'PPB-V2-Controlled-Deploy.bootstrap.ssm.json').write_text(json.dumps(d,indent=2)+'\n')
+    digest,d=document();target=ROOT.parent/'PPB-V2-Controlled-Deploy.bootstrap.ssm.json';text=json.dumps(d,indent=2)+'\n'
+    if '--check' in sys.argv:assert target.read_text()==text
+    else:target.write_text(text)
     print('BOOTSTRAP_S3_KEY=releases/bootstrap/'+digest+'/fixed.tar.gz')

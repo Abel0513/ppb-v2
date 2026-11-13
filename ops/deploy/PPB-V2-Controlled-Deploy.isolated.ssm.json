@@ -101,7 +101,7 @@
           "test -f /www/ppb-v2-deploy/scripts/isolation/lifecycle.py && test ! -L /www/ppb-v2-deploy/scripts/isolation/lifecycle.py",
           "printf '%s  %s\\n' 4527597647f3f0c3dfbfd6534084c2fac076b3d00e7908253128f6df64e6c66c /www/ppb-v2-deploy/scripts/isolation/lifecycle.py | sha256sum -c - >/dev/null",
           "test -f /www/ppb-v2-deploy/scripts/isolation/release.py && test ! -L /www/ppb-v2-deploy/scripts/isolation/release.py",
-          "printf '%s  %s\\n' 5f86653b29195c1abb623316ad8974a3fbe247af11b4a1ca5f3b019c98b223b8 /www/ppb-v2-deploy/scripts/isolation/release.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' 66cae53c818e45b491f9395a035541913529bad557e410801f8670fcb0f28454 /www/ppb-v2-deploy/scripts/isolation/release.py | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' c502f1bffdf259d7d831ff63f14153ab9eff9566ebf937cc37fa73c486fe1678 /www/ppb-v2-deploy/scripts/controlled-deploy.py | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' bb342948784ff102d54a2dcc5faab2ffde1129c5e99ee6fd490d67aa5ea8d4e7 /www/ppb-v2-deploy/scripts/stage-release.py | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' e213e522b49c8fc38401623b3f19da44bdf5799a5424cf36a3f244462732d9ee /www/ppb-v2-deploy/scripts/check-release.py | sha256sum -c - >/dev/null",
