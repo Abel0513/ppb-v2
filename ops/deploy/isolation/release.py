@@ -79,6 +79,10 @@ def release(args):
         if plan['migrate']:results.append(l.run('migrate',args.commit,'release-'+args.commit+'-migrate'))
         for target in plan['cache']:results.append(l.run('cache_'+target,args.commit,'release-'+args.commit+'-cache-'+target))
         if plan['queue_restart']:results.append(l.run('queue_restart',args.commit,'release-'+args.commit+'-queue'))
+        # Reload only the hash-approved dedicated V2 FPM unit, never shared PHP/nginx.
+        restarted=subprocess.run(['systemctl','reload-or-restart','ppb-v2-php.service'],capture_output=True,text=True,timeout=60)
+        b.need(restarted.returncode==0,'V2_FPM_RELOAD_FAILED')
+        l.audit()
         # Fixed HTTP acceptance must be available before deployment is called PASS.
         a=module('acceptance',HERE.parents[1]/'automation/accept-v2.py')
         state=json.loads((Path(b.PRIVATE)/'current-release.json').read_text())

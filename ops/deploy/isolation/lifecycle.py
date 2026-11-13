@@ -58,16 +58,18 @@ def audit(call=subprocess.run):
     p=call([PHP,str(ROOT/'db-probe.php')],input=json.dumps(env),capture_output=True,text=True,timeout=30)
     b.need(p.returncode==0,'DATABASE_SCOPE_PROBE_FAILED')
     checks=b.validate_probe(policy,env,json.loads(p.stdout))
-    service=call(['systemctl','show','ppb-v2-php.service','--property=User,ProtectSystem,NoNewPrivileges,CapabilityBoundingSet,ReadWritePaths,InaccessiblePaths,PrivateTmp,PrivateDevices,IPAddressDeny,BindReadOnlyPaths'],capture_output=True,text=True,timeout=15)
+    service=call(['systemctl','show','ppb-v2-php.service','--property=ActiveState,User,ProtectSystem,NoNewPrivileges,CapabilityBoundingSet,ReadWritePaths,InaccessiblePaths,PrivateTmp,PrivateDevices,IPAddressDeny,BindReadOnlyPaths'],capture_output=True,text=True,timeout=15)
     b.need(service.returncode==0,'V2_WEB_SERVICE_ISOLATION_UNVERIFIED')
     b.validate_service(dict(line.split('=',1) for line in service.stdout.splitlines() if '=' in line))
-    paths=[('/www/server/panel/vhost/nginx/v2.csdatw.xyz.conf','vhost_sha256'),('/etc/ppb-v2/php-fpm.conf','php_config_sha256')]
+    paths=[('/www/server/panel/vhost/nginx/v2.csdatw.xyz.conf','vhost_sha256'),('/etc/ppb-v2/php-fpm.conf','php_config_sha256'),('/etc/systemd/system/ppb-v2-php.service','php_unit_sha256')]
     configs=[]
     for filename,key in paths:
         path=Path(filename);st=path.lstat()
         b.need(path.is_file() and not path.is_symlink() and st.st_uid==0 and st.st_mode&0o022==0 and hashlib.sha256(path.read_bytes()).hexdigest()==policy[key],'WEB_CONFIG_CHANGED_RECHECK_BOUNDARY')
         configs.append(path.read_text())
-    b.validate_web_config(*configs)
+    b.validate_web_config(*configs[:2])
+    drops=call(['systemctl','show','ppb-v2-php.service','--property=DropInPaths','--value'],capture_output=True,text=True,timeout=15)
+    b.need(drops.returncode==0 and not drops.stdout.strip(),'UNREVIEWED_V2_SERVICE_DROPINS')
     socket=Path(b.LIVE)/'storage/run/php-fpm.sock'
     b.need(stat.S_ISSOCK(socket.lstat().st_mode) and socket.lstat().st_uid==account.pw_uid,'ISOLATED_FPM_SOCKET_NOT_ACTIVE')
     return policy,env,checks

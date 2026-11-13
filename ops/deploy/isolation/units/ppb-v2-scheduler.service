@@ -1,0 +1,21 @@
+# Reviewed template: installation requires verified V2 SQL/OS isolation.
+[Unit]
+Description=V2-only Laravel scheduler
+After=network.target
+[Service]
+Type=oneshot
+User=ppb-v2
+Group=ppb-v2
+WorkingDirectory=/www/wwwroot/ppbaos.com
+ExecStart=/www/server/php/84/bin/php artisan schedule:run --no-interaction
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+NoNewPrivileges=true
+CapabilityBoundingSet=
+ReadWritePaths=/www/wwwroot/ppbaos.com
+BindReadOnlyPaths=/www/wwwroot/ppbaos.com/.env
+InaccessiblePaths=/www/wwwroot/3.231.229.26 /www/server/data /www/server/panel /www/ppb-v2-deploy /run/mysqld -/etc/mysql -/etc/my.cnf
+IPAddressDeny=169.254.0.0/16 fd00:ec2::254/128
+UMask=0077

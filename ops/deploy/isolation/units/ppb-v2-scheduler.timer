@@ -1,0 +1,8 @@
+[Unit]
+Description=V2-only scheduler minute timer; does not modify old Cron
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=false
+Unit=ppb-v2-scheduler.service
+[Install]
+WantedBy=timers.target

@@ -20,14 +20,14 @@ def private_json(path):
     return json.loads(path.read_text())
 
 def validate_policy(p):
-    need(set(p)=={'version','live','private','unix_user','database','read_only_schemas','env_sha256','legacy_roots','vhost_sha256','php_config_sha256'},'POLICY_SCHEMA_INVALID')
+    need(set(p)=={'version','live','private','unix_user','database','read_only_schemas','env_sha256','legacy_roots','vhost_sha256','php_config_sha256','php_unit_sha256'},'POLICY_SCHEMA_INVALID')
     need(p['version']==1 and p['live']==LIVE and p['private']==PRIVATE and p['unix_user']==USER,'POLICY_PATH_OR_USER_INVALID')
     need(isinstance(p['database'],str) and re.fullmatch('[A-Za-z0-9_]{1,64}',p['database']),'V2_DATABASE_NOT_ESTABLISHED')
     need(isinstance(p['read_only_schemas'],list) and all(isinstance(x,str) and re.fullmatch('[A-Za-z0-9_]{1,64}',x) for x in p['read_only_schemas']),'READONLY_SCHEMA_INVALID')
     need(p['database'] not in p['read_only_schemas'],'V2_LEGACY_SCHEMA_OVERLAP')
     need(isinstance(p['env_sha256'],str) and re.fullmatch('[a-f0-9]{64}',p['env_sha256']),'ENV_NOT_APPROVED')
     need(p['legacy_roots']==[LEGACY],'LEGACY_PATH_POLICY_MISMATCH')
-    need(all(isinstance(p.get(k),str) and re.fullmatch('[a-f0-9]{64}',p[k]) for k in ['vhost_sha256','php_config_sha256']),'WEB_ROUTING_NOT_APPROVED')
+    need(all(isinstance(p.get(k),str) and re.fullmatch('[a-f0-9]{64}',p[k]) for k in ['vhost_sha256','php_config_sha256','php_unit_sha256']),'WEB_ROUTING_NOT_APPROVED')
     return p
 
 def read_env(path,expected,owner=0,require_low_privilege=True):
@@ -112,6 +112,7 @@ def sandbox_command(argv):
 
 
 def validate_service(properties):
+    need(properties.get('ActiveState')=='active','V2_WEB_SERVICE_NOT_ACTIVE')
     need(properties.get('User')==USER and properties.get('ProtectSystem')=='strict'
          and properties.get('NoNewPrivileges')=='yes' and properties.get('CapabilityBoundingSet')=='',
          'V2_WEB_UID_OR_SANDBOX_UNVERIFIED')

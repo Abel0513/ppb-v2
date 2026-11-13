@@ -8,5 +8,6 @@
   "env_sha256": null,
   "vhost_sha256": null,
   "php_config_sha256": null,
+  "php_unit_sha256": null,
   "legacy_roots": ["/www/wwwroot/3.231.229.26"]
 }

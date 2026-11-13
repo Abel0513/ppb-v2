@@ -16,7 +16,7 @@ l=load('lifecycle_test',ROOT/'isolation/lifecycle.py')
 r=load('release_client_test',ROOT/'release-client.py')
 
 class Boundary(unittest.TestCase):
-    def policy(self):return dict(version=1,live=b.LIVE,private=b.PRIVATE,unix_user='ppb-v2',database='v2prod',read_only_schemas=['legacy'],env_sha256='a'*64,legacy_roots=[b.LEGACY],vhost_sha256='a'*64,php_config_sha256='b'*64)
+    def policy(self):return dict(version=1,live=b.LIVE,private=b.PRIVATE,unix_user='ppb-v2',database='v2prod',read_only_schemas=['legacy'],env_sha256='a'*64,legacy_roots=[b.LEGACY],vhost_sha256='a'*64,php_config_sha256='b'*64,php_unit_sha256='c'*64)
     def test_no_unverified_or_shared_database_policy(self):
         p=self.policy();self.assertEqual(b.validate_policy(p)['database'],'v2prod')
         for changes in [dict(database=None),dict(database='legacy'),dict(unix_user='root'),dict(live=b.LEGACY),dict(env_sha256=None)]:
@@ -50,7 +50,7 @@ class Boundary(unittest.TestCase):
             p.write_text(text.replace('DB_USERNAME=worker','DB_USERNAME=root'))
             with self.assertRaisesRegex(RuntimeError,'HIGH_PRIVILEGE'):b.read_env(p,hashlib.sha256(p.read_bytes()).hexdigest(),owner=os.geteuid())
     def test_web_service_identity_and_write_scope(self):
-        good=dict(User='ppb-v2',ProtectSystem='strict',NoNewPrivileges='yes',CapabilityBoundingSet='',ReadWritePaths=b.LIVE,InaccessiblePaths=b.LEGACY+' /www/ppb-v2-deploy /www/server/panel',PrivateTmp='yes',PrivateDevices='yes',IPAddressDeny='169.254.0.0/16 fd00:ec2::254/128',BindReadOnlyPaths=b.LIVE+'/.env')
+        good=dict(ActiveState='active',User='ppb-v2',ProtectSystem='strict',NoNewPrivileges='yes',CapabilityBoundingSet='',ReadWritePaths=b.LIVE,InaccessiblePaths=b.LEGACY+' /www/ppb-v2-deploy /www/server/panel',PrivateTmp='yes',PrivateDevices='yes',IPAddressDeny='169.254.0.0/16 fd00:ec2::254/128',BindReadOnlyPaths=b.LIVE+'/.env')
         self.assertTrue(b.validate_service(good))
         for change in [dict(User='www'),dict(User='root'),dict(ProtectSystem='no'),dict(ReadWritePaths='/www/wwwroot'),dict(InaccessiblePaths='')]:
             with self.assertRaises(RuntimeError):b.validate_service(dict(good,**change))
