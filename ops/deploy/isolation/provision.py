@@ -41,6 +41,9 @@ def flatten(text,depth=0):
         files=sorted(Path('/').glob(name.lstrip('/'))) if '*' in name else [Path(name)]
         return '\n'.join(flatten(checked_file(p),depth+1) for p in files if p.exists())
     text=re.sub(r'(?m)^\s*include\s+([^;\n]+);',include,text)
+    if depth==0 and re.search(r'\broot\s+/www/wwwroot/ppbaos\.com/public\s*;',text) and not re.search(r'\blocation\s+(?:(?:\^~|=)\s+)?/\s*\{',text):
+        b.need(PHP_LOCATION in text,'V2_PHP_LOCATION_MISSING')
+        text=text.replace(PHP_LOCATION,'location / { try_files $uri $uri/ /index.php?$query_string; }\n'+PHP_LOCATION,1)
     b.need(not re.search(r'\b(?:proxy_pass|content_by_lua|perl|root\s+/www/wwwroot/3\.231\.229\.26)\b',text),'V2_VHOST_UNREVIEWED_UPSTREAM')
     return text
 

@@ -252,6 +252,9 @@ class FpmCutover(unittest.TestCase):
         source='server {\nserver_name v2.csdatw.xyz;\nroot /www/wwwroot/ppbaos.com/public;\ninclude enable-php-84.conf;\n}'
         rendered=self.m.flatten(source)
         self.assertNotIn('enable-php-84',rendered)
+        self.assertIn('location / { try_files $uri $uri/ /index.php?$query_string; }',rendered)
+        existing=source.replace('include enable-php-84.conf;', 'location / { try_files $uri /index.php?$query_string; }\ninclude enable-php-84.conf;')
+        self.assertEqual(self.m.flatten(existing).count('location / {'),1)
         b.validate_web_config(rendered,(ROOT/'isolation/units/php-fpm.conf').read_text())
     def test_unknown_include_cannot_modify_old_vhost(self):
         for value in ['include /etc/nginx/old.conf;','include /www/server/panel/vhost/nginx/legacy.conf;']:
