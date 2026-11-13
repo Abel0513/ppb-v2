@@ -281,7 +281,7 @@ class SocketAcl(unittest.TestCase):
             path=Path(tmp)/'php-fpm.sock'
             with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as sock:
                 sock.bind(str(path));path.chmod(0o600)
-                self.m.apply(path,os.getuid(),65534)
+                self.m.apply(path,os.getuid(),os.getuid()) # Cloud sandbox maps only its own UID.
                 self.assertEqual(path.stat().st_mode&0o007,0)
                 self.assertTrue(os.getxattr(path,'system.posix_acl_access'))
     def test_socket_helper_refuses_symlink_and_wrong_owner(self):
