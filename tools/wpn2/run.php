@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require __DIR__.'/legacy.php';
 if(!defined('JOURNAL_DIR'))define('JOURNAL_DIR','/var/tmp/ppb-codex-issue12-new-expert-v1');
-$state=['version'=>'WPN2','result'=>'UNVERIFIED','wp_test_success'=>false,
+$state=['version'=>'WPN2','result'=>'UNVERIFIED','wp_test_success'=>false,'media_verified_image_count'=>0,
     'execution'=>['commit'=>getenv('PPB_WP_GITHUB_COMMIT')?:null,
                   'run_id'=>getenv('PPB_WP_GITHUB_RUN_ID')?:null,
                   'run_attempt'=>getenv('PPB_WP_GITHUB_RUN_ATTEMPT')?:null]];
@@ -14,6 +14,10 @@ function atomicJson(string $path,array $data):void {
     $raw=json_encode($data,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR);
     if(fwrite($h,$raw)!==strlen($raw)||!fflush($h)||!fsync($h))stop('STATE_SYNC_FAILED');
     fclose($h);if(!rename($tmp,$path))stop('STATE_RENAME_FAILED');
+}
+function saveReport():void {
+    $GLOBALS['state']['journal_exists']=is_file(JOURNAL_DIR.'/journal.json');
+    atomicJson(JOURNAL_DIR.'/report.json',$GLOBALS['state']);
 }
 function journalSave():void {$GLOBALS['state']['phase']=$GLOBALS['journal']['phase']??'UNKNOWN';atomicJson(JOURNAL_DIR.'/journal.json',$GLOBALS['journal']);}
 function allowed(string $path,string $method,?array $payload):bool {
@@ -91,7 +95,9 @@ function run(?array $fixture=null):void {
     foreach($fields as $key=>&$v)if(str_contains($key,'推薦'))$v='Codex測試';unset($v);
     $GLOBALS['expected']=$fields;
     $media=mediaSourceInfo($ctx,$people);
-    if(count(array_filter($media,fn($m)=>($m['source_verified']??false)))!==6)stop('SIX_MEDIA_NOT_VERIFIED');
+    // Explicit PHP -> Python report contract; do not rely on legacy globals.
+    $state['media_verified_image_count']=count(array_filter($media,static fn($m)=>($m['source_verified']??false)===true));
+    if($state['media_verified_image_count']!==6)stop('SIX_MEDIA_NOT_VERIFIED');
     $fp=hash('sha256',fingerprint($plan).json_encode($fields).':'.$author);
     $state['source_fingerprint']=$fp;$state['analysts']=array_values($people);$state['expert_author']=$author;
     if($journal&&($journal['phase']??'')!=='PREFLIGHT'&&($journal['fingerprint']??'')!==$fp)stop('JOURNAL_SOURCE_CHANGED');
@@ -160,7 +166,6 @@ if(realpath($_SERVER['SCRIPT_FILENAME'])===__FILE__){
         run();
     }catch(Throwable $e){$state['result']='STOP';$state['stop_code']=preg_match('/^[A-Z0-9_]+$/D',$e->getMessage())?$e->getMessage():'UNEXPECTED_'.get_class($e);fwrite(STDERR,'STOP: '.$state['stop_code']."\n");}
     if(($held??false)&&($journalLoaded??false)&&$state['result']==='STOP'){$journal['last_stop_code']=$state['stop_code'];journalSave();}
-    $state['journal_exists']=is_file(JOURNAL_DIR.'/journal.json');
-    if($held??false)atomicJson(JOURNAL_DIR.'/report.json',$state);
+    if($held??false)saveReport();
     exit($state['wp_test_success']?0:2);
 }

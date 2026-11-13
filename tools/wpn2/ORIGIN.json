@@ -9,5 +9,8 @@
     "run.sh": "b0fa2e10c5f3b209bfe08d65738aec5313928f3076f8c5826631fe748bc01896"
   },
   "parser_identical": true,
-  "verification": "PHP 8.4.24 lint and offline orchestration passed; live WP NOT executed"
+  "verification": "PHP 8.4.24 lint and offline orchestration passed; live WP NOT executed",
+  "adaptations": [
+    "mediaSourceInfo retains WP validation; run.php owns the explicit report media count."
+  ]
 }

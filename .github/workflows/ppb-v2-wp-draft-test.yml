@@ -20,7 +20,14 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - run: python3 -m unittest discover -s ops/wp-test/tests -v
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: PHP to Python integration and WP remote regressions
+        run: python3 -m unittest discover -s ops/wp-test/tests -v
+      - name: Lint the actual PHP producer and fixture
+        run: for file in tools/wpn2/*.php; do php -l "$file"; done
       - run: php tools/wpn2/test.php
       - run: python3 tools/wpn2/build-package.py --check
       - run: python3 ops/wp-test/render-ssm.py --check

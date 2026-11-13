@@ -1,3 +1,11 @@
+## 2026-11-13 PHP → Python 契約與 root 執行限制
+
+run.php 明確計算／持久化 media_verified_image_count，初始化為 0；Python 缺欄位或型態不符會回報明確 STOP，不能默認為六張。新增實際 PHP writer → JSON → Python collector → controller 整合測試，包含六張成功、五張照片失敗、欄位缺漏、推薦／43 欄／HTTP 不符與舊 attempt 拒絕。
+
+SSM 以管理者核准之套件 SHA 作為 allowedValues 與 shell 內固定常數，不再接受分支自選 SHA 即以 root 執行新程式。測試實際執行固定 shell 的驗證段，證明「替換內容且提交自己的 SHA」及「假冒核准 SHA」都失敗；不執行 root／WP 程式。一次性管理工具先撤 SendCommand、更新／鎖定文件、撤除其他歷史版本、重新 GET 後才授權；失敗保留 Deny。政策只針對本 WP 文件，沒有更換 OIDC／S3／SSM 架構。
+
+本機 WP suite 61 項通過（含真正跨語言測試）。完整 GitHub CI 與本次真實遠端 Run 尚待此修正推送後回收；測試 fixture 不構成 WP 實測證據。
+
 ## 2026-11-13 自動遠端接入批次
 
 改用現有 GitHub OIDC provider、私人 S3 bucket 與固定 SSM 文件傳遞 WPN2；不依賴 EC2 安裝 runner.py／evidence.json／credentials.json，不要求使用者登入 EC2。一次性管理工具只設定 WP 專用 role、固定 document 與既有 instance role 的 S3 讀取前綴。

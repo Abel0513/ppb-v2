@@ -239,7 +239,7 @@ function mediaSourceInfo(array $ctx,array $people):array {
         $out[$id]=$info;
     }
     $GLOBALS['state']['media_audit']=array_map(static fn($x)=>array_diff_key($x,['keys'=>true]),array_values($out));
-    $GLOBALS['state']['media_verified_image_count']=count($people)-count($failed);
+    // The public media_verified_image_count contract is owned by run.php.
     $GLOBALS['state']['media_with_strict_path_proof_count']=count(array_filter($out,static fn($x)=>($x['url_count']??0)>0));
     return $out;
 }

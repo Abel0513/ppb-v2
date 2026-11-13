@@ -8,7 +8,7 @@
 python3 ops/wp-test/admin-setup.py --apply
 ```
 
-不帶 `--apply` 則只讀產生計畫；工具會自行查出指定 EC2 的 profile／role。它不下載或執行 EC2 命令、不建立 OIDC provider、不修改正式 Deploy-Role，不建立 Codex CLI Runner。正常執行往後由 GitHub Actions 全自動完成。
+不帶 `--apply` 則只讀產生計畫；工具會自行查出指定 EC2 的 profile／role。它不下載或執行 EC2 命令、不建立 OIDC provider、不修改正式 Deploy-Role，不建立 Codex CLI Runner。此核准版本往後由 GitHub Actions 全自動完成。管理工具會輸出精確核准的 package SHA；固定文件內的 allowedValues 與 shell 常數皆鎖定該 SHA，不接受開發分支自行授權其他可執行內容。
 
 ## 精確變更範圍
 
@@ -17,7 +17,7 @@ python3 ops/wp-test/admin-setup.py --apply
 | 既有 `arn:aws:iam::429724121147:oidc-provider/token.actions.githubusercontent.com` | 只讀 `iam:GetOpenIDConnectProvider`，確認既有 sts.amazonaws.com audience；不重建 provider |
 | `arn:aws:iam::429724121147:role/PPB-V2-GitHub-WP-Draft-Test-Role` | `iam:GetRole`／`ListRolePolicies`／`ListAttachedRolePolicies`；必要時 `CreateRole`、`UpdateAssumeRolePolicy`；`PutRolePolicy` 僅 `PPB-WP-Draft-Runtime`。若現有 role 另有未知政策，先停止，不默默保留廣權限或刪除政策 |
 | `i-0135d6b2fac7a54c2` 已附加的 instance role | `ec2:DescribeInstances`、`iam:GetInstanceProfile` 自動取得真實 role ARN；只對它 `iam:PutRolePolicy` 增加 `PPB-WP-Test-ArtifactRead`，不更換 profile、不修改現有 SSM 政策 |
-| `arn:aws:ssm:us-east-1:429724121147:document/PPB-V2-WP-Draft-Test` | `DescribeDocument`／`GetDocument`；必要時 `CreateDocument` 或 `UpdateDocument`，再 `UpdateDocumentDefaultVersion`。不修改 Preflight／Controlled-Deploy 文件 |
+| `arn:aws:ssm:us-east-1:429724121147:document/PPB-V2-WP-Draft-Test` | `DescribeDocument`／`GetDocument`／`ListDocumentVersions`；必要時 `CreateDocument` 或 `UpdateDocument`，再 `UpdateDocumentDefaultVersion`；`DeleteDocument --document-version <舊版本>` 僅撤除此 WP 文件的舊版本，避免繞回未鎖定 root 執行入口。不修改 Preflight／Controlled-Deploy 文件 |
 | AWS account 身分 | `sts:GetCallerIdentity`，強制帳號一致 |
 
 上述管理 API 不授予日常 WP Actions role。EC2 role 的真實名稱不能從 snapshot 猜測；管理工具會從固定 instance 的現有 profile 解析並在計畫／套用結果列出確切 ARN，不讓使用者手動判斷或挑選其他主機。
@@ -47,3 +47,14 @@ Actions 會辨識失敗層級：
 - 已取得 SSM Command ID 後的未知結果：不自動重送。固定 journal 保留；後續驗證只能接續／核對同一草稿。Actions Artifact 保留已知 Command ID 供追蹤。
 
 所有實際結果以 Actions 的 `remote-result.json`／Job Summary 為準；缺 Command ID 或新 WP ID 時必須標示未完成，不能用離線測試替代。
+
+## 唯一管理操作的安全順序
+
+同一個 `admin-setup.py --apply` 完成以下步驟，不拆成使用者逐項執行：
+
+1. 只讀確認帳號、既有 provider、指定 EC2 的 instance profile、專用 role 既有政策，並核對本地文件與核准套件可重建且 SHA 相符。
+2. 先將 WP 專用 role 的 runtime policy 暫設為 Deny SendCommand，再更新其精確 OIDC trust。新 role 若需建立，初始沒有執行權限。
+3. 安裝鎖定 package SHA 的固定 SSM 文件，切換 default version；撤除這一個 WP 文件的其他版本，避免分支利用舊版本傳入任意 SHA。沒有刪除其他 SSM 文件、WP 草稿或應用資料。
+4. 重新列出版本並 GET 核對內容完全一致後，最後才開放固定 document／instance／S3 前綴的日常政策。中途失敗保持 Deny，不能半套開放。
+
+日常 WP role 沒有以上 IAM／SSM 管理權限。單次管理核准授權的是這一份可審查的固定程式；同一套件之後自動重跑／回收，不需登入 EC2。若將來修改可執行套件或 SSM shell／collector，必須重新審查其固定內容，不能以「開發分支已通過 CI」取代 root 程式授權。純文件更新不會改變 runtime 套件 SHA。

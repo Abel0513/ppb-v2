@@ -9,7 +9,8 @@ import zipfile
 
 root = Path(__file__).resolve().parent
 target = root.parents[1] / 'ops/wp-test/ppb_wpn2_verified.sh'
-files = sorted(p for p in root.iterdir() if p.is_file() and p.name != 'SHA256SUMS')
+# Runtime inputs only: documentation changes must not reauthorize root code.
+files = [root / name for name in sorted(['run.php','legacy.php','parser.php','run.sh','test.php','ORIGIN.json'])]
 manifest = ''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in files)
 if '--check' in sys.argv:
     assert (root / 'SHA256SUMS').read_text() == manifest, 'manifest differs'

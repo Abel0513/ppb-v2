@@ -23,7 +23,7 @@ EXECUTION = dict(commit=COMMIT, run_id='12345', run_attempt='1')
 
 def envelope():
     return dict(schema_version=1, execution=EXECUTION, result='PASS', wp_expert_id=40001,
-                wp_status='draft', post_type='expert', acf_matched=43, readback_http=200,
+                wp_status='draft', post_type='expert', acf_matched=43, media_verified_image_count=6, readback_http=200,
                 create_http=201, recommendations={k: 'Codex測試' for k in e.REC_KEYS},
                 wp_edit_url='https://csdatw.com/wp-admin/post.php?post=40001&action=edit')
 
@@ -166,6 +166,8 @@ class SetupTests(unittest.TestCase):
         if args[:2]==('iam','get-role'):raise r.Stop('AWS_NoSuchEntity')
         if args[:2]==('ssm','describe-document'):raise r.Stop('AWS_InvalidDocument')
         if args[:2]==('ssm','create-document'):return {'DocumentDescription':{'DocumentVersion':'1'}}
+        if args[:2]==('ssm','list-document-versions'):return {'DocumentVersions':[{'DocumentVersion':'1'}]}
+        if args[:2]==('ssm','get-document'):return {'DocumentVersion':'1','Content':(ROOT/'PPB-V2-WP-Draft-Test.ssm.json').read_text()}
         if args[:2] in [('iam','create-role'),('iam','put-role-policy'),('ssm','update-document-default-version')]:return {}
         raise AssertionError(args)
     def test_plan_discovers_real_attached_role_and_never_writes(self):
@@ -176,7 +178,7 @@ class SetupTests(unittest.TestCase):
         result=a.setup(True,self.aws)
         self.assertEqual(result['document_version'],'1')
         writes=[c for c in self.calls if c[1].startswith(('create','put','update'))]
-        self.assertEqual([c[:2] for c in writes],[('iam','create-role'),('iam','put-role-policy'),('iam','put-role-policy'),('ssm','create-document'),('ssm','update-document-default-version')])
+        self.assertEqual([c[:2] for c in writes],[('iam','create-role'),('iam','put-role-policy'),('iam','put-role-policy'),('ssm','create-document'),('ssm','update-document-default-version'),('iam','put-role-policy')])
         self.assertFalse(any(c[:2]==('ssm','send-command') for c in self.calls))
         self.assertNotIn('PPB-V2-GitHub-Deploy-Role',json.dumps(self.calls))
         self.assertFalse(any('create-open-id-connect-provider' in c for c in self.calls))

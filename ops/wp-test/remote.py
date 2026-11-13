@@ -64,12 +64,13 @@ def validate_envelope(output, result):
     # Only return the fixed collector's explicit schema, never raw remote stdout.
     keys = {'schema_version', 'execution', 'result', 'stop_code', 'wp_expert_id', 'candidate_expert_id',
             'wp_status', 'post_type', 'acf_matched', 'recommendations', 'create_http',
-            'readback_http', 'wp_edit_url', 'reference_30436_unchanged', 'package_exit_code'}
+            'readback_http', 'media_verified_image_count', 'wp_edit_url', 'reference_30436_unchanged', 'package_exit_code'}
     require(set(data) <= keys, 'RESULT_UNEXPECTED_KEYS')
     if data.get('result') == 'PASS':
         number = data.get('wp_expert_id')
         require(type(number) is int and number > 0 and number != 30436, 'NEW_ID_INVALID')
         require(data.get('wp_status') == 'draft' and data.get('post_type') == 'expert', 'NOT_EXPERT_DRAFT')
+        require(data.get('media_verified_image_count') == 6, 'SIX_MEDIA_NOT_VERIFIED')
         require(data.get('acf_matched') == 43 and data.get('readback_http') == 200, 'ACF_READBACK_NOT_VERIFIED')
         require(isinstance(data.get('recommendations'), dict) and len(data['recommendations']) == 6
                 and set(data['recommendations'].values()) == {'Codex測試'}, 'SIX_RECOMMENDATIONS_NOT_VERIFIED')
@@ -94,6 +95,8 @@ def execute(result, path, timeout=900, call=aws, clock=time.monotonic, sleep=tim
     result.update(ssm_document_version=version, ssm_document_sha256=meta['Hash'])
     package = ROOT / 'ppb_wpn2_verified.sh'
     digest = hashlib.sha256(package.read_bytes()).hexdigest()
+    approved=json.loads((ROOT / 'PPB-V2-WP-Draft-Test.ssm.json').read_text())['parameters']['PackageSha256'].get('allowedValues')
+    require(approved == [digest], 'PACKAGE_NOT_ADMIN_APPROVED')
     key = f"wp-test/{result['commit']}/run-{result['github_run_id']}-attempt-{result['github_run_attempt']}.sh"
     save('S3_UPLOAD')
     call('s3api', 'put-object', '--bucket', BUCKET, '--key', key, '--body', str(package),
@@ -163,6 +166,7 @@ def summary(result, path):
         wp = result['wp']
         lines.extend([f"| ACF | {wp.get('acf_matched', 0)}/43 |",
                       f"| 六推薦 | {len(wp.get('recommendations', {}))}/6 |",
+                      f"| 照片 | {wp.get('media_verified_image_count', 0)}/6 |",
                       f"| 後台網址 | {wp.get('wp_edit_url') or '未驗證'} |"])
     Path(path).write_text('\n'.join(lines) + '\n')
 

@@ -13,14 +13,22 @@ REC_KEYS = ['分析師1推薦', '分析師2推薦', '分析師3推薦', '分析�
 def collect(report, execution, exit_code):
     result = dict(schema_version=1, execution=execution, result='STOP',
                   package_exit_code=exit_code, wp_expert_id=None)
+    if not isinstance(report,dict):
+        return dict(result,stop_code='REPORT_SCHEMA_INVALID')
     if report.get('execution') != execution:
         return dict(result, stop_code='CURRENT_EXECUTION_REPORT_MISSING')
     code = report.get('stop_code', 'WP_VERIFICATION_NOT_COMPLETE')
     result['stop_code'] = code if re.fullmatch('[A-Za-z0-9_]{1,120}', str(code)) else 'REMOTE_STOP'
+    if 'media_verified_image_count' not in report:
+        return dict(result,stop_code='MEDIA_VERIFIED_IMAGE_COUNT_MISSING')
+    if type(report['media_verified_image_count']) is not int:
+        return dict(result,stop_code='MEDIA_VERIFIED_IMAGE_COUNT_INVALID')
     final = report.get('final_readback', {})
     recs = report.get('recommendations', {})
     number = report.get('new_expert_id')
     analysts = report.get('analysts', [])
+    if not isinstance(final,dict) or not isinstance(recs,dict) or not isinstance(analysts,list) or not all(isinstance(p,dict) for p in analysts):
+        return dict(result,stop_code='REPORT_SCHEMA_INVALID')
     valid = (exit_code == 0 and report.get('result') == 'PASS' and report.get('wp_test_success') is True
              and type(number) is int and number > 0 and number != 30436
              and report.get('ACF_MATCHED') == 43 and final.get('expected_keys') == 43
@@ -35,6 +43,7 @@ def collect(report, execution, exit_code):
             return dict(result, stop_code='EDIT_URL_NOT_VERIFIED')
         result.update(result='PASS', stop_code=None, wp_expert_id=number, wp_status='draft',
                       post_type='expert', acf_matched=43, recommendations=recs,
+                      media_verified_image_count=report['media_verified_image_count'],
                       create_http=report.get('CREATE_HTTP'), readback_http=200,
                       wp_edit_url=report['edit_url'],
                       reference_30436_unchanged=report.get('reference_30436', {}).get('readback_unchanged'))
