@@ -1,0 +1,29 @@
+name: V2 existing release result recovery
+on:
+  push:
+    branches: [main]
+    paths: ['ops/deploy/recover-result.py', 'ops/deploy/recovery-request.json', '.github/workflows/ppb-v2-recover-result.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  collect:
+    if: github.repository_id == '1454285732' && github.repository_owner_id == '55256582' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: {contents: read, id-token: write}
+    steps:
+      - uses: actions/checkout@v5
+        with: {persist-credentials: false}
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::429724121147:role/PPB-V2-GitHub-Deploy-Role
+          aws-region: us-east-1
+          allowed-account-ids: '429724121147'
+      - name: Only read the pinned existing SSM command; never send or deploy
+        run: python3 ops/deploy/recover-result.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v2-recovered-${{ github.run_id }}
+          path: v2-result/recovered.json
+          retention-days: 14

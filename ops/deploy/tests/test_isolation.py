@@ -324,3 +324,26 @@ class SocketAcl(unittest.TestCase):
             with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as sock:
                 sock.bind(str(target))
                 with self.assertRaisesRegex(RuntimeError,'IDENTITY'):self.m.apply(target,os.getuid()+1,65534)
+
+class ExistingReleaseRecovery(unittest.TestCase):
+    def test_plugin_delay_recovers_original_command_without_any_write_api(self):
+        m=load('recovery_receiver_test',ROOT/'recover-result.py')
+        request=json.loads((ROOT/'recovery-request.json').read_text());calls=[];polls=[]
+        payload=dict(result='PPB_V2_ISOLATED_RELEASE_PASS',commit=request['commit'],isolation={'legacy_database_write':False,'v2_database_write':True},acceptance={'COMMIT':request['commit'],'RESULT':'PPB_V2_FUNCTIONAL_BASELINE_PASS','CHECKS':5})
+        def aws(*args):
+            calls.append(args)
+            if args[:2]==('sts','get-caller-identity'):return {'Account':r.ACCOUNT}
+            if args[:2]==('ssm','describe-document'):return {'Document':{'Hash':request['document_hash'],'HashType':'Sha256'}}
+            if args[:2]==('ssm','get-document'):return {'Content':(ROOT/'PPB-V2-Controlled-Deploy.isolated.ssm.json').read_text()}
+            if args[:2]==('ssm','get-command-invocation'):
+                polls.append(1)
+                if len(polls)==1:raise RuntimeError('AWS_InvalidPluginName')
+                return dict(CommandId=request['command_id'],InstanceId=r.INSTANCE,DocumentName=r.DOC,DocumentVersion=request['document_version'],Status='Success',ResponseCode=0,StandardOutputContent='PPB_V2_RELEASE_V1='+json.dumps(payload))
+            self.fail('Recovery attempted an unapproved mutation '+str(args[:2]))
+        with tempfile.TemporaryDirectory() as tmp:
+            old=os.getcwd();os.chdir(tmp)
+            try:result=m.recover(request,aws,lambda _:None)
+            finally:os.chdir(old)
+        self.assertEqual(result['result'],'PASS');self.assertEqual(len(polls),2)
+        self.assertFalse(result['send_command_requested'])
+        self.assertTrue(all(x[:2] in [('sts','get-caller-identity'),('ssm','describe-document'),('ssm','get-document'),('ssm','get-command-invocation')] for x in calls))
