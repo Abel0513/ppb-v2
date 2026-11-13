@@ -15,7 +15,7 @@ def req(op='update_acf',rid='bonus30460-request01',value='Codex測試123'):
     return dict(operation=op,expert_id=30460,request_id=rid,fields={} if op=='read' else {'Bonus推薦投注':value})
 
 def snapshot():
-    return dict(fields={**{f'field{i}':i for i in range(42)},'Bonus推薦投注':'Codex測試'},
+    return dict(readback_http=200,create_http=201,fields={**{f'field{i}':i for i in range(42)},'Bonus推薦投注':'Codex測試'},
                 journal_sha256='a'*64,fingerprint='b'*64,core={'id':30460},reference={'id':30436},
                 identities=list(range(6)),media=list(range(6)))
 

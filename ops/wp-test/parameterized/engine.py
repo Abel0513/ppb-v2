@@ -61,13 +61,14 @@ def load(path):
     return json.loads(path.read_text())
 
 def compare(before, after, fields):
+    need(before.get('readback_http')==200 and after.get('readback_http')==200 and before.get('create_http')==201 and after.get('create_http')==201,'HTTP_RECEIPTS_MISSING')
     need(len(before['fields'])==43 and set(before['fields'])==set(after['fields']), 'ACF_43_SCHEMA_CHANGED')
     need(before['journal_sha256']==after['journal_sha256'] and before['fingerprint']==after['fingerprint'], 'ORIGINAL_JOURNAL_CHANGED')
     need(before['core']==after['core'] and before['reference']==after['reference'], 'CORE_OR_30436_CHANGED')
     need(before['identities']==after['identities'] and before['media']==after['media'], 'ANALYST_OR_MEDIA_CHANGED')
     for k, value in before['fields'].items():
         need(after['fields'][k]==fields.get(k,value), 'ACF_VALUE_OR_UNTOUCHED_FIELD_CHANGED')
-    return {'acf_matched':43, 'untouched_acf_matched':43-len(fields),
+    return {'readback_http':200, 'create_http':201, 'acf_matched':43, 'untouched_acf_matched':43-len(fields),
             'analysts_verified':6, 'media_verified':6, 'reference_30436_unchanged':True,
             'journal_unchanged':True, 'fingerprint_unchanged':True}
 
@@ -95,7 +96,7 @@ def locked(req, root, rpc):
     before=rpc('read', {})
     if operation=='read':
         return dict(result='READ_VERIFIED',expert_id=TARGET,request_id=req['request_id'],
-                    fields=before['fields'],journal_sha256=before['journal_sha256'],fingerprint=before['fingerprint'],wp_write_requests=0)
+                    fields=before['fields'],readback_http=before['readback_http'],create_http=before['create_http'],journal_sha256=before['journal_sha256'],fingerprint=before['fingerprint'],wp_write_requests=0)
     if operation=='verify':
         need(record is not None, 'UPDATE_RECEIPT_REQUIRED')
         checks=compare(record['before'],before,fields)

@@ -51,9 +51,9 @@ def invoke(req,call=r.aws,pause=time.sleep):
             if req['operation']!='read':
                 checks=data.get('checks',{})
                 e.need(data.get('result')=='PASS' and data.get('fields')==req['fields'] and checks=={
-                    'acf_matched':43,'untouched_acf_matched':42,'analysts_verified':6,'media_verified':6,
+                    'readback_http':200,'create_http':201,'acf_matched':43,'untouched_acf_matched':42,'analysts_verified':6,'media_verified':6,
                     'reference_30436_unchanged':True,'journal_unchanged':True,'fingerprint_unchanged':True},'VERIFICATION_INCOMPLETE')
-            else:e.need(data.get('result')=='READ_VERIFIED' and data.get('wp_write_requests')==0,'READ_NOT_VERIFIED')
+            else:e.need(data.get('result')=='READ_VERIFIED' and data.get('wp_write_requests')==0 and data.get('readback_http')==200 and data.get('create_http')==201,'READ_NOT_VERIFIED')
             result.update(result=data['result'],stage='VERIFIED');save();return result
         raise RuntimeError('OUTCOME_UNKNOWN_DO_NOT_RESEND')
     except (r.Stop,RuntimeError,ValueError,KeyError,OSError) as exc:

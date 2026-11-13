@@ -50,7 +50,7 @@ function paramOperate(array $q,?array $fixture=null):array {
         return ['http'=>$r['status'],'network_error'=>$r['network_error']];
     }
     if($fixture===null&&hash_file('sha256',$p)!==hash('sha256',$raw))stop('PARAM_JOURNAL_CHANGED');
-    return ['fields'=>$fields,'core'=>$core,'reference'=>$reference,'identities'=>$identities,'media'=>$media,
+    return ['readback_http'=>200,'create_http'=>201,'fields'=>$fields,'core'=>$core,'reference'=>$reference,'identities'=>$identities,'media'=>$media,
             'journal_sha256'=>hash('sha256',$raw),'fingerprint'=>$journal['fingerprint']];
 }
 if(realpath($_SERVER['SCRIPT_FILENAME'])===__FILE__){
