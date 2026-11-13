@@ -270,6 +270,11 @@ if __name__=='__main__':
     except Exception as exc:
         import traceback
         reason=str(exc);result={'result':'STOP','reason':reason if re.fullmatch('[A-Z0-9_]{1,160}',reason) else 'V2_PROVISION_NOT_VERIFIED','database_writes':0,'exception_type':type(exc).__name__,'frames':[{'file':Path(x.filename).name,'line':x.lineno,'function':x.name} for x in traceback.extract_tb(exc.__traceback__)[-7:]]}
+    if result.get('reason','').startswith('V2_EXTENSION_'):
+        entries=[]
+        for item in Path('/www/server/panel/vhost/nginx/extension/v2.ppbaos.com').glob('*.conf'):
+            st=item.lstat();entries.append({'name':item.name,'uid':st.st_uid,'mode':oct(st.st_mode&0o777),'regular':stat.S_ISREG(st.st_mode)})
+        result['v2_extension_entries']=entries
     if result.get('reason') in {'V2_LOGIN_HTTP_CHECK_FAILED','V2_GUEST_REDIRECT_CHECK_FAILED'}:
         diagnostic=PRIVATE/'provision-http.json'
         if diagnostic.is_file():result['http_diagnostic']=json.loads(diagnostic.read_text())

@@ -356,5 +356,10 @@ class EmptyExtensionBoundary(unittest.TestCase):
             old=l.vhost_digest(canonical=True,texts={'v2':base})
             self.assertEqual(old,l.vhost_digest(canonical=True,texts={'v2':base+ref}))
             self.assertNotEqual(old,l.vhost_digest(canonical=True,texts={'v2':base.replace('/ppbaos.com','/old')}))
-        with patch.object(l.b.Path,'glob',return_value=[Path('unreviewed.conf')]):
-            with self.assertRaisesRegex(RuntimeError,'EXTENSION_NOT_EMPTY'):l.vhost_digest(canonical=True,texts={'v2':base+ref})
+        from types import SimpleNamespace
+        entry=SimpleNamespace(lstat=lambda:SimpleNamespace(st_mode=0o100644,st_uid=0,st_nlink=1),read_text=lambda:'fastcgi_pass unix:/old.sock;')
+        with patch.object(l.b.Path,'glob',return_value=[entry]):
+            with self.assertRaisesRegex(RuntimeError,'EXTENSION_HAS_DIRECTIVES'):l.vhost_digest(canonical=True,texts={'v2':base+ref})
+        entry.read_text=lambda:'# Generated V2 placeholder only\n'
+        with patch.object(l.b.Path,'glob',return_value=[entry]):
+            self.assertEqual(old,l.vhost_digest(canonical=True,texts={'v2':base+ref}))

@@ -1,5 +1,6 @@
 """Strict V2 isolation policy. No app bootstrap, SQL writes or credential output."""
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -147,6 +148,10 @@ def validate_web_config(vhost,php_config):
 def omit_empty_v2_extension(text):
     pattern=r'(?m)^[ \t]*include[ \t]+/www/server/panel/vhost/nginx/extension/v2\.ppbaos\.com/\*\.conf[ \t]*;[ \t]*(?:#[^\n]*)?$'
     if re.search(pattern,text):
-        need(not list(Path('/www/server/panel/vhost/nginx/extension/v2.ppbaos.com').glob('*.conf')),'V2_EXTENSION_NOT_EMPTY_REQUIRES_REVIEW')
+        spec=importlib.util.spec_from_file_location('inert_extension_lexer',Path(__file__).with_name('nginx_lex.py'));lexer=importlib.util.module_from_spec(spec);spec.loader.exec_module(lexer)
+        for path in Path('/www/server/panel/vhost/nginx/extension/v2.ppbaos.com').glob('*.conf'):
+            st=path.lstat()
+            need(stat.S_ISREG(st.st_mode) and st.st_uid==0 and st.st_mode&0o022==0 and st.st_nlink==1,'V2_EXTENSION_FILE_NOT_ROOT_PROTECTED')
+            need(not lexer.nginx_tokens(path.read_text()),'V2_EXTENSION_HAS_DIRECTIVES_REQUIRES_REVIEW')
         text=re.sub(pattern,'',text)
     return text
