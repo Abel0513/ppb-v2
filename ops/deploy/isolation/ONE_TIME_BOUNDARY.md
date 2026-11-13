@@ -101,6 +101,8 @@ management identity; owner consent alone cannot add IAM actions.
 3. Review actual inventory. Provision a dedicated ppb-v2 OS identity, a dedicated
    V2 SQL principal with no legacy write/global/role authority, and root-private
    policy/isolation.json with independently verified exact database ownership.
+   Certify absence of cross-schema cascades/privileged definers with full DBA
+   metadata visibility once; limited user metadata alone is not a global proof.
    policy.example.json deliberately uses nulls; it cannot silently activate writes.
    Do not read/reuse old private DB/root credentials to bypass this requirement.
 4. Configure dedicated ppb-v2-php.service (V2 only): User ppb-v2,
@@ -108,6 +110,9 @@ management identity; owner consent alone cannot add IAM actions.
    /www/wwwroot/ppbaos.com, read-only .env, PrivateTmp/Devices, inaccessible legacy
    root/panel/private deployment area, IMDS IPv4/IPv6 denied. Verify kernel/service
    enforcement, no www/shared UID/group access and only V2 vhost upstream changes.
+   Bind the approved V2 vhost/pool/unit hashes and verify the actual active socket
+   belongs to ppb-v2. Reviewed unit/pool templates are in the private bootstrap
+   units/ directory; templates are not automatically activated.
    Preserve old Nginx configs/entrypoints/cron. Back up/clear inherited V2 config
    cache and rebuild under the isolated UID after safe credentials are installed.
 5. Install the runtime isolated document version as default; archive/delete old

@@ -9,6 +9,7 @@ from pathlib import Path
 import tarfile
 ROOT=Path(__file__).resolve().parent
 FILES={
+    **{'units/'+n:ROOT/'units'/n for n in ['ppb-v2-php.service','php-fpm.conf','ppb-v2-queue.service','ppb-v2-scheduler.service','ppb-v2-scheduler.timer']},
     **{'scripts/isolation/'+n:ROOT/n for n in ['boundary.py','db-probe.php','lifecycle.py','release.py']},
     **{'scripts/'+n:ROOT.parent/n for n in ['controlled-deploy.py','stage-release.py','check-release.py']},
     'automation/accept-v2.py':ROOT.parents[1]/'automation/accept-v2.py',
