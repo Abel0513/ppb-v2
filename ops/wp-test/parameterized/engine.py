@@ -41,6 +41,7 @@ def validate(req):
 
 def save(path, data):
     raw=canonical(data).encode()
+    need(len(raw)<500000,'REQUEST_RECORD_TOO_LARGE')
     fd,name=tempfile.mkstemp(prefix='.request-',dir=path.parent)
     tmp=Path(name)
     try:

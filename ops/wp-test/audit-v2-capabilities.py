@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import urllib.request
 import urllib.error
@@ -16,6 +17,8 @@ def main():
         PPB_AUTO_DEPLOY_configured=bool(os.environ.get('PPB_AUTO_DEPLOY_VALUE','')),
         PPB_SUBSCRIPTION_RUNNER_READY=os.environ.get('PPB_SUBSCRIPTION_RUNNER_READY_VALUE','')=='true',
         publisher_token_present=os.environ.get('PPB_PUBLISH_TOKEN_PRESENT')=='true',
+        deploy_document_version_configured=bool(re.fullmatch('[1-9][0-9]*',os.environ.get('PPB_DEPLOY_DOCUMENT_VERSION_VALUE',''))),
+        deploy_document_sha256_configured=bool(re.fullmatch('[a-f0-9]{64}',os.environ.get('PPB_DEPLOY_DOCUMENT_SHA256_VALUE',''))),
         aws_role_used=r.ROLE,assumed_deploy_role=False,production_mutations=0)
     reads={
         'wp_role_inline_policy':('iam','get-role-policy','--role-name','PPB-V2-GitHub-WP-Draft-Test-Role','--policy-name','PPB-WP-Draft-Runtime'),

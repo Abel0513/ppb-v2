@@ -44,6 +44,8 @@ jobs:
           role-duration-seconds: 1800
       - name: Read configuration evidence without deploying V2 or assuming its role
         env:
+          PPB_DEPLOY_DOCUMENT_VERSION_VALUE: ${{ vars.PPB_DEPLOY_DOCUMENT_VERSION }}
+          PPB_DEPLOY_DOCUMENT_SHA256_VALUE: ${{ vars.PPB_DEPLOY_DOCUMENT_SHA256 }}
           PPB_AUTO_DEPLOY_VALUE: ${{ vars.PPB_AUTO_DEPLOY }}
           PPB_SUBSCRIPTION_RUNNER_READY_VALUE: ${{ vars.PPB_SUBSCRIPTION_RUNNER_READY }}
           PPB_PUBLISH_TOKEN_PRESENT: ${{ secrets.CODEX_GITHUB_TOKEN != '' }}

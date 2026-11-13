@@ -146,3 +146,34 @@ class RealPHPIntegration(unittest.TestCase):
             calls=json.loads((root/'server.json').read_text())['calls']
             writes=[p for p,m in calls if m!='GET']
             self.assertEqual(writes,['/wp-json/acf/v3/expert/30460'])
+
+
+class CandidateClient(unittest.TestCase):
+    def test_uninstalled_candidate_never_uploads_or_sends_command(self):
+        from unittest.mock import patch
+        spec=importlib.util.spec_from_file_location('param_client',ROOT/'client.py')
+        c=importlib.util.module_from_spec(spec);spec.loader.exec_module(c)
+        calls=[]
+        def aws(*args):
+            calls.append(args)
+            if args[:2]==('sts','get-caller-identity'):return {'Account':c.r.ACCOUNT}
+            if args[:2]==('ssm','describe-document'):return {'Document':{'DocumentVersion':'2','Hash':'a'*64}}
+            if args[:2]==('ssm','get-document'):return {'Content':'{}'}
+            self.fail('Unexpected AWS mutation')
+        with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,GITHUB_SHA='a'*40,GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT='1'):
+            old=os.getcwd()
+            try:
+                os.chdir(tmp);result=c.invoke(req(),aws)
+            finally:os.chdir(old)
+        self.assertEqual(result['stop_code'],'PARAMETERIZED_INTERFACE_NOT_INSTALLED')
+        self.assertIsNone(result['ssm_command_id'])
+        self.assertEqual(len(calls),3)
+    def test_document_schema_and_reproducibility(self):
+        spec=importlib.util.spec_from_file_location('param_render',ROOT/'render.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        d=module.document()
+        self.assertEqual(d,json.loads((ROOT/'document.json').read_text()))
+        self.assertEqual(d['parameters']['Operation']['allowedValues'],['read','update_acf','verify'])
+        self.assertNotIn('create',d['parameters']['Operation']['allowedValues'])
+        self.assertIn('request.json',d['mainSteps'][1]['inputs']['sourceInfo'])
+        self.assertLess(len(json.dumps(d).encode()),64000)
