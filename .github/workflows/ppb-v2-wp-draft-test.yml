@@ -57,6 +57,24 @@ jobs:
           persist-credentials: false
       - name: Initialize correlated acceptance evidence before AWS access
         run: python3 ops/wp-test/remote.py init
+      - name: Diagnose OIDC identity without logging credentials
+        shell: bash
+        run: |
+          python3 - <<'PY_OIDC'
+          import base64, json, os, urllib.parse, urllib.request
+          from pathlib import Path
+          url = os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']
+          url += ('&' if '?' in url else '?') + urllib.parse.urlencode({'audience':'sts.amazonaws.com'})
+          request = urllib.request.Request(url, headers={'Authorization':'Bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
+          with urllib.request.urlopen(request, timeout=30) as response:
+              token = json.load(response)['value']
+          encoded = token.split('.')[1]
+          claims = json.loads(base64.urlsafe_b64decode(encoded+'='*(-len(encoded)%4)))
+          keys = ['iss','aud','sub','repository','repository_id','repository_owner_id','ref','job_workflow_ref','run_id','run_attempt']
+          identity = {key:claims.get(key) for key in keys}
+          Path('wp-result/oidc-identity.json').write_text(json.dumps(identity,indent=2))
+          print('OIDC_IDENTITY='+json.dumps(identity))
+          PY_OIDC
       - name: Assume WP-only role through existing GitHub OIDC provider
         id: aws
         uses: aws-actions/configure-aws-credentials@v6.3.0
