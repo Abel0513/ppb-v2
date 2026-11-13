@@ -11,6 +11,10 @@ Keep the existing OIDC provider, private S3 bucket, instance, instance role and
    Require CODEOWNERS review for `ops/wp-test/interface/**`,
    `.github/workflows/**`, `tools/wpn2/**` and `ops/wp-test/result-envelope.py`.
    The developer/agent must not be an approving owner or have protection bypass.
+   This PR author is Abel0513: GitHub will not allow that same account to approve
+   its own PR. The initial CODEOWNERS owner entry must be supplemented/replaced
+   with an actual independent reviewer account before enabling promotion; we
+   cannot invent an available reviewer identity or claim this is configured.
 2. Create GitHub environment `wp-interface-promotion`: only protected `main`,
    independent required reviewer, prevent self-review. Do not run promotion on
    the development branch. A separate protected review branch is possible, but

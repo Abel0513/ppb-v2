@@ -15,6 +15,7 @@ r=importlib.util.module_from_spec(spec);spec.loader.exec_module(r)
 
 def invoke(operation, result, path, call=r.aws, sleep=time.sleep):
     r.require(call('sts','get-caller-identity').get('Account')==r.ACCOUNT,'WRONG_ACCOUNT')
+    result['stage']='SSM_DOCUMENT';r.persist(path,result)
     meta=call('ssm','describe-document','--name',r.DOCUMENT,'--document-version','$DEFAULT')['Document']
     version=meta['DocumentVersion']
     actual=call('ssm','get-document','--name',r.DOCUMENT,'--document-version',version,'--document-format','JSON')
