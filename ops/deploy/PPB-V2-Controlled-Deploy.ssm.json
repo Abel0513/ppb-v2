@@ -136,7 +136,23 @@
           "  echo \"RESULT=PPB_V2_FIRST_DEPLOYMENT_THREE_OF_SIX_SCOPE_PASS\"",
           "fi",
           "if [ \"$SSM_Operation\" = audit ]; then echo \"RESULT=PPB_V2_SSM_AUDIT_CACHE_COMPAT_PASS\"; exit 0; fi",
+          "if [ \"$SSM_Operation\" = deploy ]; then",
+          "  test -f /www/ppb-v2-deploy/scripts/accept-v2.py && test ! -L /www/ppb-v2-deploy/scripts/accept-v2.py",
+          "  printf \"1556753733a1b576c756e5b2786a0617028c3e166f575cc19bc70d87a9995396  /www/ppb-v2-deploy/scripts/accept-v2.py\\n\" | sha256sum -c - >/dev/null",
+          "fi",
           "exec python3 /www/ppb-v2-deploy/scripts/controlled-deploy.py --operation \"$SSM_Operation\" --archive \"$f\" --sha256 \"$SSM_Sha256\" --commit \"$SSM_Commit\" --run-id \"$SSM_RunId\" --run-attempt \"$SSM_RunAttempt\" --confirmation \"$SSM_Approval\""
+        ]
+      }
+    },
+    {
+      "action": "aws:runShellScript",
+      "name": "functionalAcceptance",
+      "inputs": {
+        "timeoutSeconds": "120",
+        "runCommand": [
+          "set -eu",
+          "if [ \"$SSM_Operation\" != deploy ]; then echo RESULT=FUNCTIONAL_ACCEPTANCE_NOT_REQUESTED; exit 0; fi",
+          "exec /usr/bin/python3 -I /www/ppb-v2-deploy/scripts/accept-v2.py \"$SSM_Commit\""
         ]
       }
     }

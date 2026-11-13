@@ -1,0 +1,26 @@
+# Reviewed example; activate only after exact V2 DB ownership/grants are certified.
+[Unit]
+Description=Dedicated V2 PHP-FPM (never the shared legacy PHP service)
+After=network.target
+[Service]
+Type=simple
+User=ppb-v2
+Group=ppb-v2
+WorkingDirectory=/www/wwwroot/ppbaos.com
+ExecStart=/www/server/php/84/sbin/php-fpm --nodaemonize --fpm-config /etc/ppb-v2/php-fpm.conf
+ExecStartPost=+/usr/bin/python3 -I /www/ppb-v2-deploy/scripts/isolation/socket-acl.py
+ExecReload=/bin/kill -USR2 $MAINPID
+Restart=on-failure
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+NoNewPrivileges=true
+CapabilityBoundingSet=
+ReadWritePaths=/www/wwwroot/ppbaos.com
+BindReadOnlyPaths=/www/wwwroot/ppbaos.com/.env
+InaccessiblePaths=/www/wwwroot/3.231.229.26 /www/server/data /www/server/panel /www/ppb-v2-deploy -/run/mysqld -/etc/mysql -/etc/my.cnf
+IPAddressDeny=169.254.0.0/16 fd00:ec2::254/128
+UMask=0077
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,25 @@
+name: V2 authorized application auto-merge
+on:
+  workflow_run:
+    workflows: ['PPB V2 offline release guard tests', 'PPB automation tests', 'V2 isolation and lifecycle tests']
+    types: [completed]
+permissions:
+  contents: read
+concurrency:
+  group: ppb-v2-application-merge
+  cancel-in-progress: false
+jobs:
+  merge:
+    if: vars.PPB_AUTO_DEPLOY != 'false' && github.repository_id == '1454285732' && github.repository_owner_id == '55256582' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v5
+        with: {ref: main, persist-credentials: false}
+      - name: Merge only authorized V2 application changes with all trusted CI green
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: python3 ops/automation/autonomy.py

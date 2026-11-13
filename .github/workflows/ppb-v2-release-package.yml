@@ -1,6 +1,9 @@
 name: PPB V2 build, private S3 package and optional controlled delivery
 
 on:
+  pull_request:
+    types: [closed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       operation:
@@ -12,6 +15,14 @@ on:
           - package_only
           - audit
           - deploy
+      source_pr:
+        description: 'Trusted automatic dispatch source PR; blank for explicit operator release'
+        required: false
+        type: string
+      expected_commit:
+        description: 'Exact merged commit for automatic dispatch'
+        required: false
+        type: string
       confirmation:
         description: 'For deploy only, enter DEPLOY-PPB-V2 (exact). Otherwise leave blank.'
         required: false
@@ -19,15 +30,35 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: ppb-v2-private-release
   cancel-in-progress: false
 
 jobs:
-  package:
-    if: github.ref == 'refs/heads/main' && github.repository == 'Abel0513/ppb-v2' && github.repository_id == '1454285732' && github.repository_owner_id == '55256582'
+  merge-gate:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true && vars.PPB_AUTO_DEPLOY != 'false')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    outputs:
+      approved: ${{ steps.gate.outputs.approved }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          persist-credentials: false
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PPB_AUTO_DEPLOY: ${{ vars.PPB_AUTO_DEPLOY }}
+        run: python3 ops/automation/release-gate.py
+  build:
+    needs: merge-gate
+    if: always() && needs.merge-gate.outputs.approved == 'true' && github.ref == 'refs/heads/main' && github.repository == 'Abel0513/ppb-v2' && github.repository_id == '1454285732' && github.repository_owner_id == '55256582'
+    permissions: {contents: read}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -37,8 +68,8 @@ jobs:
       - name: Verify manual production approval before running any build
         shell: bash
         env:
-          PPB_OPERATION: ${{ inputs.operation }}
-          PPB_CONFIRMATION: ${{ inputs.confirmation }}
+          PPB_OPERATION: ${{ github.event_name == 'pull_request' && 'deploy' || inputs.operation }}
+          PPB_CONFIRMATION: ${{ github.event_name == 'pull_request' && 'DEPLOY-PPB-V2' || inputs.confirmation }}
         run: |
           set -euo pipefail
           case "$PPB_OPERATION:$PPB_CONFIRMATION" in
@@ -83,135 +114,57 @@ jobs:
           sha256_hex="$(sha256sum "$archive" | awk '{print $1}')"
           printf 'RELEASE_ARCHIVE=%s\n' "$archive" >> "$GITHUB_ENV"
           printf 'RELEASE_SHA256=%s\n' "$sha256_hex" >> "$GITHUB_ENV"
+      - name: Export version archive as data only (no AWS identity in build job)
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-release-input-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.RELEASE_ARCHIVE }}
+          retention-days: 3
+          if-no-files-found: error
+
+  deliver:
+    needs: [merge-gate, build]
+    if: always() && needs.merge-gate.outputs.approved == 'true' && needs.build.result == 'success' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    permissions: {contents: read, id-token: write}
+    steps:
+      - uses: actions/checkout@v5
+        with: {ref: '${{ github.sha }}', persist-credentials: false}
+      - uses: actions/download-artifact@v4
+        with:
+          name: v2-release-input-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-input
+      - name: Bind exact archive filename; never execute artifact code on this runner
+        run: echo "RELEASE_ARCHIVE=$RUNNER_TEMP/release-input/ppb-v2-$GITHUB_SHA.tar.gz" >> "$GITHUB_ENV"
       - uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
           role-to-assume: arn:aws:iam::429724121147:role/PPB-V2-GitHub-Deploy-Role
           aws-region: us-east-1
           allowed-account-ids: '429724121147'
-      - name: Upload immutable version to private S3 before optional SSM operation
-        shell: bash
+      - name: Store package or execute pinned isolated release and collect actual result
         env:
-          AWS_REGION: us-east-1
-        run: |
-          set -euo pipefail
-          key="releases/$GITHUB_SHA/run-$GITHUB_RUN_ID-attempt-$GITHUB_RUN_ATTEMPT.tar.gz"
-          checksum_b64="$(python3 - "$RELEASE_ARCHIVE" <<'PY'
-          import base64, hashlib, sys
-          digest = hashlib.sha256()
-          with open(sys.argv[1], 'rb') as fp:
-              for block in iter(lambda: fp.read(1048576), b''):
-                  digest.update(block)
-          print(base64.b64encode(digest.digest()).decode())
-          PY
-          )"
-          aws s3api put-object \
-            --region "$AWS_REGION" \
-            --bucket "$PPB_BUCKET" \
-            --key "$key" \
-            --body "$RELEASE_ARCHIVE" \
-            --if-none-match '*' \
-            --checksum-algorithm SHA256 \
-            --checksum-sha256 "$checksum_b64" \
-            --server-side-encryption AES256 \
-            --metadata "git-commit=$GITHUB_SHA,sha256=$RELEASE_SHA256" \
-            --query '{VersionId:VersionId,ChecksumSHA256:ChecksumSHA256}' \
-            --output json
-          {
-            echo '## PPB V2 private release stored'
-            printf -- '- Git commit: %s\n' "$GITHUB_SHA"
-            printf -- '- S3 key: %s\n' "$key"
-            printf -- '- SHA256: %s\n' "$RELEASE_SHA256"
-            echo '- Packaging did not access the production host or DB; any later SSM operation is reported separately.'
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo 'RESULT=PPB_V2_PRIVATE_RELEASE_UPLOAD_PASS'
+          PPB_OPERATION: ${{ github.event_name == 'pull_request' && 'deploy' || inputs.operation }}
+        run: python3 ops/deploy/release-client.py
+      - name: Preserve bounded release result (no SQL dumps or raw credentials)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: v2-result/
+          if-no-files-found: ignore
+          retention-days: 14
 
-      - name: Audit or deploy pinned version through fixed SSM document
-        if: ${{ inputs.operation == 'audit' || inputs.operation == 'deploy' }}
-        shell: bash
+  acceptance-report:
+    needs: [merge-gate, deliver]
+    if: always() && github.event_name == 'pull_request' && needs.merge-gate.outputs.approved == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v7
         env:
-          AWS_REGION: us-east-1
-          PPB_INSTANCE_ID: i-0135d6b2fac7a54c2
-          PPB_OPERATION: ${{ inputs.operation }}
-        run: |
-          set -euo pipefail
-          approval=NONE
-          if [[ "$PPB_OPERATION" == deploy ]]; then approval=DEPLOY-PPB-V2; fi
-          parameters="$(jq -nc \
-            --arg commit "$GITHUB_SHA" \
-            --arg sha "$RELEASE_SHA256" \
-            --arg run_id "$GITHUB_RUN_ID" \
-            --arg attempt "$GITHUB_RUN_ATTEMPT" \
-            --arg op "$PPB_OPERATION" \
-            --arg approval "$approval" \
-            '{Commit:[$commit],Sha256:[$sha],RunId:[$run_id],RunAttempt:[$attempt],Operation:[$op],Approval:[$approval]}')"
-          command_id="$(aws ssm send-command \
-            --region "$AWS_REGION" \
-            --document-name PPB-V2-Controlled-Deploy \
-            --instance-ids "$PPB_INSTANCE_ID" \
-            --parameters "$parameters" \
-            --timeout-seconds 1800 \
-            --max-concurrency 1 \
-            --max-errors 0 \
-            --comment "ppb-v2 $PPB_OPERATION git=$GITHUB_SHA run=$GITHUB_RUN_ID" \
-            --query Command.CommandId --output text)"
-          echo "SSM command: $command_id"
-          # Multi-step SSM documents require --plugin-name to fetch actual output.
-          # Poll the final fixed step, not the document-level (Output=null) response.
-          status=Pending
-          for poll in $(seq 1 195); do
-            status="$(aws ssm get-command-invocation \
-              --region "$AWS_REGION" \
-              --command-id "$command_id" \
-              --instance-id "$PPB_INSTANCE_ID" \
-              --plugin-name controlledRelease \
-              --query Status --output text 2>/dev/null || echo Pending)"
-            case "$status" in
-              Success|Failed|Cancelled|TimedOut|Cancelling|DeliveryTimedOut|ExecutionTimedOut) break ;;
-            esac
-            sleep 10
-          done
-          invocation="$(aws ssm get-command-invocation \
-            --region "$AWS_REGION" \
-            --command-id "$command_id" \
-            --instance-id "$PPB_INSTANCE_ID" \
-            --plugin-name controlledRelease \
-            --output json)"
-          status="$(jq -r .Status <<<"$invocation")"
-          code="$(jq -r .ResponseCode <<<"$invocation")"
-          step_output="$(jq -r '.StandardOutputContent // ""' <<<"$invocation")"
-          step_error="$(jq -r '.StandardErrorContent // ""' <<<"$invocation")"
-          echo "SSM final step: controlledRelease; status=$status; response_code=$code"
-          if [[ -n "$step_output" ]]; then printf '%s\n' "$step_output"; fi
-          if [[ -n "$step_error" ]]; then printf '%s\n' "$step_error" >&2; fi
-          {
-            echo '## PPB V2 controlled AWS delivery'
-            printf -- '- Operation: %s\n' "$PPB_OPERATION"
-            printf -- '- Git commit: %s\n' "$GITHUB_SHA"
-            printf -- '- Archive SHA256: %s\n' "$RELEASE_SHA256"
-            printf -- '- SSM Command ID: %s\n' "$command_id"
-            printf -- '- SSM final step: %s (exit %s)\n' "$status" "$code"
-            echo '### Verified execution output'
-            echo '```text'
-            printf '%s\n' "$step_output" | grep -E '^(APPROVED_DIFF_FILE|PHP_LINT_PASSED|COMMIT|RELEASE_FILES|REPLACE_FILES|ADD_FILES|DELETE_FILES|PRESERVED|DATABASE_MIGRATIONS_EXECUTED|LIVE_APPLICATION_DEPLOYED|RESULT)=' || true
-            echo '```'
-            echo '- No database migrations are run by this workflow. Application health requires separate functional validation.'
-          } >> "$GITHUB_STEP_SUMMARY"
-          if [[ "$status" != Success || "$code" != 0 ]]; then
-            echo "::error::SSM controlledRelease step failed: command=$command_id status=$status code=$code"
-            exit 1
-          fi
-          expected_marker=RESULT=PPB_V2_CONTROLLED_AUDIT_PASS
-          if [[ "$PPB_OPERATION" == deploy ]]; then
-            expected_marker=RESULT=PPB_V2_CONTROLLED_DEPLOY_PASS
-            if ! grep -Fxq "LIVE_APPLICATION_DEPLOYED=YES" <<<"$step_output"; then
-              echo "::error::SSM returned success without live deployment confirmation"
-              exit 1
-            fi
-          fi
-          if ! grep -Fxq "$expected_marker" <<<"$step_output" || \
-             ! grep -Fxq "DATABASE_MIGRATIONS_EXECUTED=NO" <<<"$step_output" || \
-             ! grep -Fxq "COMMIT=$GITHUB_SHA" <<<"$step_output"; then
-            echo "::error::SSM response is missing expected result/commit/no-migration markers"
-            exit 1
-          fi
-          echo "RESULT=PPB_V2_SSM_${PPB_OPERATION^^}_PASS"
+          RELEASE_RESULT: ${{ needs.deliver.result }}
+        with:
+          script: |
+            await github.rest.issues.createComment({...context.repo,issue_number:context.payload.pull_request.number,body:`V2 release/acceptance job: ${process.env.RELEASE_RESULT}. Actual SSM IDs, commit, backup/deploy evidence and functional baseline are in ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}. WP/DB/LIFF business acceptance is not implied. Failure requires inspection of the recorded transaction; no automatic retry or DB rollback.`});

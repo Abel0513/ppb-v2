@@ -130,7 +130,7 @@ def clone_file_atomic(source, destination, old_stat=None):
 
 class ControlledDeploy:
     def __init__(self, live=LIVE_DEFAULT, private=PRIVATE_DEFAULT,
-                 health=None, require_host=True):
+                 health=None, require_host=True, allow_assets_changes=False):
         self.live = Path(live)
         self.private = Path(private)
         self.releases = self.private / 'releases'
@@ -140,6 +140,7 @@ class ControlledDeploy:
         self.lock_path = self.private / '.deployment.lock'
         self.health = health if health is not None else self.http_health
         self.require_host = require_host
+        self.allow_assets_changes = allow_assets_changes
 
     @staticmethod
     def http_health():
@@ -249,7 +250,7 @@ class ControlledDeploy:
             if dest.exists() and filecmp.cmp(source, dest, shallow=False):
                 continue
             if rel == 'public/assets' or rel.startswith('public/assets/'):
-                if dest.exists():
+                if dest.exists() and not self.allow_assets_changes:
                     fail('public/assets differs; requires a separate asset-change approval: ' + rel)
             action.append({'kind': 'replace' if dest.exists() else 'add', 'path': rel})
         removals = sorted(previous_files - set(names))
@@ -257,7 +258,7 @@ class ControlledDeploy:
             fail('deleted managed paths require explicit separate approval; count=' + str(len(removals)))
         for rel in removals:
             safe_rel(rel)
-            if rel.startswith('public/assets/'):
+            if rel.startswith('public/assets/') and not self.allow_assets_changes:
                 fail('removal of public/assets is forbidden')
             p = checked_path(self.live, rel)
             if p.exists():

@@ -1,0 +1,123 @@
+{
+  "schemaVersion": "2.2",
+  "description": "V2 isolated controlled release: fixed root file coordinator, nonroot lifecycle, scoped SQL grants, data-only acceptance",
+  "parameters": {
+    "Commit": {
+      "type": "String",
+      "interpolationType": "ENV_VAR",
+      "allowedPattern": "^[0-9a-f]{40}$",
+      "description": "Approved Git commit"
+    },
+    "Sha256": {
+      "type": "String",
+      "interpolationType": "ENV_VAR",
+      "allowedPattern": "^[0-9a-f]{64}$",
+      "description": "Pinned release tarball SHA256"
+    },
+    "RunId": {
+      "type": "String",
+      "interpolationType": "ENV_VAR",
+      "allowedPattern": "^[1-9][0-9]{0,19}$",
+      "description": "GitHub Actions run number"
+    },
+    "RunAttempt": {
+      "type": "String",
+      "interpolationType": "ENV_VAR",
+      "allowedPattern": "^[1-9][0-9]{0,19}$",
+      "description": "GitHub Actions attempt"
+    },
+    "Operation": {
+      "type": "String",
+      "interpolationType": "ENV_VAR",
+      "allowedValues": [
+        "audit",
+        "deploy"
+      ],
+      "description": "Audit by default; deploy requires separate approval",
+      "default": "audit"
+    },
+    "Approval": {
+      "type": "String",
+      "interpolationType": "ENV_VAR",
+      "allowedValues": [
+        "NONE",
+        "DEPLOY-PPB-V2"
+      ],
+      "default": "NONE"
+    }
+  },
+  "mainSteps": [
+    {
+      "action": "aws:runShellScript",
+      "name": "prepareIsolatedDownload",
+      "precondition": {
+        "StringEquals": [
+          "platformType",
+          "Linux"
+        ]
+      },
+      "inputs": {
+        "timeoutSeconds": "30",
+        "runCommand": [
+          "set -eu",
+          ": \"${SSM_Commit:?Commit not available}\"",
+          ": \"${SSM_Sha256:?Sha256 not available}\"",
+          ": \"${SSM_RunId:?RunId not available}\"",
+          ": \"${SSM_RunAttempt:?RunAttempt not available}\"",
+          ": \"${SSM_Operation:?Operation not available}\"",
+          ": \"${SSM_Approval:?Approval not available}\"",
+          "root=/www/ppb-v2-deploy/releases",
+          "test -d \"$root\" && test ! -L \"$root\"",
+          "case \"$SSM_Operation:$SSM_Approval\" in audit:NONE|deploy:DEPLOY-PPB-V2) ;; *) echo \"STOP=INVALID_APPROVAL\"; exit 1 ;; esac",
+          "download=\"$root/ssm-incoming-${SSM_RunId}-${SSM_RunAttempt}\"",
+          "test ! -L \"$download\"",
+          "install -d -m 700 \"$download\"",
+          "test ! -e \"$download/run-${SSM_RunId}-attempt-${SSM_RunAttempt}.tar.gz\"",
+          "echo \"RESULT=PPB_V2_SSM_PREPARE_PASS\""
+        ]
+      }
+    },
+    {
+      "action": "aws:downloadContent",
+      "name": "downloadPrivatePinnedArtifact",
+      "inputs": {
+        "sourceType": "S3",
+        "sourceInfo": "{\"path\":\"https://s3.us-east-1.amazonaws.com/ppb-v2-release-artifacts-429724121147-use1/releases/{{Commit}}/run-{{RunId}}-attempt-{{RunAttempt}}.tar.gz\"}",
+        "destinationPath": "/www/ppb-v2-deploy/releases/ssm-incoming-{{RunId}}-{{RunAttempt}}"
+      }
+    },
+    {
+      "action": "aws:runShellScript",
+      "name": "controlledRelease",
+      "inputs": {
+        "timeoutSeconds": "1800",
+        "runCommand": [
+          "set -eu",
+          "umask 077",
+          "test -f /www/ppb-v2-deploy/scripts/isolation/nginx_lex.py && test ! -L /www/ppb-v2-deploy/scripts/isolation/nginx_lex.py",
+          "printf '%s  %s\\n' 708824475e9abc74d52620f4257695511a3808f6db159cb0a50acfdd13e49e1d /www/ppb-v2-deploy/scripts/isolation/nginx_lex.py | sha256sum -c - >/dev/null",
+          "test -f /www/ppb-v2-deploy/scripts/isolation/provision.py && test ! -L /www/ppb-v2-deploy/scripts/isolation/provision.py",
+          "printf '%s  %s\\n' 755d265c8560d178c93a80675212a430437f423ea2ba31997ca0b7425eaa051a /www/ppb-v2-deploy/scripts/isolation/provision.py | sha256sum -c - >/dev/null",
+          "test -f /www/ppb-v2-deploy/scripts/isolation/socket-acl.py && test ! -L /www/ppb-v2-deploy/scripts/isolation/socket-acl.py",
+          "printf '%s  %s\\n' 05ddcba530c08e450bf5e92bed114d9a50da9e50defd4f855feb9febe098b49b /www/ppb-v2-deploy/scripts/isolation/socket-acl.py | sha256sum -c - >/dev/null",
+          "test -f /www/ppb-v2-deploy/scripts/isolation/global-metadata.php && test ! -L /www/ppb-v2-deploy/scripts/isolation/global-metadata.php",
+          "printf '%s  %s\\n' 50644a282986f9386419221d68c6766af0f88eb9abb6ef5ee9ddd55260cf79a9 /www/ppb-v2-deploy/scripts/isolation/global-metadata.php | sha256sum -c - >/dev/null",
+          "test -f /www/ppb-v2-deploy/scripts/isolation/boundary.py && test ! -L /www/ppb-v2-deploy/scripts/isolation/boundary.py",
+          "printf '%s  %s\\n' ddc4f861f4734afe981e42a38e9b186d321973147e7a499da86cc6e1e41e9bfb /www/ppb-v2-deploy/scripts/isolation/boundary.py | sha256sum -c - >/dev/null",
+          "test -f /www/ppb-v2-deploy/scripts/isolation/db-probe.php && test ! -L /www/ppb-v2-deploy/scripts/isolation/db-probe.php",
+          "printf '%s  %s\\n' bbb5d30264b2ccf1c5dbe715d0727c14e87d617a97232e0cdccbc2c6955d93c4 /www/ppb-v2-deploy/scripts/isolation/db-probe.php | sha256sum -c - >/dev/null",
+          "test -f /www/ppb-v2-deploy/scripts/isolation/lifecycle.py && test ! -L /www/ppb-v2-deploy/scripts/isolation/lifecycle.py",
+          "printf '%s  %s\\n' 5b70c3fcea711ba8ea9027157c5b5fd70f7f97fb2a0f63bcfb70a69aec40b6af /www/ppb-v2-deploy/scripts/isolation/lifecycle.py | sha256sum -c - >/dev/null",
+          "test -f /www/ppb-v2-deploy/scripts/isolation/release.py && test ! -L /www/ppb-v2-deploy/scripts/isolation/release.py",
+          "printf '%s  %s\\n' 0ced82f8ad575c1521281153a4b4ab5d91e45b2b850502967034c98108638f19 /www/ppb-v2-deploy/scripts/isolation/release.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' c502f1bffdf259d7d831ff63f14153ab9eff9566ebf937cc37fa73c486fe1678 /www/ppb-v2-deploy/scripts/controlled-deploy.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' bb342948784ff102d54a2dcc5faab2ffde1129c5e99ee6fd490d67aa5ea8d4e7 /www/ppb-v2-deploy/scripts/stage-release.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' e213e522b49c8fc38401623b3f19da44bdf5799a5424cf36a3f244462732d9ee /www/ppb-v2-deploy/scripts/check-release.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' da1c2c9e5b9eed7fecfbafb01e18e967f2db3d48cc430d5de9117f2002e2ff5d /www/ppb-v2-deploy/automation/accept-v2.py | sha256sum -c - >/dev/null",
+          "f=\"/www/ppb-v2-deploy/releases/ssm-incoming-${SSM_RunId}-${SSM_RunAttempt}/run-${SSM_RunId}-attempt-${SSM_RunAttempt}.tar.gz\"",
+          "exec python3 /www/ppb-v2-deploy/scripts/isolation/release.py --operation \"$SSM_Operation\" --archive \"$f\" --sha256 \"$SSM_Sha256\" --commit \"$SSM_Commit\" --run-id \"$SSM_RunId\" --run-attempt \"$SSM_RunAttempt\" --confirmation \"$SSM_Approval\""
+        ]
+      }
+    }
+  ]
+}

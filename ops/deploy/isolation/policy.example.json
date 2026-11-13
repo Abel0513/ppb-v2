@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "live": "/www/wwwroot/ppbaos.com",
+  "private": "/www/ppb-v2-deploy",
+  "unix_user": "ppb-v2",
+  "database": null,
+  "read_only_schemas": [],
+  "env_sha256": null,
+  "vhost_sha256": null,
+  "php_config_sha256": null,
+  "php_unit_sha256": null,
+  "legacy_roots": ["/www/wwwroot/3.231.229.26"]
+}

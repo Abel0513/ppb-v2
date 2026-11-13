@@ -1,0 +1,152 @@
+name: PPB Issue to Codex PR
+on:
+  issues:
+    types: [labeled]
+  workflow_run:
+    workflows: ['PPB V2 offline release guard tests', 'PPB automation tests']
+    types: [completed]
+  pull_request_review:
+    types: [submitted]
+permissions:
+  contents: read
+concurrency:
+  # Serialize all task claims and shared repair budget across event types.
+  group: ppb-codex-${{ github.event.workflow_run.head_branch || github.event.pull_request.head.ref || format('codex/issue-{0}', github.event.issue.number) }}
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.repository == 'Abel0513/ppb-v2' && ((github.event_name == 'issues' && github.event.label.name == 'codex-run') || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure') || (github.event_name == 'pull_request_review' && github.event.review.user.login == 'chatgpt-codex-connector[bot]'))
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      actions: read
+    outputs:
+      ready: ${{ steps.plan.outputs.ready }}
+      base: ${{ steps.plan.outputs.base }}
+      branch: ${{ steps.plan.outputs.branch }}
+      issue: ${{ steps.plan.outputs.issue }}
+      pr: ${{ steps.plan.outputs.pr }}
+      mode: ${{ steps.plan.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Require subscription runner readiness and publisher token
+        env:
+          RUNNER_READY: ${{ vars.PPB_SUBSCRIPTION_RUNNER_READY == 'true' }}
+          HAS_PUBLISH_TOKEN: ${{ secrets.CODEX_GITHUB_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          test "$RUNNER_READY:$HAS_PUBLISH_TOKEN" = true:true || { echo 'STOP=Configure trusted ChatGPT Codex runner and CODEX_GITHUB_TOKEN before reserving a task'; exit 1; }
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ops/automation/control.py prepare
+      - uses: actions/upload-artifact@v7
+        with:
+          name: trusted-task
+          path: prompt.txt
+          retention-days: 3
+  develop:
+    needs: prepare
+    if: needs.prepare.outputs.ready == 'true' && vars.PPB_SUBSCRIPTION_RUNNER_READY == 'true'
+    # Persistent, isolated runner using the operator's ChatGPT-signed-in Codex CLI.
+    # NEVER label a production root runner or expose legacy site/database mounts.
+    runs-on: [self-hosted, linux, x64, ppb-codex-subscription]
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.base }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8
+        with:
+          name: trusted-task
+          path: .task
+      - name: Verify dedicated subscription runner tools and login
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v codex
+          command -v php
+          command -v composer
+          # No API-based authentication may be injected through runner defaults.
+          test -z "${OPENAI_API_KEY:-}${CODEX_API_KEY:-}" || { echo 'STOP=API_KEY_AUTH_DISALLOWED'; exit 1; }
+          codex -c forced_login_method=chatgpt login status >/dev/null
+      - name: Prepare locked dependencies without scripts or plugins
+        run: composer install --prefer-dist --no-interaction --no-progress --no-scripts --no-plugins
+      - name: Save trusted exporter before agent edits
+        run: git show origin/main:ops/automation/control.py > "$RUNNER_TEMP/export.py"
+      - name: Run Codex with ChatGPT subscription (no API key)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Force ChatGPT auth even if someone previously logged in with an API key.
+          test -z "${OPENAI_API_KEY:-}${CODEX_API_KEY:-}" || { echo 'STOP=API_KEY_AUTH_DISALLOWED'; exit 1; }
+          codex -c forced_login_method=chatgpt exec --sandbox workspace-write --ask-for-approval never "$(cat .task/prompt.txt)" > agent-summary.txt
+      - name: Export candidate patch (no GitHub write token)
+        env:
+          BASE: ${{ needs.prepare.outputs.base }}
+          PATCH_PATH: ${{ runner.temp }}/candidate.patch
+        run: |
+          rm -rf .task agent-summary.txt
+          python3 "$RUNNER_TEMP/export.py" export "$BASE"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: candidate
+          path: ${{ runner.temp }}/candidate.patch
+          retention-days: 3
+  publish:
+    needs: [prepare, develop]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: candidate
+          path: ${{ runner.temp }}/candidate
+      - name: Validate patch and publish one managed branch and PR
+        env:
+          GH_TOKEN: ${{ secrets.CODEX_GITHUB_TOKEN }}
+          BASE: ${{ needs.prepare.outputs.base }}
+          BRANCH: ${{ needs.prepare.outputs.branch }}
+          ISSUE: ${{ needs.prepare.outputs.issue }}
+          PR: ${{ needs.prepare.outputs.pr }}
+          MODE: ${{ needs.prepare.outputs.mode }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          test -n "$GH_TOKEN" || { echo 'STOP=Configure CODEX_GITHUB_TOKEN'; exit 1; }
+          cp ops/automation/control.py "$RUNNER_TEMP/publish.py"
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          Path(os.environ['RUNNER_TEMP']+'/meta.json').write_text(json.dumps(dict(base=os.environ['BASE'],branch=os.environ['BRANCH'],issue=int(os.environ['ISSUE']),pr=int(os.environ['PR']),mode=os.environ['MODE'])))
+          PY
+          python3 "$RUNNER_TEMP/publish.py" publish "$RUNNER_TEMP/meta.json" "$RUNNER_TEMP/candidate/candidate.patch"
+  report:
+    needs: [prepare, develop, publish]
+    if: always() && needs.prepare.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          ISSUE: ${{ needs.prepare.outputs.issue }}
+          DEVELOP: ${{ needs.develop.result }}
+          PUBLISH: ${{ needs.publish.result }}
+        with:
+          script: |
+            await github.rest.issues.createComment({...context.repo, issue_number:Number(process.env.ISSUE), body:`Codex task: develop=${process.env.DEVELOP}, publish=${process.env.PUBLISH}. Evidence: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}. No merge/deploy executed. Failed attempts remain reserved; inspect the linked run, do not reset the repair counter.`});

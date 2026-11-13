@@ -1,0 +1,36 @@
+{
+  "ready": true,
+  "deployed_commit": "35256c95a8e6b24b40165808e9778c489ac7ae4d",
+  "metadata_audit": {
+    "run_id": 43483476302,
+    "ssm_command_id": "4369e071-f112-4af2-aba8-cdd431120710",
+    "global_metadata_coverage": true
+  },
+  "isolation": {
+    "run_id": 43505484293,
+    "ssm_command_id": "99d1e2a0-0a0c-417b-9b84-11a0dde1ea35",
+    "runtime_version": 35,
+    "runtime_sha256": "c3f2b2c856aa3ec70eef94acc157a96fa546084630b8a06a1bd63fb81015edf5"
+  },
+  "release": {
+    "run_id": 43505632860,
+    "attempt": 1,
+    "ssm_command_id": "8ebf8a0f-af76-4b4d-bfbe-37ca260c4387",
+    "http_checks": 5,
+    "result": "PASS"
+  },
+  "repeat": {
+    "run_id": 43505632860,
+    "attempt": 2,
+    "ssm_command_id": "c9b0b518-305a-49d2-ac18-5681d6ca5f57",
+    "http_checks": 5,
+    "result": "PASS",
+    "idempotent": true,
+    "program_files_written": 0
+  },
+  "limitations": [
+    "DDL migration path is guarded but no production DDL executed in this page acceptance",
+    "Queue and scheduler units configured but disabled; no business jobs started",
+    "Public GET from Codex environment blocked by network proxy; HTTP checks executed by EC2 fixed verifier"
+  ]
+}
