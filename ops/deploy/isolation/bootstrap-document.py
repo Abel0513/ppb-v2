@@ -54,6 +54,7 @@ with tarfile.open(archive,'r:gz') as tf:
         os.replace(temp,target)
 for name,digest in expected.items():assert hashlib.sha256((root/name).read_bytes()).hexdigest()==digest
 subprocess.run(['python3',str(root/'scripts/isolation/prepare-os.py')],check=True,timeout=30)
+subprocess.run(['python3',str(root/'scripts/isolation/provision.py')],check=True,timeout=360)
 print('V2_FIXED_TOOLS_INSTALLED=YES')
 print('V2_DB_AND_SERVICE_ISOLATION=NOT_YET_VERIFIED')
 p=subprocess.run(['python3',str(root/'scripts/isolation/lifecycle.py'),'inventory','--commit','COMMIT_VALUE','--request-id','bootstrap-inventory-APPROVED_SHORT'],capture_output=True,text=True,timeout=60)
@@ -66,7 +67,7 @@ except Exception:print('V2_INVENTORY=UNVERIFIED')
     return digest,dict(schemaVersion='2.2',description='Reviewed one-time V2 fixed-tool install; no shell input/SQL grants/live app or old-system changes',parameters={},mainSteps=[
         dict(action='aws:runShellScript',name='prepareFixedTools',inputs=dict(timeoutSeconds='30',runCommand=['set -eu','umask 077','test "$(id -u)" = 0','test -d /www/ppb-v2-deploy && test ! -L /www/ppb-v2-deploy',f'test ! -L /www/ppb-v2-deploy/bootstrap',f'install -d -m 700 /www/ppb-v2-deploy/bootstrap/{digest}'])),
         dict(action='aws:downloadContent',name='downloadReviewedTools',inputs=dict(sourceType='S3',sourceInfo=json.dumps(dict(path='https://s3.us-east-1.amazonaws.com/ppb-v2-release-artifacts-429724121147-use1/releases/bootstrap/'+digest+'/fixed.tar.gz')),destinationPath='/www/ppb-v2-deploy/bootstrap/'+digest)),
-        dict(action='aws:runShellScript',name='installReviewedTools',inputs=dict(timeoutSeconds='120',runCommand=['set -eu','umask 077',"python3 - <<'FIXED_INSTALL'",*code.splitlines(),'FIXED_INSTALL']))])
+        dict(action='aws:runShellScript',name='installReviewedTools',inputs=dict(timeoutSeconds='600',runCommand=['set -eu','umask 077',"python3 - <<'FIXED_INSTALL'",*code.splitlines(),'FIXED_INSTALL']))])
 if __name__=='__main__':
     digest,d=document();target=ROOT.parent/'PPB-V2-Controlled-Deploy.bootstrap.ssm.json';text=json.dumps(d,indent=2)+'\n'
     if '--check' in sys.argv:assert target.read_text()==text

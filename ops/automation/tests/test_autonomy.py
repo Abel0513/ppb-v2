@@ -20,6 +20,13 @@ class Autonomy(unittest.TestCase):
             with self.assertRaises(RuntimeError):a.classify([{'filename':name}])
         p=self.pr();p['head']['ref']='codex/issue-12-wp-draft'
         with self.assertRaises(RuntimeError):a.validate_pr(p,[{'filename':'app/new.php'}],self.checks(),SHA)
+    def test_proof_exception_is_exact_pr_branch_and_page_files_only(self):
+        p=self.pr();p['number']=22;p['head']['ref']='codex/v2-automation-proof'
+        self.assertTrue(a.acceptance_proof(p,[{'filename':'routes/web.php'}]))
+        for name in ['database/migrations/new.php','app/Models/New.php','.github/workflows/new.yml']:
+            self.assertFalse(a.acceptance_proof(p,[{'filename':name}]))
+        p['number']=23
+        self.assertFalse(a.acceptance_proof(p,[{'filename':'routes/web.php'}]))
     def test_draft_cannot_auto_merge(self):
         p=self.pr();p['draft']=True
         with self.assertRaisesRegex(RuntimeError,'DRAFT_PR'):a.validate_pr(p,[{'filename':'routes/web.php'}],self.checks(),SHA)

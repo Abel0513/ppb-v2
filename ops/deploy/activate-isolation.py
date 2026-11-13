@@ -119,7 +119,7 @@ def activate(call=c.aws,pause=time.sleep):
                       '--comment','Reviewed V2 bootstrap '+os.environ['GITHUB_RUN_ID'])
             command=sent['Command']['CommandId']
         result['ssm_command_id']=command;save();print('SSM_COMMAND_ID='+command,flush=True)
-        for _ in range(80):
+        for _ in range(200):
             try:inv=call('ssm','get-command-invocation','--command-id',command,'--instance-id',c.INSTANCE,'--plugin-name','installReviewedTools')
             except RuntimeError as exc:
                 if str(exc)=='AWS_InvalidPluginName':
@@ -137,6 +137,8 @@ def activate(call=c.aws,pause=time.sleep):
                 if str(exc)=='AWS_InvocationDoesNotExist':pause(3);continue
                 raise
             if inv['Status'] in {'Pending','InProgress','Delayed'}:pause(3);continue
+            provisions=[line.split('=',1)[1] for line in inv.get('StandardOutputContent','').splitlines() if line.startswith('V2_PROVISION=')]
+            if provisions:result['service_provision']=json.loads(provisions[-1]);save()
             c.need(inv['Status']=='Success' and inv['ResponseCode']==0,'FIXED_TOOL_INSTALL_FAILED')
             output=inv.get('StandardOutputContent','');c.need('V2_FIXED_TOOLS_INSTALLED=YES' in output,'TOOL_INSTALL_RECEIPT_MISSING')
             rows=[line.split('=',1)[1] for line in output.splitlines() if line.startswith('V2_INVENTORY=')]

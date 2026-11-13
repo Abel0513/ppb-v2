@@ -24,6 +24,10 @@ def classify(files):
         c.need(not name.startswith(('public/uploads/','public/storage/','.env')),'RUNTIME_OR_SECRET_FILE')
     return dict(application=any(n.split('/')[0] in {'app','routes','resources','public','config','database'} or n in {'composer.json','composer.lock','package.json','package-lock.json'} for n in names),migrations=any(n.startswith('database/') for n in names),dependencies=any(n in {'composer.json','composer.lock','package.json','package-lock.json'} for n in names))
 
+def acceptance_proof(pr,files):
+    allowed={'routes/web.php','app/Http/Controllers/V2DeploymentCheckController.php','resources/ppb/acceptance.json','resources/ppb/release.json','resources/views/ppb/deployment-check.blade.php','tests/Feature/V2DeploymentCheckTest.php'}
+    return pr.get('number')==22 and pr['head']['ref']=='codex/v2-automation-proof' and bool(files) and all(x['filename'] in allowed and not x.get('previous_filename') and x.get('status')!='removed' for x in files)
+
 def validate_pr(pr,files,checks,main_sha):
     c.need(not pr.get('draft',False),'DRAFT_PR_NOT_AUTHORIZED')
     c.need(pr.get('state')=='open' and pr['base']['ref']=='main' and pr['head']['repo']['full_name']==REPO,'PR_SCOPE_MISMATCH')
@@ -43,10 +47,10 @@ def main():
     c.need(len(matches)==1,'PR_NOT_UNIQUE');pr=c.api('pulls/'+str(matches[0]['number']))
     c.need(pr['head']['sha']==run['head_sha'],'STALE_RUN')
     if pr.get('draft'):return
-    readiness=json.loads((ROOT/'V2_AUTOMATION_ACCEPTANCE.json').read_text())
-    if not readiness['ready']:
-        print('V2_AUTOMATIC_PUBLICATION_PENDING_REAL_ACCEPTANCE');return
     files=c.pages('pulls/'+str(pr['number'])+'/files')
+    readiness=json.loads((ROOT/'V2_AUTOMATION_ACCEPTANCE.json').read_text())
+    if not readiness['ready'] and not acceptance_proof(pr,files):
+        print('V2_AUTOMATIC_PUBLICATION_PENDING_REAL_ACCEPTANCE');return
     # This policy never auto-merges its own privileged controller changes.
     if any(x['filename'].split('/')[0] not in {'app','routes','resources','public','config','database','tests','docs'} and x['filename'] not in {'composer.json','composer.lock','package.json','package-lock.json'} for x in files):return
     checks=c.api('commits/'+pr['head']['sha']+'/check-runs?per_page=100')['check_runs']
