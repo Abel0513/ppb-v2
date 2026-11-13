@@ -44,8 +44,11 @@ def main():
     if run.get('conclusion')!='success' or run.get('event')!='pull_request':return
     c.need(run['head_repository']['full_name']==REPO,'FOREIGN_RUN')
     matches=c.pages('pulls?state=open&head=Abel0513:'+run['head_branch'])
+    if not matches:
+        print('NO_OPEN_PR_ALREADY_HANDLED');return
     c.need(len(matches)==1,'PR_NOT_UNIQUE');pr=c.api('pulls/'+str(matches[0]['number']))
-    c.need(pr['head']['sha']==run['head_sha'],'STALE_RUN')
+    if pr['head']['sha']!=run['head_sha']:
+        print('STALE_RUN_WAITING_FOR_CURRENT_HEAD');return
     if pr.get('draft'):return
     files=c.pages('pulls/'+str(pr['number'])+'/files')
     readiness=json.loads((ROOT/'V2_AUTOMATION_ACCEPTANCE.json').read_text())
@@ -54,6 +57,8 @@ def main():
     # This policy never auto-merges its own privileged controller changes.
     if any(x['filename'].split('/')[0] not in {'app','routes','resources','public','config','database','tests','docs'} and x['filename'] not in {'composer.json','composer.lock','package.json','package-lock.json'} for x in files):return
     checks=c.api('commits/'+pr['head']['sha']+'/check-runs?per_page=100')['check_runs']
+    if not all(any(x['name']==name and x['status']=='completed' and x['conclusion']=='success' and x['app']['slug']=='github-actions' for x in checks) for name in CHECKS):
+        print('WAITING_FOR_ALL_REQUIRED_CI');return
     main_sha=c.api('git/ref/heads/main')['object']['sha']
     pr['_verified_merge_base']=c.api('compare/'+main_sha+'...'+pr['head']['sha'])['merge_base_commit']['sha']
     scope=validate_pr(pr,files,checks,main_sha)
