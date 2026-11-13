@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
-    <meta name="ppb-acceptance" content="isolated-runtime-verified">
+    <meta name="ppb-acceptance" content="lifecycle-receipt-verified">
     <title>V2 發布驗證</title>
     <style>
         body { margin: 0; background: #f4f7fa; color: #183247; font: 1rem/1.7 system-ui, sans-serif; }
