@@ -23,6 +23,8 @@ def invoke(req,call=r.aws,pause=time.sleep):
         meta=call('ssm','describe-document','--name',r.DOCUMENT,'--document-version','$DEFAULT')['Document']
         actual=call('ssm','get-document','--name',r.DOCUMENT,'--document-version',meta['DocumentVersion'],'--document-format','JSON')
         result['installed_ssm_version']=meta['DocumentVersion'];result['installed_ssm_hash']=meta['Hash']
+        approval=json.loads((ROOT/'installed-approval.json').read_text())
+        e.need(meta['DocumentVersion']==approval['document_version'] and meta['Hash']==approval['document_sha256'],'APPROVED_INSTALLED_VERSION_OR_SHA_MISMATCH')
         e.need(json.loads(actual['Content'])==json.loads((ROOT/'document.json').read_text()),'PARAMETERIZED_INTERFACE_NOT_INSTALLED')
         request=dict(execution=execution,request=req)
         with tempfile.TemporaryDirectory() as tmp:

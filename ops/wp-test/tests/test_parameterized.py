@@ -207,7 +207,7 @@ class CandidateClient(unittest.TestCase):
             try:
                 os.chdir(tmp);result=c.invoke(req(),aws)
             finally:os.chdir(old)
-        self.assertEqual(result['stop_code'],'PARAMETERIZED_INTERFACE_NOT_INSTALLED')
+        self.assertEqual(result['stop_code'],'APPROVED_INSTALLED_VERSION_OR_SHA_MISMATCH')
         self.assertIsNone(result['ssm_command_id'])
         self.assertEqual(len(calls),3)
     def test_document_schema_and_reproducibility(self):
