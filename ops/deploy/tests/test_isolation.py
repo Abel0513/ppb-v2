@@ -272,3 +272,26 @@ class FpmCutover(unittest.TestCase):
             os.link(target,root/'storage/old.php')
             with self.assertRaisesRegex(RuntimeError,'HARDLINK'):self.m.runtime_permissions(root/'storage/old.php',os.getuid(),os.getgid(),0o600,root=root)
             self.assertEqual(target.stat().st_mode&0o777,0o644)
+
+class SocketAcl(unittest.TestCase):
+    def setUp(self):self.m=load('fixed_socket_acl_test',ROOT/'isolation/socket-acl.py')
+    def test_named_nginx_acl_round_trip_without_world_access(self):
+        import socket
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'php-fpm.sock'
+            with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as sock:
+                sock.bind(str(path));path.chmod(0o600)
+                self.m.apply(path,os.getuid(),65534)
+                self.assertEqual(path.stat().st_mode&0o007,0)
+                self.assertTrue(os.getxattr(path,'system.posix_acl_access'))
+    def test_socket_helper_refuses_symlink_and_wrong_owner(self):
+        import socket
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);old=root/'old.php';old.write_text('protected');old.chmod(0o644)
+            target=root/'socket';target.symlink_to(old)
+            with self.assertRaisesRegex(RuntimeError,'IDENTITY'):self.m.apply(target,os.getuid(),65534)
+            self.assertEqual(old.stat().st_mode&0o777,0o644)
+            target.unlink()
+            with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as sock:
+                sock.bind(str(target))
+                with self.assertRaisesRegex(RuntimeError,'IDENTITY'):self.m.apply(target,os.getuid()+1,65534)
