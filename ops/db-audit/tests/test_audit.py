@@ -9,6 +9,12 @@ ROOT=Path(__file__).resolve().parents[1]
 def load(name,file):
     s=importlib.util.spec_from_file_location(name,ROOT/file);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m
 class Audit(unittest.TestCase):
+    def test_nginx_tokens_preserve_quoted_values_and_routing(self):
+        lex=load('nginx_lex_test','nginx_lex.py').nginx_tokens
+        self.assertEqual(lex('server { # comment\n root /v2; }'),lex('server{root /v2;}'))
+        self.assertNotEqual(lex('root /v2;'),lex('root /old;'))
+        self.assertNotEqual(lex('add_header X "a b";'),lex('add_header X "ab";'))
+
     def test_document_is_fixed_and_has_no_install_or_mutation_interface(self):
         d=load('document_test','document.py').document()
         compile('\n'.join(d['mainSteps'][0]['inputs']['runCommand'][3:-1]),'<fixed-metadata>','exec')
