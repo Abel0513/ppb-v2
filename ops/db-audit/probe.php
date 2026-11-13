@@ -23,6 +23,7 @@ try {
     $identity=$p->query('SELECT VERSION() AS version, @@version_comment AS version_comment, DATABASE() AS db, CURRENT_USER() AS actor, USER() AS login')->fetch(PDO::FETCH_ASSOC);
     $raw=$p->query('SHOW GRANTS FOR CURRENT_USER')->fetchAll(PDO::FETCH_COLUMN);
     $grants=array_map(fn($g)=>preg_replace('/\s+IDENTIFIED\b.*$/i',' [AUTHENTICATION REDACTED]',$g),$raw);
+    $plugins=$p->query("SELECT PLUGIN_NAME,PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_TYPE='AUTHENTICATION' ORDER BY PLUGIN_NAME")->fetchAll(PDO::FETCH_ASSOC);
     $roles='UNVERIFIED';try{$roles=$p->query('SELECT CURRENT_ROLE()')->fetchColumn();}catch(Throwable $ignored){}
     $q=$p->prepare('SELECT CONSTRAINT_SCHEMA,CONSTRAINT_NAME,TABLE_NAME,UNIQUE_CONSTRAINT_SCHEMA,REFERENCED_TABLE_NAME,UPDATE_RULE,DELETE_RULE FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA<>UNIQUE_CONSTRAINT_SCHEMA AND (CONSTRAINT_SCHEMA=? OR UNIQUE_CONSTRAINT_SCHEMA=?) ORDER BY CONSTRAINT_SCHEMA,CONSTRAINT_NAME');$q->execute(['ppbaos','ppbaos']);$fks=$q->fetchAll(PDO::FETCH_ASSOC);
     $objects=[];
@@ -42,7 +43,15 @@ try {
         elseif(!preg_match("/^GRANT USAGE ON \\*\\.\\* TO 'ppbaos'@'localhost'$/D",$grant))$ownScoped=false;
     }
     $out=['result'=>'STOP','identity'=>$identity,'roles'=>$roles,'effective_grants'=>$grants,'v2_privileges_scoped'=>$ownScoped&&$ownAll,'v2_object_metadata_coverage_proven'=>$ownScoped&&$ownAll,'global_fk_visibility_proven'=>false,'fk_scope'=>'CURRENT_ACCOUNT_VISIBLE_SCHEMAS_ONLY','visible_cross_schema_fks'=>$fks,'v2_objects'=>$objects,'business_table_queries'=>0,'ddl_dml_statements'=>0,'credential_output'=>false];
+    $out['authentication_plugins']=$plugins;
     $out['metadata_connection_file_present']=isset($in['metadata']);
+    // Exact dedicated account only; no root login or old credential search.
+    // An active auth_socket plugin permits one-time DBA provisioning without a password file.
+    if(!isset($in['metadata'])&&array_filter($plugins,fn($x)=>$x['PLUGIN_NAME']==='auth_socket'&&$x['PLUGIN_STATUS']==='ACTIVE')) {
+        $candidate=$in['v2'];$candidate['DB_USERNAME']='ppb_v2_metadata';$candidate['DB_PASSWORD']='';
+        try{connection($candidate);$in['metadata']=$candidate;$out['metadata_authentication']='DEDICATED_AUTH_SOCKET';}
+        catch(Throwable $ignored){$out['metadata_authentication']='DEDICATED_AUTH_SOCKET_ACCOUNT_NOT_ACCESSIBLE';}
+    }
     $out['reason']='AUTHORIZED_METADATA_IDENTITY_NOT_PROVISIONED';
     if(isset($in['metadata'])) {
         $m=$in['metadata'];
