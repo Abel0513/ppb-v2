@@ -64,10 +64,10 @@ def compare(before, after, fields):
     need(before.get('readback_http')==200 and after.get('readback_http')==200 and before.get('create_http')==201 and after.get('create_http')==201,'HTTP_RECEIPTS_MISSING')
     need(len(before['fields'])==43 and set(before['fields'])==set(after['fields']), 'ACF_43_SCHEMA_CHANGED')
     need(before['journal_sha256']==after['journal_sha256'] and before['fingerprint']==after['fingerprint'], 'ORIGINAL_JOURNAL_CHANGED')
-    need(before['core']==after['core'] and before['reference']==after['reference'], 'CORE_OR_30436_CHANGED')
-    need(before['identities']==after['identities'] and before['media']==after['media'], 'ANALYST_OR_MEDIA_CHANGED')
+    need(canonical(before['core'])==canonical(after['core']) and canonical(before['reference'])==canonical(after['reference']), 'CORE_OR_30436_CHANGED')
+    need(canonical(before['identities'])==canonical(after['identities']) and canonical(before['media'])==canonical(after['media']), 'ANALYST_OR_MEDIA_CHANGED')
     for k, value in before['fields'].items():
-        need(after['fields'][k]==fields.get(k,value), 'ACF_VALUE_OR_UNTOUCHED_FIELD_CHANGED')
+        need(canonical(after['fields'][k])==canonical(fields.get(k,value)), 'ACF_VALUE_OR_UNTOUCHED_FIELD_CHANGED')
     return {'readback_http':200, 'create_http':201, 'acf_matched':43, 'untouched_acf_matched':43-len(fields),
             'analysts_verified':6, 'media_verified':6, 'reference_30436_unchanged':True,
             'journal_unchanged':True, 'fingerprint_unchanged':True}

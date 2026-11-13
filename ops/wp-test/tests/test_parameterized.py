@@ -74,6 +74,10 @@ class Engine(unittest.TestCase):
         for q in [dict(req(),expert_id=30436),dict(req(),operation='create'),dict(req(),fields={'分析師1':'fake'}),dict(req(),request_id='../escape'),dict(req(),fields={'Bonus推薦投注':'x\n'}),dict(req(),shell='id')]:
             with self.assertRaises(RuntimeError):e.process(q,self.root,self.rpc)
         self.assertEqual(self.calls,[])
+    def test_untouched_field_type_changes_are_not_accepted_as_equal(self):
+        before=snapshot();after=copy.deepcopy(before)
+        after['fields']['field1']=True
+        with self.assertRaisesRegex(RuntimeError,'ACF_VALUE'):e.compare(before,after,{'Bonus推薦投注':'Codex測試'})
     def test_same_value_new_request_has_no_post(self):
         self.state['fields']['Bonus推薦投注']='Codex測試123'
         self.assertEqual(e.process(req(),self.root,self.rpc)['wp_write_requests'],0)
