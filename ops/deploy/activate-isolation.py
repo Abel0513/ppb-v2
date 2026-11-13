@@ -29,6 +29,20 @@ def activate(call=c.aws,pause=time.sleep):
             latest=content('$LATEST')
             if json.loads(latest['Content'])==value:return latest['DocumentVersion']
         except RuntimeError as exc:result['document_read_before_install']=str(exc)
+        # A one-time administrator can preload both reviewed versions; daily
+        # activation should reuse them rather than request UpdateDocument again.
+        try:
+            token=None
+            for _ in range(20):
+                args=['ssm','list-document-versions','--name',c.DOC]
+                if token:args+=['--next-token',token]
+                page=call(*args)
+                for item in page.get('DocumentVersions',[]):
+                    candidate=content(item['DocumentVersion'])
+                    if json.loads(candidate['Content'])==value:return item['DocumentVersion']
+                token=page.get('NextToken')
+                if not token:break
+        except RuntimeError as exc:result['version_read_before_install']=str(exc)
         # Authorized bounded write: create a reviewed non-default version only.
         result.update(stage='CREATE_REVIEWED_VERSION',required_action='ssm:UpdateDocument');save()
         value_path=out/'reviewed-document.json';value_path.write_text(json.dumps(value))
@@ -73,8 +87,9 @@ def activate(call=c.aws,pause=time.sleep):
         else:raise RuntimeError('BOOTSTRAP_OUTCOME_UNKNOWN_DO_NOT_RESEND')
         # Only an actually certified SQL/OS boundary can activate the runtime.
         runtime_version=install_version(runtime)
-        result.update(stage='SET_REVIEWED_DEFAULT',required_action='ssm:UpdateDocumentDefaultVersion');save()
-        call('ssm','update-document-default-version','--name',c.DOC,'--document-version',runtime_version)
+        if json.loads(content('$DEFAULT')['Content'])!=runtime:
+            result.update(stage='SET_REVIEWED_DEFAULT',required_action='ssm:UpdateDocumentDefaultVersion');save()
+            call('ssm','update-document-default-version','--name',c.DOC,'--document-version',runtime_version)
         c.need(json.loads(content('$DEFAULT')['Content'])==runtime,'DEFAULT_READBACK_MISMATCH')
         versions=[];token=None
         for _ in range(20):
