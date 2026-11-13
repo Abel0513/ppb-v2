@@ -16,6 +16,23 @@ class Audit(unittest.TestCase):
         body=json.dumps(d)
         for token in ['useradd','systemctl','chown','chmod','mysql.user','/root/','.my.cnf','DROP DATABASE']:
             self.assertNotIn(token,body)
+    def test_delegation_has_no_login_or_business_data_capability(self):
+        import hashlib
+        body=(ROOT/'procedure.body.sql').read_text().rstrip()
+        install=(ROOT/'DBA_ONCE.mysql57.sql').read_text()
+        self.assertIn("CREATE USER 'ppb_v2_metadata'@'localhost' ACCOUNT LOCK;",install)
+        self.assertIn(body+'$$',install)
+        self.assertNotIn('GRANT SELECT',install)
+        self.assertNotIn('IDENTIFIED BY',install)
+        self.assertNotIn('CREATE DATABASE',install)
+        for token in ['INSERT ','UPDATE ','DELETE ','CREATE ','ALTER ','DROP ','PREPARE ','EXECUTE ','CALL ']:
+            self.assertNotIn(token,body)
+        self.assertIn('UPDATE_RULE,DELETE_RULE',body)
+        import base64
+        d=load('proc_document_test','document.py').document()
+        source='\n'.join(d['mainSteps'][0]['inputs']['runCommand'])
+        self.assertIn('information_schema',base64.b64decode(source.split("base64.b64decode('")[1].split("'")[0]).decode())
+        self.assertNotIn('EXPECTED_PROCEDURE_SHA256',source)
     def test_filtered_empty_result_never_becomes_pass_and_sha_is_pinned(self):
         m=load('metadata_run_test','run.py');calls=[];value=m.d.document()
         def call(*args):
