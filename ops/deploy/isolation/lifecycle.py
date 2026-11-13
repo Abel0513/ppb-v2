@@ -92,7 +92,21 @@ def inspect_host():
             env=b.read_env(path,digest,require_low_privilege=False)
             result['database_configuration']={key:env.get(key) for key in ['DB_CONNECTION','DB_HOST','DB_PORT','DB_DATABASE','DB_USERNAME']}
             result['env_sha256']=digest
+            probe=subprocess.run([PHP,str(ROOT/'inventory-db.php')],input=json.dumps(env),capture_output=True,text=True,timeout=45)
+            result['database_metadata']=json.loads(probe.stdout) if probe.returncode==0 else {'result':'METADATA_INVENTORY_FAILED'}
         except RuntimeError as exc:result['database_configuration']={'reason':str(exc)}
+    result['web']={}
+    for filename in ['/www/server/panel/vhost/nginx/v2.csdatw.xyz.conf','/www/server/php/84/etc/php-fpm.conf']:
+        p=Path(filename)
+        if p.is_file() and not p.is_symlink():
+            # Only approved config keys; never emit certificate/private key/env values.
+            lines=[line.strip() for line in p.read_text().splitlines() if re.match(r'^\s*(?:server_name|root|include|fastcgi_pass|listen|user|group|pid|daemonize)\s*(?:=|\s)',line)][:80]
+            result['web'][filename]={'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'directives':lines}
+    for binary in [PHP,'/www/server/php/84/sbin/php-fpm','/www/server/nginx/sbin/nginx','/usr/bin/mysql','/www/server/mysql/bin/mysql']:
+        result['paths'][binary]={'exists':Path(binary).is_file()}
+    service=subprocess.run(['systemctl','show','ppb-v2-php.service','--property=LoadState,ActiveState,User,Group,FragmentPath'],capture_output=True,text=True,timeout=10)
+    result['service']={line.split('=',1)[0]:line.split('=',1)[1] for line in service.stdout.splitlines() if '=' in line}
+    result['policy_exists']=POLICY.exists()
     return result
 
 def run(operation,commit,request_id,call=subprocess.run):
