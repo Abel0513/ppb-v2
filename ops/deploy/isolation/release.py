@@ -75,7 +75,7 @@ def release(args):
         b.need(args.confirmation=='DEPLOY-PPB-V2','DEPLOY_CONFIRMATION_REQUIRED')
         if plan['migrate']:backup(env,args.commit)
         obj.apply(candidate,names,actions,args.sha256,args.commit)
-        results=[]
+        results=[l.run('verify_feature',args.commit,'release-'+args.commit+'-runtime')] 
         if plan['migrate']:results.append(l.run('migrate',args.commit,'release-'+args.commit+'-migrate'))
         for target in plan['cache']:results.append(l.run('cache_'+target,args.commit,'release-'+args.commit+'-cache-'+target))
         if plan['queue_restart']:results.append(l.run('queue_restart',args.commit,'release-'+args.commit+'-queue'))

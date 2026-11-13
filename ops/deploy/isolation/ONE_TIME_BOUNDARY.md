@@ -32,7 +32,12 @@ WP stays in PR 13 and its WP role/document; no WP changes in this V2 PR.
 * PDO probe uses only fixed read-only metadata queries without bootstrapping the
   app. Effective grants reject global privileges, roles/proxy ambiguity, GRANT
   OPTION, schema wildcards and write/execute outside the verified V2 schema.
+  Privileged object definers and cross-schema cascade constraints are rejected;
+  a DBA must independently certify full metadata visibility/ownership once.
   Optional old schemas may have SELECT/SHOW VIEW only. No high-privilege shared DB.
+* A reusable nonroot ppb:runtime-check verifies the actual Laravel DB actor/database
+  against the fixed PDO grant probe and begins/rolls back a transaction with no
+  data writes or tables. Feature-specific business acceptance remains separate.
 * Migration requires a fresh private, checksummed, same-release V2-only backup.
   MySQL DDL is NOT transactionally rolled back. INTENT is durable; unknown outcomes
   block further mutation and must be diagnosed, never blindly replayed or declared

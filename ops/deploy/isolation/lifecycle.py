@@ -20,6 +20,7 @@ spec=importlib.util.spec_from_file_location('boundary',ROOT/'boundary.py');b=imp
 PHP='/www/server/php/84/bin/php'
 POLICY=Path('/www/ppb-v2-deploy/policy/isolation.json')
 COMMANDS={
+ 'verify_feature':['ppb:runtime-check','--no-interaction'],
  'package_discover':['package:discover','--no-interaction'],
  'migrate':['migrate','--force','--no-interaction'],
  'migration_status':['migrate:status','--no-interaction'],
@@ -131,13 +132,22 @@ def run(operation,commit,request_id,call=subprocess.run):
                    and hashlib.sha256(backup.read_bytes()).hexdigest()==receipt.get('sha256'),'BACKUP_RECEIPT_INVALID')
         atomic(record,dict(intent=intent,phase='INTENT'))
         argv=b.sandbox_command([PHP,str(Path(b.LIVE)/'artisan'),*COMMANDS[operation]])
+        argv.insert(argv.index('--'),'--setenv=PPB_V2_RELEASE_COMMIT='+commit)
         p=call(argv,capture_output=True,text=True,timeout=900)
+        feature=None
+        if operation=='verify_feature':
+            lines=[line.split('=',1)[1] for line in p.stdout.splitlines() if line.startswith('V2_FEATURE_V1=')]
+            b.need(len(lines)==1,'FEATURE_RECEIPT_MISSING')
+            feature=json.loads(lines[0])
+            b.need(feature.get('result')=='PASS' and feature.get('commit')==commit
+                   and feature.get('database')==checks['database'] and feature.get('user')==checks['user']
+                   and feature.get('transaction_rolled_back') is True and feature.get('database_writes')==0,'LARAVEL_DATABASE_IDENTITY_MISMATCH')
         # Never export raw app output (may contain SQL/auth/session data).
         b.need(p.returncode==0,'LIFECYCLE_COMMAND_FAILED_PRIVATE_DIAGNOSIS_REQUIRED')
         _,_,after=audit(call)
         b.need({k:v for k,v in after.items() if k!='tables'}=={k:v for k,v in checks.items() if k!='tables'},'DATABASE_AUTHORITY_CHANGED_DURING_OPERATION')
         atomic(record,dict(intent=intent,phase='VERIFIED'))
-        return dict(result,replayed=False)
+        return dict(result,replayed=False,feature=feature)
     finally:os.close(lock)
 
 def main():
