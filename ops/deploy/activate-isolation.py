@@ -55,6 +55,49 @@ def activate(call=c.aws,pause=time.sleep):
         else:raise RuntimeError('DOCUMENT_ACTIVATION_TIMEOUT')
         c.need(json.loads(content(version)['Content'])==value,'DOCUMENT_READBACK_MISMATCH')
         return version
+    def quarantine(bootstrap,version):
+        # No SQL/OS service writes: retain only this reviewed, no-input bootstrap
+        # while runtime certification is pending. Archive ALL prior bytes first.
+        import hashlib
+        versions=[];token=None
+        for _ in range(20):
+            args=['ssm','list-document-versions','--name',c.DOC]
+            if token:args+=['--next-token',token]
+            page=call(*args)
+            for item in page.get('DocumentVersions',[]):
+                prior=content(item['DocumentVersion'])
+                if json.loads(prior['Content'])!=bootstrap:versions.append((item['DocumentVersion'],prior['Content']))
+            token=page.get('NextToken')
+            if not token:break
+        else:raise RuntimeError('QUARANTINE_SCAN_LIMIT')
+        result['quarantine_archives']=[];save()
+        for old,raw in versions:
+            path=out/'prior-document.json';path.write_text(raw)
+            digest=hashlib.sha256(raw.encode()).hexdigest()
+            key='releases/ssm-history/'+os.environ['GITHUB_RUN_ID']+'-attempt-'+os.environ.get('GITHUB_RUN_ATTEMPT','1')+'/version-'+old+'-'+digest+'.json'
+            call('s3api','put-object','--bucket',c.BUCKET,'--key',key,'--body',str(path),'--if-none-match','*','--server-side-encryption','AES256')
+            result['quarantine_archives'].append(dict(version=old,sha256=digest,key=key));save()
+        if json.loads(content('$DEFAULT')['Content'])!=bootstrap:
+            call('ssm','update-document-default-version','--name',c.DOC,'--document-version',version)
+        c.need(json.loads(content('$DEFAULT')['Content'])==bootstrap,'QUARANTINE_DEFAULT_NOT_VERIFIED')
+        result['retired_versions']=[];save()
+        for old,_ in versions:
+            call('ssm','delete-document','--name',c.DOC,'--document-version',old)
+            result['retired_versions'].append(old);save()
+        token=None;kept=[]
+        for _ in range(20):
+            args=['ssm','list-document-versions','--name',c.DOC]
+            if token:args+=['--next-token',token]
+            page=call(*args)
+            for item in page.get('DocumentVersions',[]):
+                c.need(json.loads(content(item['DocumentVersion'])['Content'])==bootstrap,'UNREVIEWED_CALLABLE_VERSION_REMAINS')
+                kept.append(item['DocumentVersion'])
+            token=page.get('NextToken')
+            if not token:break
+        else:raise RuntimeError('QUARANTINE_RECHECK_LIMIT')
+        result.update(callable_versions=kept,quarantine_default_version=version,unsafe_prior_versions_callable=False)
+        save()
+
     try:
         identity=call('sts','get-caller-identity');c.need(identity['Account']==c.ACCOUNT,'WRONG_ACCOUNT')
         result['caller_arn']=identity['Arn'];save()
@@ -100,6 +143,7 @@ def activate(call=c.aws,pause=time.sleep):
             c.need(len(rows)==1,'INVENTORY_RECEIPT_MISSING')
             inventory=json.loads(rows[0]);result.update(inventory=inventory,fixed_tools_installed=True)
             if inventory.get('result')!='PASS':
+                quarantine(bootstrap,version)
                 result.update(result='TOOLS_INSTALLED_ISOLATION_PENDING',stage='SQL_OS_BOUNDARY_REQUIRED');save();return result
             c.need(inventory.get('isolation',{}).get('legacy_database_write') is False,'LEGACY_DATABASE_WRITE_NOT_EXCLUDED')
             result['database_isolation']='VERIFIED';break

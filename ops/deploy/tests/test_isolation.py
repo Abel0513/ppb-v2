@@ -172,6 +172,7 @@ class ActivationAuthority(unittest.TestCase):
             if args[:2]==('sts','get-caller-identity'):return {'Account':r.ACCOUNT,'Arn':'fixture'}
             if args[:2]==('ssm','get-document'):return {'Content':bootstrap,'DocumentVersion':'9'}
             if args[:2]==('ssm','describe-document'):return {'Document':{'Hash':'a'*64,'HashType':'Sha256'}}
+            if args[:2]==('ssm','list-document-versions'):return {'DocumentVersions':[{'DocumentVersion':'9'}]}
             if args[:2]==('ssm','send-command'):return {'Command':{'CommandId':'fixture-install-command'}}
             if args[:2]==('ssm','get-command-invocation'):return dict(Status='Success',ResponseCode=0,StandardOutputContent='V2_FIXED_TOOLS_INSTALLED=YES\nV2_INVENTORY={"result":"INVENTORY_ONLY_ISOLATION_UNVERIFIED"}')
             self.fail('Unexpected authority expansion')
@@ -188,6 +189,7 @@ class ActivationAuthority(unittest.TestCase):
             if args[:2]==('sts','get-caller-identity'):return {'Account':r.ACCOUNT,'Arn':'fixture'}
             if args[:2]==('ssm','get-document'):return {'Content':bootstrap,'DocumentVersion':'5'}
             if args[:2]==('ssm','describe-document'):return {'Document':{'Hash':'a'*64,'HashType':'Sha256'}}
+            if args[:2]==('ssm','list-document-versions'):return {'DocumentVersions':[{'DocumentVersion':'9'}]}
             if args[:2]==('ssm','get-command-invocation'):return dict(Status='Success',ResponseCode=0,StandardOutputContent='V2_FIXED_TOOLS_INSTALLED=YES\nV2_INVENTORY={"result":"INVENTORY_ONLY_ISOLATION_UNVERIFIED"}')
             self.fail('Recovery must not send a new command')
         from contextlib import redirect_stdout
@@ -195,6 +197,34 @@ class ActivationAuthority(unittest.TestCase):
         with patch.dict(os.environ,GITHUB_RUN_ID='1',PPB_BOOTSTRAP_RECOVERY_COMMAND_ID='ff2db294-03d8-4f4a-9bb3-09ccbd93c5fe'),redirect_stdout(io.StringIO()):result=self.m.activate(aws,lambda _:None)
         self.assertEqual(result['result'],'TOOLS_INSTALLED_ISOLATION_PENDING')
         self.assertFalse(any(x[:2]==('ssm','send-command') for x in self.calls))
+
+    def test_old_versions_archived_before_quarantine_and_deletion(self):
+        bootstrap=(ROOT/'PPB-V2-Controlled-Deploy.bootstrap.ssm.json').read_text()
+        state={'default':'1','old':True}
+        def aws(*args):
+            self.calls.append(args)
+            op=args[:2]
+            if op==('sts','get-caller-identity'):return {'Account':r.ACCOUNT,'Arn':'fixture'}
+            if op==('ssm','get-document'):
+                version=args[args.index('--document-version')+1]
+                if version=='$DEFAULT':version=state['default']
+                return {'Content':'{"schemaVersion":"2.2","unsafe":true}' if version=='1' else bootstrap,'DocumentVersion':version}
+            if op==('ssm','describe-document'):return {'Document':{'Hash':'a'*64,'HashType':'Sha256'}}
+            if op==('ssm','list-document-versions'):return {'DocumentVersions':([{'DocumentVersion':'1'}] if state['old'] else [])+[{'DocumentVersion':'9'}]}
+            if op==('ssm','get-command-invocation'):return dict(Status='Success',ResponseCode=0,StandardOutputContent='V2_FIXED_TOOLS_INSTALLED=YES\nV2_INVENTORY={"result":"INVENTORY_ONLY_ISOLATION_UNVERIFIED"}')
+            if op==('s3api','put-object'):return {}
+            if op==('ssm','update-document-default-version'):state['default']='9';return {}
+            if op==('ssm','delete-document'):self.assertEqual(args[-1],'1');state['old']=False;return {}
+            self.fail(str(op))
+        from contextlib import redirect_stdout
+        import io
+        with patch.dict(os.environ,GITHUB_RUN_ID='1',PPB_BOOTSTRAP_RECOVERY_COMMAND_ID='f246d516-1598-4f0a-9abf-dfc53edca689'),redirect_stdout(io.StringIO()):result=self.m.activate(aws,lambda _:None)
+        self.assertEqual(result['retired_versions'],['1'])
+        self.assertFalse(result['unsafe_prior_versions_callable'])
+        ops=[x[:2] for x in self.calls]
+        self.assertLess(ops.index(('s3api','put-object')),ops.index(('ssm','update-document-default-version')))
+        self.assertLess(ops.index(('ssm','update-document-default-version')),ops.index(('ssm','delete-document')))
+        self.assertNotIn(('ssm','send-command'),ops)
 
 class OsPreparation(unittest.TestCase):
     def setUp(self):
