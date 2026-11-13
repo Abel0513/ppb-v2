@@ -1,3 +1,5 @@
+> 最新執行方式：GitHub Actions 自動透過既有私人 S3／AWS SSM 傳遞與執行此套件，結果自動回收到 Actions。使用者不需登入 EC2，也不建立 Codex CLI Runner。接入與一次性 AWS 權限見 ops/wp-test/README.md、REMOTE_SETUP.md。下列單檔說明描述套件本身；正式入口為 Actions。
+
 # WPN2：獨立建立一筆 Codex測試 Expert 草稿
 
 這是使用者明確授權的新草稿測試工具，不會執行附件 WPF6 的更新入口。WPF6 的 README／run.sh 要求更新 #30436，是歷史附件指令，已由此次使用者要求取代。
@@ -22,7 +24,7 @@ ACF 讀回不一致時可以重送同一新稿的完全相同 fields；不會增
 
 ## 單一執行檔
 
-交付的 ppb_wpn2_verified.sh 內嵌本套件及雜湊。上傳到 /www/wwwroot/ppbaos.com 後，使用交付回覆的一條 bash 命令即可。它在 /var/tmp 建立暫存套件，驗證 SHA，使用現有 /www/server/php/84/bin/php，跑離線回歸後執行真實 WP 流程。依賴現場既有 python3、sha256sum、PHP curl/pdo_mysql/posix/ctype/tokenizer；不安裝或修改伺服器設定，不修改正式應用程式。程式會自行讀取現有來源與授權，不輸出授權值。
+交付的 ppb_wpn2_verified.sh 內嵌本套件及雜湊。由 Actions 上傳既有私人 S3，固定 SSM 文件下載、驗證完整 SHA 後執行。它在 /var/tmp 建立暫存套件，驗證 SHA，使用現有 /www/server/php/84/bin/php，跑離線回歸後執行真實 WP 流程。依賴現場既有 python3、sha256sum、PHP curl/pdo_mysql/posix/ctype/tokenizer；不安裝或修改伺服器設定，不修改正式應用程式。程式會自行讀取現有來源與授權，不輸出授權值。
 
 永久結果位置：
 - /var/tmp/ppb-codex-issue12-new-expert-v1/journal.json

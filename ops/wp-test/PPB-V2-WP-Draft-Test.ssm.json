@@ -1,41 +1,146 @@
 {
   "schemaVersion": "2.2",
-  "description": "Issue 12 single approved Expert draft only",
+  "description": "Issue 12: pinned WPF6 package, one Expert draft, correlated result only",
   "parameters": {
     "Commit": {
       "type": "String",
-      "allowedPattern": "^[a-f0-9]{40}$",
-      "interpolationType": "ENV_VAR"
+      "interpolationType": "ENV_VAR",
+      "allowedPattern": "^[a-f0-9]{40}$"
     },
-    "RunnerSha256": {
+    "PackageSha256": {
       "type": "String",
-      "allowedPattern": "^[a-f0-9]{64}$",
-      "interpolationType": "ENV_VAR"
+      "interpolationType": "ENV_VAR",
+      "allowedPattern": "^[a-f0-9]{64}$"
+    },
+    "RunId": {
+      "type": "String",
+      "interpolationType": "ENV_VAR",
+      "allowedPattern": "^[1-9][0-9]{0,19}$"
+    },
+    "RunAttempt": {
+      "type": "String",
+      "interpolationType": "ENV_VAR",
+      "allowedPattern": "^[1-9][0-9]{0,19}$"
     },
     "Approval": {
       "type": "String",
+      "interpolationType": "ENV_VAR",
       "allowedValues": [
         "CREATE-ONE-EXPERT-DRAFT"
-      ],
-      "interpolationType": "ENV_VAR"
+      ]
     }
   },
   "mainSteps": [
     {
       "action": "aws:runShellScript",
-      "name": "expertDraftTest",
+      "name": "prepareWpTestDownload",
       "inputs": {
-        "timeoutSeconds": "180",
+        "timeoutSeconds": "30",
         "runCommand": [
           "set -eu",
-          "umask 077",
           "test \"$(id -u)\" = 0",
-          "cd /www/ppb-v2-deploy/wp-test",
-          "test ! -L runner.py",
-          "test \"$(stat -c %u runner.py)\" = 0",
-          "test \"$(stat -c %a runner.py)\" = 600",
-          "printf '%s  runner.py\\n' \"$SSM_RunnerSha256\" | sha256sum -c - >/dev/null",
-          "exec /usr/bin/python3 -I runner.py \"$SSM_Commit\" \"$SSM_RunnerSha256\" \"$SSM_Approval\""
+          ": \"${SSM_Commit:?}\" \"${SSM_PackageSha256:?}\" \"${SSM_RunId:?}\" \"${SSM_RunAttempt:?}\" \"${SSM_Approval:?}\"",
+          "test \"$SSM_Approval\" = CREATE-ONE-EXPERT-DRAFT",
+          "root=/www/ppb-v2-deploy",
+          "test -d \"$root\" && test ! -L \"$root\"",
+          "test ! -L \"$root/wp-test\"",
+          "install -d -m 700 \"$root/wp-test\"",
+          "download=\"$root/wp-test/ssm-incoming-${SSM_RunId}-${SSM_RunAttempt}\"",
+          "test ! -e \"$download\"",
+          "install -d -m 700 \"$download\""
+        ]
+      }
+    },
+    {
+      "action": "aws:downloadContent",
+      "name": "downloadPinnedWpPackage",
+      "inputs": {
+        "sourceType": "S3",
+        "sourceInfo": "{\"path\":\"https://s3.us-east-1.amazonaws.com/ppb-v2-release-artifacts-429724121147-use1/wp-test/{{Commit}}/run-{{RunId}}-attempt-{{RunAttempt}}.sh\"}",
+        "destinationPath": "/www/ppb-v2-deploy/wp-test/ssm-incoming-{{RunId}}-{{RunAttempt}}"
+      }
+    },
+    {
+      "action": "aws:runShellScript",
+      "name": "expertDraftTest",
+      "inputs": {
+        "timeoutSeconds": "720",
+        "runCommand": [
+          "set -eu",
+          ": \"${SSM_Commit:?}\" \"${SSM_PackageSha256:?}\" \"${SSM_RunId:?}\" \"${SSM_RunAttempt:?}\" \"${SSM_Approval:?}\"",
+          "test \"$SSM_Approval\" = CREATE-ONE-EXPERT-DRAFT",
+          "download=\"/www/ppb-v2-deploy/wp-test/ssm-incoming-${SSM_RunId}-${SSM_RunAttempt}\"",
+          "package=\"$download/run-${SSM_RunId}-attempt-${SSM_RunAttempt}.sh\"",
+          "test -d \"$download\" && test ! -L \"$download\"",
+          "test -f \"$package\" && test ! -L \"$package\"",
+          "chmod 600 \"$package\"",
+          "printf '%s  %s\\n' \"$SSM_PackageSha256\" \"$package\" | sha256sum -c - >\"$download/integrity.log\"",
+          "export PPB_WP_GITHUB_COMMIT=\"$SSM_Commit\" PPB_WP_GITHUB_RUN_ID=\"$SSM_RunId\" PPB_WP_GITHUB_RUN_ATTEMPT=\"$SSM_RunAttempt\"",
+          "PPB_WP_PACKAGE_EXIT_CODE=0",
+          "bash \"$package\" >\"$download/execution.log\" 2>&1 || PPB_WP_PACKAGE_EXIT_CODE=$?",
+          "export PPB_WP_PACKAGE_EXIT_CODE",
+          "python3 - <<'PY_COLLECT'",
+          "#!/usr/bin/env python3",
+          "\"\"\"Fixed SSM collector: expose only correlated, bounded verification facts.\"\"\"",
+          "import json",
+          "import os",
+          "from pathlib import Path",
+          "import re",
+          "import stat",
+          "import sys",
+          "",
+          "REPORT = Path('/var/tmp/ppb-codex-issue12-new-expert-v1/report.json')",
+          "REC_KEYS = ['分析師1推薦', '分析師2推薦', '分析師3推薦', '分析師4推薦', '分析師5推薦', 'Bonus推薦投注']",
+          "",
+          "def collect(report, execution, exit_code):",
+          "    result = dict(schema_version=1, execution=execution, result='STOP',",
+          "                  package_exit_code=exit_code, wp_expert_id=None)",
+          "    if report.get('execution') != execution:",
+          "        return dict(result, stop_code='CURRENT_EXECUTION_REPORT_MISSING')",
+          "    code = report.get('stop_code', 'WP_VERIFICATION_NOT_COMPLETE')",
+          "    result['stop_code'] = code if re.fullmatch('[A-Za-z0-9_]{1,120}', str(code)) else 'REMOTE_STOP'",
+          "    final = report.get('final_readback', {})",
+          "    recs = report.get('recommendations', {})",
+          "    number = report.get('new_expert_id')",
+          "    analysts = report.get('analysts', [])",
+          "    valid = (exit_code == 0 and report.get('result') == 'PASS' and report.get('wp_test_success') is True",
+          "             and type(number) is int and number > 0 and number != 30436",
+          "             and report.get('ACF_MATCHED') == 43 and final.get('expected_keys') == 43",
+          "             and final.get('present_keys') == 43 and final.get('all_43_values_match') is True",
+          "             and set(recs) == set(REC_KEYS) and all(v == 'Codex測試' for v in recs.values())",
+          "             and report.get('READBACK_HTTP') == 200 and report.get('media_verified_image_count') == 6",
+          "             and len(analysts) == 6 and {p.get('id') for p in analysts} == set(range(2, 8)))",
+          "    if valid:",
+          "        allowed_urls = [f'https://{host}/wp-admin/post.php?post={number}&action=edit'",
+          "                        for host in ['csdatw.com', 'www.csdatw.com']]",
+          "        if report.get('edit_url') not in allowed_urls:",
+          "            return dict(result, stop_code='EDIT_URL_NOT_VERIFIED')",
+          "        result.update(result='PASS', stop_code=None, wp_expert_id=number, wp_status='draft',",
+          "                      post_type='expert', acf_matched=43, recommendations=recs,",
+          "                      create_http=report.get('CREATE_HTTP'), readback_http=200,",
+          "                      wp_edit_url=report['edit_url'],",
+          "                      reference_30436_unchanged=report.get('reference_30436', {}).get('readback_unchanged'))",
+          "    return result",
+          "",
+          "def main():",
+          "    execution = dict(commit=os.environ['SSM_Commit'], run_id=os.environ['SSM_RunId'],",
+          "                     run_attempt=os.environ['SSM_RunAttempt'])",
+          "    code = int(os.environ['PPB_WP_PACKAGE_EXIT_CODE'])",
+          "    report = {}",
+          "    try:",
+          "        st = REPORT.lstat()",
+          "        if stat.S_ISREG(st.st_mode) and st.st_uid == os.geteuid() and st.st_size <= 200000 and st.st_mode & 0o077 == 0:",
+          "            report = json.loads(REPORT.read_text())",
+          "        result = collect(report, execution, code)",
+          "    except (OSError, ValueError, TypeError):",
+          "        result = dict(schema_version=1, execution=execution, result='STOP',",
+          "                      stop_code='REPORT_UNAVAILABLE_OR_INVALID', wp_expert_id=None, package_exit_code=code)",
+          "    print('PPB_WP_RESULT_V1=' + json.dumps(result, ensure_ascii=False, separators=(',', ':')))",
+          "    return 0 if result['result'] == 'PASS' else 1",
+          "",
+          "if __name__ == '__main__':",
+          "    sys.exit(main())",
+          "PY_COLLECT"
         ]
       }
     }

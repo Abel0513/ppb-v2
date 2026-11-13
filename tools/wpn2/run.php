@@ -2,7 +2,10 @@
 declare(strict_types=1);
 require __DIR__.'/legacy.php';
 if(!defined('JOURNAL_DIR'))define('JOURNAL_DIR','/var/tmp/ppb-codex-issue12-new-expert-v1');
-$state=['version'=>'WPN2','result'=>'UNVERIFIED','wp_test_success'=>false];
+$state=['version'=>'WPN2','result'=>'UNVERIFIED','wp_test_success'=>false,
+    'execution'=>['commit'=>getenv('PPB_WP_GITHUB_COMMIT')?:null,
+                  'run_id'=>getenv('PPB_WP_GITHUB_RUN_ID')?:null,
+                  'run_attempt'=>getenv('PPB_WP_GITHUB_RUN_ATTEMPT')?:null]];
 $journal=[];
 function atomicJson(string $path,array $data):void {
     if(is_link($path))stop('STATE_SYMLINK');

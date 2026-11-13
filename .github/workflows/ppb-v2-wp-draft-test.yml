@@ -1,11 +1,14 @@
-name: PPB V2 Expert draft test (manual approval required)
+name: PPB WordPress Expert remote acceptance
 on:
+  push:
+    branches: ['codex/issue-12-wp-draft']
+    paths: ['tools/wpn2/**', 'ops/wp-test/**', '.github/workflows/ppb-v2-wp-draft-test.yml']
   pull_request:
     paths: ['tools/wpn2/**', 'ops/wp-test/**', '.github/workflows/ppb-v2-wp-draft-test.yml']
   workflow_dispatch:
     inputs:
       confirmation:
-        description: 'CREATE-ONE-EXPERT-DRAFT (requires protected environment approval)'
+        description: 'CREATE-ONE-EXPERT-DRAFT (existing permanent journal prevents another Expert)'
         required: true
         type: string
 permissions:
@@ -20,12 +23,19 @@ jobs:
       - run: python3 -m unittest discover -s ops/wp-test/tests -v
       - run: php tools/wpn2/test.php
       - run: python3 tools/wpn2/build-package.py --check
+      - run: python3 ops/wp-test/render-ssm.py --check
       - run: bash -n ops/wp-test/ppb_wpn2_verified.sh
-      - run: python3 -m json.tool ops/wp-test/PPB-V2-WP-Draft-Test.ssm.json >/dev/null
   execute:
     needs: offline
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'Abel0513/ppb-v2' && inputs.confirmation == 'CREATE-ONE-EXPERT-DRAFT'
-    environment: ppb-wp-draft-test
+    # User explicitly authorized automatic execution on this exact development branch.
+    # PR/fork events never receive AWS authority; no pull_request_target checkout.
+    if: >-
+      github.repository == 'Abel0513/ppb-v2' && github.repository_id == '1454285732' &&
+      github.repository_owner_id == '55256582' &&
+      ((github.event_name == 'push' && github.ref == 'refs/heads/codex/issue-12-wp-draft') ||
+       (github.event_name == 'workflow_dispatch' &&
+        (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/issue-12-wp-draft') &&
+        inputs.confirmation == 'CREATE-ONE-EXPERT-DRAFT'))
     concurrency:
       group: ppb-issue-12-single-expert
       cancel-in-progress: false
@@ -33,37 +43,39 @@ jobs:
       contents: read
       id-token: write
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - uses: aws-actions/configure-aws-credentials@v6.3.0
+      - name: Initialize correlated acceptance evidence before AWS access
+        run: python3 ops/wp-test/remote.py init
+      - name: Assume WP-only role through existing GitHub OIDC provider
+        id: aws
+        uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
           role-to-assume: arn:aws:iam::429724121147:role/PPB-V2-GitHub-WP-Draft-Test-Role
+          role-session-name: PPBWP-${{ github.run_id }}-${{ github.run_attempt }}
           aws-region: us-east-1
           allowed-account-ids: '429724121147'
-      - name: Invoke only approved installed SSM document and runner
-        env:
-          DOCUMENT_VERSION: ${{ vars.SSM_DOCUMENT_VERSION }}
-          DOCUMENT_HASH: ${{ vars.SSM_DOCUMENT_SHA256 }}
+          role-duration-seconds: 1800
+          retry-max-attempts: 2
+      - name: Upload pinned package, execute fixed SSM and retrieve WP acceptance
+        if: steps.aws.outcome == 'success'
+        run: python3 ops/wp-test/remote.py execute
+      - name: Record OIDC blocker without inventing Command ID or Expert ID
+        if: always() && steps.aws.outcome == 'failure'
+        run: python3 ops/wp-test/remote.py oidc-failed
+      - name: Publish acceptance summary even on remote failure
+        if: always()
         shell: bash
         run: |
-          set -euo pipefail
-          [[ "$DOCUMENT_VERSION" =~ ^[1-9][0-9]*$ ]]
-          [[ "$DOCUMENT_HASH" =~ ^[a-f0-9]{64}$ ]]
-          sha=$(sha256sum ops/wp-test/runner.py | cut -d' ' -f1)
-          params=$(jq -nc --arg c "$GITHUB_SHA" --arg s "$sha" '{Commit:[$c],RunnerSha256:[$s],Approval:["CREATE-ONE-EXPERT-DRAFT"]}')
-          command=$(aws ssm send-command --document-name PPB-V2-WP-Draft-Test --document-version "$DOCUMENT_VERSION" --document-hash "$DOCUMENT_HASH" --document-hash-type Sha256 --instance-ids i-0135d6b2fac7a54c2 --parameters "$params" --timeout-seconds 180 --max-concurrency 1 --max-errors 0 --query Command.CommandId --output text)
-          echo "SSM_COMMAND_ID=$command"
-          aws ssm wait command-executed --command-id "$command" --instance-id i-0135d6b2fac7a54c2 || true
-          aws ssm get-command-invocation --command-id "$command" --instance-id i-0135d6b2fac7a54c2 --plugin-name expertDraftTest > "$RUNNER_TEMP/invocation.json"
-          python3 - "$RUNNER_TEMP/invocation.json" <<'PY'
-          import json, sys
-          invocation=json.load(open(sys.argv[1]))
-          if invocation['Status']!='Success' or invocation['ResponseCode']!=0:
-              sys.exit('STOP: SSM failed or pending; inspect privately; do not retry POST')
-          result=json.loads(invocation['StandardOutputContent'])
-          assert result['RESULT']=='PASS' and result['WP_STATUS']=='draft' and result['ACF_MATCHED']==43
-          print(json.dumps(result,ensure_ascii=False))
-          PY
+          if [[ -f wp-result/summary.md ]]; then cat wp-result/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Preserve correlated result, never upload EC2 credentials or raw logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wp-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: wp-result/
+          if-no-files-found: error
+          retention-days: 7

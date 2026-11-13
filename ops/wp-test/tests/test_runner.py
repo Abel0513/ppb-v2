@@ -105,16 +105,14 @@ class Tests(unittest.TestCase):
         with self.assertRaises(r.Stop): self.go()
         self.assertEqual(len(self.wp.posts),1)
     def test_ssm_fixed_command(self):
-        import subprocess
         doc=json.loads((Path(__file__).parents[1]/'PPB-V2-WP-Draft-Test.ssm.json').read_text())
-        self.assertEqual(set(doc['parameters']),{'Commit','RunnerSha256','Approval'})
-        commands='\n'.join(doc['mainSteps'][0]['inputs']['runCommand'])
-        self.assertEqual(subprocess.run(['sh','-n'],input=commands,text=True).returncode,0)
-        self.assertIn('/usr/bin/python3 -I runner.py',commands)
-        self.assertNotIn('curl',commands)
-    def test_workflow_has_manual_gate_and_pins(self):
+        self.assertEqual(set(doc['parameters']),{'Commit','PackageSha256','RunId','RunAttempt','Approval'})
+        commands='\n'.join(doc['mainSteps'][-1]['inputs']['runCommand'])
+        self.assertIn('sha256sum -c',commands)
+        self.assertNotIn('/usr/bin/python3 -I runner.py',commands)
+    def test_workflow_has_authorized_automatic_branch_and_pins(self):
         workflow=(Path(__file__).parents[3]/'.github/workflows/ppb-v2-wp-draft-test.yml').read_text()
-        for guard in ["github.event_name == 'workflow_dispatch'", "github.ref == 'refs/heads/main'", 'environment: ppb-wp-draft-test', '--document-version', '--document-hash', '--plugin-name expertDraftTest']:
+        for guard in ["github.event_name == 'push'", "github.ref == 'refs/heads/codex/issue-12-wp-draft'", 'cancel-in-progress: false', 'ops/wp-test/remote.py execute']:
             self.assertIn(guard,workflow)
     def test_redirects_refused(self):
         self.assertIsNone(r.NoRedirect().redirect_request(None,None,302,'',{},'https://elsewhere.invalid'))

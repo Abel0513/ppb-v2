@@ -1,3 +1,11 @@
+## 2026-11-13 自動遠端接入批次
+
+改用現有 GitHub OIDC provider、私人 S3 bucket 與固定 SSM 文件傳遞 WPN2；不依賴 EC2 安裝 runner.py／evidence.json／credentials.json，不要求使用者登入 EC2。一次性管理工具只設定 WP 專用 role、固定 document 與既有 instance role 的 S3 讀取前綴。
+
+本機：Python 49 項通過（含原 P2 26 項、遠端 controller／collector／SSM／IAM 設定保護）；PHP WPN2 43 欄全流程與原日期媒體 selftest 通過；套件可重建、SSM JSON 可重建、shell 與 embedded Python 語法通過。測試 fixture 的 ID 不是真實 AWS 或 WP 證據。
+
+本批尚待真實 Actions 接入回收。沒有取得的 Command ID／Expert ID 不得填值；後續結果記錄實際 Run 與失敗層級。
+
 # 2026-11-13 離線驗證
 
 基準 main：2b03fcc6351b26513ccf6ead0b9e448c38a692be。
