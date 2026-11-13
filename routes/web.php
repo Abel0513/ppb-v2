@@ -14,5 +14,6 @@ Route::get('/v2-automation-check', \App\Http\Controllers\V2DeploymentCheckContro
         \Illuminate\Session\Middleware\StartSession::class,
         \Illuminate\View\Middleware\ShareErrorsFromSession::class,
         \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+        \Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class,
     ])
     ->name('v2.automation-check');
