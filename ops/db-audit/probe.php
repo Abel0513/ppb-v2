@@ -10,12 +10,13 @@ function referenceOnly(array $grants,string $actor,mixed $roles): bool {
     $reference=false;
     foreach($grants as $g){
         if(preg_match("/^GRANT REFERENCES ON \\*\\.\\* TO 'ppb_v2_metadata'@'localhost'$/D",$g))$reference=true;
+        elseif(preg_match("/^GRANT EXECUTE ON PROCEDURE `ppbaos`\\.`ppb_v2_metadata_audit_v1` TO 'ppb_v2_metadata'@'localhost'$/D",$g))continue;
         elseif(!preg_match("/^GRANT USAGE ON \\*\\.\\* TO 'ppb_v2_metadata'@'localhost'$/D",$g))return false;
     }
     return $reference;
 }
 function supportedServer(string $version): bool {
-    return !str_contains(strtolower($version),'mariadb')&&preg_match('/^8\\.(?:0|4)\\./',$version)===1;
+    return !str_contains(strtolower($version),'mariadb')&&preg_match('/^(?:5\\.7\\.|8\\.(?:0|4)\\.)/',$version)===1;
 }
 if(defined('PPB_METADATA_POLICY_TEST'))return;
 try {
@@ -25,6 +26,7 @@ try {
     $grants=array_map(fn($g)=>preg_replace('/\s+IDENTIFIED\b.*$/i',' [AUTHENTICATION REDACTED]',$g),$raw);
     $plugins=$p->query("SELECT PLUGIN_NAME,PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_TYPE='AUTHENTICATION' ORDER BY PLUGIN_NAME")->fetchAll(PDO::FETCH_ASSOC);
     $roles='UNVERIFIED';try{$roles=$p->query('SELECT CURRENT_ROLE()')->fetchColumn();}catch(Throwable $ignored){}
+    if(preg_match('/^5\\.7\\./',$identity['version'])&&!str_contains(strtolower($identity['version']),'mariadb'))$roles='NONE';
     $q=$p->prepare('SELECT CONSTRAINT_SCHEMA,CONSTRAINT_NAME,TABLE_NAME,UNIQUE_CONSTRAINT_SCHEMA,REFERENCED_TABLE_NAME,UPDATE_RULE,DELETE_RULE FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA<>UNIQUE_CONSTRAINT_SCHEMA AND (CONSTRAINT_SCHEMA=? OR UNIQUE_CONSTRAINT_SCHEMA=?) ORDER BY CONSTRAINT_SCHEMA,CONSTRAINT_NAME');$q->execute(['ppbaos','ppbaos']);$fks=$q->fetchAll(PDO::FETCH_ASSOC);
     $objects=[];
     foreach([
@@ -53,6 +55,29 @@ try {
         catch(Throwable $ignored){$out['metadata_authentication']='DEDICATED_AUTH_SOCKET_ACCOUNT_NOT_ACCESSIBLE';}
     }
     $out['reason']='AUTHORIZED_METADATA_IDENTITY_NOT_PROVISIONED';
+    $reserved=array_values(array_filter($objects['routines'],fn($x)=>$x['name']==='ppb_v2_metadata_audit_v1'));
+    if(!isset($in['metadata'])&&count($reserved)===1&&$reserved[0]['DEFINER']==='ppb_v2_metadata@localhost'&&$reserved[0]['SECURITY_TYPE']==='DEFINER') {
+        $stmt=$p->query('CALL `ppbaos`.`ppb_v2_metadata_audit_v1`()');
+        $sets=[];do{$sets[]=$stmt->fetchAll(PDO::FETCH_ASSOC);}while($stmt->nextRowset());$stmt->closeCursor();
+        if(count($sets)<5||count($sets[0])!==1||count($sets[2])!==1)throw new Exception();
+        $metaActor=$sets[0][0]['actor'];$metaGrants=array_map(fn($x)=>array_values($x)[0],$sets[1]);
+        $fingerprint=$sets[2][0]['definition_sha256']??null;
+        $covered=referenceOnly($metaGrants,$metaActor,'NONE')&&supportedServer($identity['version'])&&hash_equals('EXPECTED_PROCEDURE_SHA256',(string)$fingerprint);
+        $out['metadata_authentication']='LOCKED_DEFINER_FIXED_PARAMETERLESS_PROCEDURE';
+        $out['metadata_actor']=$metaActor;$out['procedure_definition_sha256']=$fingerprint;
+        $out['global_fk_visibility_proven']=$covered;
+        $out['reason']='METADATA_PROCEDURE_COVERAGE_OR_FINGERPRINT_UNPROVEN';
+        if($covered){
+            $out['fk_scope']='ALL_SCHEMAS_GLOBAL_REFERENCES_FIXED_PROCEDURE';
+            $out['visible_cross_schema_fks']=$sets[3];$out['schema_table_metadata_coverage']=$sets[4];
+            $otherObjects=array_sum(array_map('count',$objects))-1;
+            if(!$ownScoped||!$ownAll)$out['reason']='V2_EFFECTIVE_GRANTS_NOT_SCOPED';
+            elseif($sets[3])$out['reason']='CROSS_SCHEMA_FOREIGN_KEY_FOUND';
+            elseif($otherObjects!==0)$out['reason']='V2_SQL_OBJECT_REQUIRES_DEFINITION_REVIEW';
+            else{$out['result']='PASS';$out['reason']='GLOBAL_FK_AND_V2_OBJECT_SCOPE_VERIFIED';}
+        }
+    }
+
     if(isset($in['metadata'])) {
         $m=$in['metadata'];
         foreach(['DB_CONNECTION','DB_HOST','DB_PORT','DB_DATABASE'] as $key)if(($m[$key]??null)!==($in['v2'][$key]??null))throw new Exception();
