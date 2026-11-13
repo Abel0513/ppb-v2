@@ -11,6 +11,7 @@ def load(name,file):
 class Audit(unittest.TestCase):
     def test_document_is_fixed_and_has_no_install_or_mutation_interface(self):
         d=load('document_test','document.py').document()
+        compile('\n'.join(d['mainSteps'][0]['inputs']['runCommand'][3:-1]),'<fixed-metadata>','exec')
         self.assertEqual(d['parameters'],{})
         self.assertEqual([x['name'] for x in d['mainSteps']],['fixedMetadataAudit'])
         body=json.dumps(d)
