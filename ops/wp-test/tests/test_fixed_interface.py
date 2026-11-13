@@ -109,3 +109,20 @@ function lookup($ctx){return [['id'=>40001,'type'=>'expert','status'=>'draft','s
             self.assertEqual(result['candidate_expert_id'],40001)
             self.assertEqual(result['wp_write_requests'],0)
             self.assertEqual(path.read_bytes(),before)
+
+
+    def test_artifact_result_files_have_the_same_current_execution(self):
+        c=load('client')
+        def invoke(operation,result,path):
+            result.update(result='READ_ONLY_VERIFIED',stage='VERIFIED',stop_code=None,ssm_command_id='fixture-command')
+        import sys
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ,GITHUB_SHA='a'*40,GITHUB_RUN_ID='22',GITHUB_RUN_ATTEMPT='1'), patch.object(sys,'argv',['client.py','journal']), patch.object(c,'prior',return_value=[]), patch.object(c,'invoke',side_effect=invoke):
+            previous=os.getcwd()
+            try:
+                os.chdir(tmp)
+                with contextlib.redirect_stdout(io.StringIO()):self.assertEqual(c.main(),0)
+                a=json.loads(Path('wp-result/interface-result.json').read_text())
+                b=json.loads(Path('wp-result/remote-result.json').read_text())
+                self.assertEqual(a,b)
+                self.assertEqual(b['result'],'READ_ONLY_VERIFIED')
+            finally:os.chdir(previous)

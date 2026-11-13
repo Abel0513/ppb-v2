@@ -80,6 +80,8 @@ def main():
     except (r.Stop,KeyError,ValueError,OSError) as e:
         result['stop_code']=str(e) if isinstance(e,r.Stop) else 'INTERFACE_CLIENT_FAILED'
     r.persist(path,result)
+    # Keep the legacy artifact name consistent with the authoritative interface result.
+    r.persist(path.parent/'remote-result.json',result)
     r.summary(result,path.parent/'summary.md')
     print(json.dumps(result,ensure_ascii=False))
     return 0 if result['result'] in ['PASS','READ_ONLY_VERIFIED'] else 1
