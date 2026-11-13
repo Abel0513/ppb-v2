@@ -47,7 +47,7 @@ for i,path in enumerate(v.VHOSTS):
              'shared_php_include':'enable-php-84.conf' in current,
              'front_controller':'/index.php?$query_string' in current}
     strip=lambda text:'\n'.join(line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith('#'))
-    files.append({'path':str(path),'current_sha256':hashlib.sha256(current.encode()).hexdigest(),'expected_sha256':expected_hashes[str(path)],'same_bytes':current==expected,'same_noncomment_lines':strip(current)==strip(expected),'same_tokens':nginx_tokens(current)==nginx_tokens(expected),'routing':routing,'changed_directives':sorted(set(re.findall(r'^[ \t]*([A-Za-z_]+)', '\n'.join(line[2:] for line in __import__('difflib').ndiff(expected.splitlines(),current.splitlines()) if line.startswith(('+ ','- '))),re.M)))}})
+    files.append({'path':str(path),'current_sha256':hashlib.sha256(current.encode()).hexdigest(),'expected_sha256':expected_hashes[str(path)],'same_bytes':current==expected,'same_noncomment_lines':strip(current)==strip(expected),'same_tokens':nginx_tokens(current)==nginx_tokens(expected),'routing':routing,'changed_directives':sorted(set(re.findall(r'^[ \t]*([A-Za-z_]+)', '\n'.join(line[2:] for line in __import__('difflib').ndiff(expected.splitlines(),current.splitlines()) if line.startswith(('+ ','- '))),re.M)))})
 print('V2_VHOST_STATE='+json.dumps({'policy_fingerprint':policy['vhost_sha256'],'actual_fingerprint':v.l.vhost_digest(),'expected_reconstructed_fingerprint':hashlib.sha256(json.dumps(expected_hashes,sort_keys=True).encode()).hexdigest(),'files':files}))
 
 '''.replace('PHP_SOURCE',php).replace('# NGINX_LEXER',(ROOT/'nginx_lex.py').read_text())
