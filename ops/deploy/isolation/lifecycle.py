@@ -20,8 +20,15 @@ spec=importlib.util.spec_from_file_location('boundary',ROOT/'boundary.py');b=imp
 PHP='/www/server/php/84/bin/php'
 POLICY=Path('/www/ppb-v2-deploy/policy/isolation.json')
 VHOSTS=['/www/server/panel/vhost/nginx/v2.csdatw.xyz-https.conf','/www/server/panel/vhost/nginx/v2.ppbaos.com.conf']
-def vhost_digest():
-    return hashlib.sha256(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in VHOSTS},sort_keys=True).encode()).hexdigest()
+def vhost_digest(canonical=False,texts=None):
+    values={p:Path(p).read_text() for p in VHOSTS} if texts is None else texts
+    if canonical:
+        spec=importlib.util.spec_from_file_location('fixed_nginx_lex',ROOT/'nginx_lex.py');lexer=importlib.util.module_from_spec(spec);spec.loader.exec_module(lexer)
+        values={p:json.dumps(lexer.nginx_tokens(b.omit_empty_v2_extension(text)),ensure_ascii=True) for p,text in values.items()}
+    else:
+        values={p:Path(p).read_bytes() for p in VHOSTS} if texts is None else {p:text.encode() for p,text in values.items()}
+    hashes={p:hashlib.sha256(value.encode() if isinstance(value,str) else value).hexdigest() for p,value in values.items()}
+    return hashlib.sha256(json.dumps(hashes,sort_keys=True).encode()).hexdigest()
 def metadata(env,call=subprocess.run):
     p=call([PHP,str(ROOT/'global-metadata.php')],input=json.dumps({'v2':env}),capture_output=True,text=True,timeout=60)
     b.need(p.returncode==0,'GLOBAL_METADATA_PROBE_FAILED')
@@ -72,14 +79,14 @@ def audit(call=subprocess.run):
     service=call(['systemctl','show','ppb-v2-php.service','--property=ActiveState,User,ProtectSystem,NoNewPrivileges,CapabilityBoundingSet,ReadWritePaths,InaccessiblePaths,PrivateTmp,PrivateDevices,IPAddressDeny,BindReadOnlyPaths'],capture_output=True,text=True,timeout=15)
     b.need(service.returncode==0,'V2_WEB_SERVICE_ISOLATION_UNVERIFIED')
     b.validate_service(dict(line.split('=',1) for line in service.stdout.splitlines() if '=' in line))
-    b.need(policy['version']==2 and vhost_digest()==policy['vhost_sha256'],'ACTUAL_V2_VHOSTS_CHANGED')
+    b.need(policy['version'] in {2,3} and vhost_digest(canonical=policy['version']==3)==policy['vhost_sha256'],'ACTUAL_V2_VHOSTS_CHANGED')
     paths=[('/etc/ppb-v2/php-fpm.conf','php_config_sha256'),('/etc/systemd/system/ppb-v2-php.service','php_unit_sha256')]
     configs=[]
     for filename,key in paths:
         path=Path(filename);st=path.lstat()
         b.need(path.is_file() and not path.is_symlink() and st.st_uid==0 and st.st_mode&0o022==0 and hashlib.sha256(path.read_bytes()).hexdigest()==policy[key],'WEB_CONFIG_CHANGED_RECHECK_BOUNDARY')
         configs.append(path.read_text())
-    for vhost in VHOSTS:b.validate_web_config(Path(vhost).read_text(),configs[0])
+    for vhost in VHOSTS:b.validate_web_config(b.omit_empty_v2_extension(Path(vhost).read_text()),configs[0])
     drops=call(['systemctl','show','ppb-v2-php.service','--property=DropInPaths','--value'],capture_output=True,text=True,timeout=15)
     b.need(drops.returncode==0 and not drops.stdout.strip(),'UNREVIEWED_V2_SERVICE_DROPINS')
     socket=Path(b.LIVE)/'storage/run/php-fpm.sock'

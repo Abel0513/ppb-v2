@@ -104,6 +104,24 @@ def health():
         result.append({'path':path,'status':status})
     return result
 
+def certify_inert_extension():
+    policy=b.private_json(l.POLICY)
+    if policy['version']!=2:return False
+    receipt=b.private_json(PRIVATE/'v2-service-isolation.json');name=receipt['backup']
+    b.need(bool(re.fullmatch('v2-fpm-cutover-[0-9]+',name)),'CUTOVER_BACKUP_ID_INVALID')
+    expected={str(path):flatten((PRIVATE/'backups'/name/('original-'+str(i))).read_text()) for i,path in enumerate(VHOSTS)}
+    b.need(l.vhost_digest(texts=expected)==policy['vhost_sha256'],'REVIEWED_BACKUP_POLICY_MISMATCH')
+    # A real directive/value change cannot be certified by this operation.
+    canonical=l.vhost_digest(canonical=True,texts=expected)
+    b.need(l.vhost_digest(canonical=True)==canonical,'VHOST_EXPANDED_CONFIGURATION_CHANGED')
+    backup=PRIVATE/'backups'/('policy-v2-before-inert-extension-'+str(time.time_ns())+'.json')
+    l.atomic(backup,policy)
+    upgraded=dict(policy,version=3,vhost_sha256=canonical)
+    l.atomic(l.POLICY,upgraded)
+    try:l.audit()
+    except Exception:l.atomic(l.POLICY,policy);raise
+    return True
+
 def repair_reviewed_http_vhost():
     # Exact observed V2-only drift. No arbitrary fingerprint approval or path input.
     receipt=b.private_json(PRIVATE/'v2-service-isolation.json')
@@ -143,7 +161,7 @@ def provision():
         try:policy,env,scope=l.audit()
         except RuntimeError as exc:
             if str(exc)!='ACTUAL_V2_VHOSTS_CHANGED':raise
-            repaired=repair_reviewed_http_vhost();policy,env,scope=l.audit()
+            repaired={'inert_extension_certified':certify_inert_extension()};policy,env,scope=l.audit()
         return {'result':'PASS','already_configured':True,'isolation':scope,'http':health(),'database_writes':0,'vhost_repair':repaired}
     account=pwd.getpwnam('ppb-v2');b.need(account.pw_uid>0 and account.pw_gid>0,'DEDICATED_V2_ACCOUNT_MISSING')
     env_path=LIVE/'.env';env=b.read_env(env_path,digest(env_path))

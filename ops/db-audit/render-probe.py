@@ -8,3 +8,7 @@ source=(ROOT/'probe.php').read_text().replace('EXPECTED_PROCEDURE_CRLF_SHA256',h
 p=ROOT.parent/'deploy/isolation/global-metadata.php'
 if '--check' in sys.argv:assert p.read_text()==source
 else:p.write_text(source)
+
+lexer=ROOT.parent/'deploy/isolation/nginx_lex.py'
+if '--check' in sys.argv:assert lexer.read_text()==(ROOT/'nginx_lex.py').read_text()
+else:lexer.write_text((ROOT/'nginx_lex.py').read_text())
