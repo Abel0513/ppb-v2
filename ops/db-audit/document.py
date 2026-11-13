@@ -8,7 +8,7 @@ ROOT=Path(__file__).resolve().parent
 def document():
     import hashlib
     body=(ROOT/'procedure.body.sql').read_text().rstrip()
-    source=(ROOT/'probe.php').read_text().replace('EXPECTED_PROCEDURE_SHA256',hashlib.sha256(body.encode()).hexdigest())
+    source=(ROOT/'probe.php').read_text().replace('EXPECTED_PROCEDURE_CRLF_SHA256',hashlib.sha256(body.replace('\n','\r\n').encode()).hexdigest()).replace('EXPECTED_PROCEDURE_SHA256',hashlib.sha256(body.encode()).hexdigest())
     php=base64.b64encode(source.encode().split(b'<?php',1)[1]).decode()
     # Existing reviewed .env parser only; never source or include app PHP.
     code='''import base64,hashlib,importlib.util,json,os,stat,subprocess
