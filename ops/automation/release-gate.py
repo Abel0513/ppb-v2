@@ -44,7 +44,7 @@ def main():
     except RuntimeError:
         with open(os.environ['GITHUB_OUTPUT'],'a') as out:out.write('approved=false\n')
         return
-    c.need(json.loads((ROOT/'V2_AUTOMATION_ACCEPTANCE.json').read_text())['ready'],'V2_AUTOMATIC_PUBLICATION_PENDING_REAL_ACCEPTANCE')
+    c.need(json.loads((ROOT/'V2_AUTOMATION_ACCEPTANCE.json').read_text())['ready'] or a.acceptance_proof(pr,files),'V2_AUTOMATIC_PUBLICATION_PENDING_REAL_ACCEPTANCE')
     current=c.api('git/ref/heads/main')['object']['sha']
     if inputs.get('expected_commit'):c.need(inputs['expected_commit']==current,'DISPATCH_COMMIT_MOVED')
     parent=c.api('commits/'+current)['parents'][0]['sha']

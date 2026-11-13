@@ -33,6 +33,9 @@ def backup(env,commit,call=subprocess.run):
     if not root.exists():root.mkdir(mode=0o700)
     st=root.lstat();b.need(root.is_dir() and not root.is_symlink() and st.st_uid==os.geteuid() and st.st_mode&0o077==0,'BACKUP_DIRECTORY_UNSAFE')
     receipt=root/('receipt-'+commit+'.json')
+    delegated=Path(b.PRIVATE)/'units/metadata-delegation.sql'
+    b.need(delegated.is_file() and not delegated.is_symlink(),'METADATA_RECOVERY_DDL_MISSING')
+    recovery=root/('metadata-delegation-'+commit+'.sql');recovery.write_bytes(delegated.read_bytes());recovery.chmod(0o600)
     destination=root/('before-'+commit+'-'+str(time.time_ns())+'.sql')
     # Credentials stay in a private temporary defaults file, never argv/log/artifact.
     fd,name=tempfile.mkstemp(prefix='.mysql-',dir=root)
@@ -50,7 +53,7 @@ def backup(env,commit,call=subprocess.run):
         extra=[] if 'mariadb' in version.stdout.lower() else ['--set-gtid-purged=OFF']
         with destination.open('xb') as output:
             os.chmod(destination,0o600)
-            p=call([binary,'--defaults-extra-file='+name,'--single-transaction','--skip-lock-tables','--no-tablespaces',*extra,'--routines','--events','--triggers','--databases',env['DB_DATABASE']],stdout=output,stderr=subprocess.PIPE,timeout=600)
+            p=call([binary,'--defaults-extra-file='+name,'--single-transaction','--skip-lock-tables','--no-tablespaces',*extra,'--skip-routines','--events','--triggers','--databases',env['DB_DATABASE']],stdout=output,stderr=subprocess.PIPE,timeout=600)
             output.flush();os.fsync(output.fileno())
         b.need(p.returncode==0 and destination.stat().st_size>0,'PRIVATE_DATABASE_BACKUP_FAILED')
         digest=hashlib.sha256()
@@ -73,6 +76,13 @@ def release(args):
         plan=validate_plan(json.loads((candidate/'.ppb-release.json').read_text()).get('operations',DEFAULT_PLAN))
         if args.operation=='audit':return dict(result='AUDIT_PASS',commit=args.commit,isolation=isolation,plan=plan)
         b.need(args.confirmation=='DEPLOY-PPB-V2','DEPLOY_CONFIRMATION_REQUIRED')
+        current=json.loads((Path(b.PRIVATE)/'current-release.json').read_text()) if (Path(b.PRIVATE)/'current-release.json').exists() else {}
+        if current.get('commit')==args.commit:
+            b.need(not actions,'SAME_COMMIT_CONTENT_DRIFT')
+            a=module('acceptance_repeat',HERE.parents[1]/'automation/accept-v2.py')
+            path=Path(b.LIVE)/'resources/ppb/acceptance.json'
+            accepted=a.verify(args.commit,current,a.get,json.loads(path.read_text()) if path.is_file() else [])
+            return dict(result='PPB_V2_ISOLATED_RELEASE_PASS',commit=args.commit,isolation=isolation,acceptance=accepted,idempotent=True,program_files_written=0,migrations=False,lifecycle=[])
         if plan['migrate']:backup(env,args.commit)
         obj.apply(candidate,names,actions,args.sha256,args.commit)
         results=[l.run('verify_feature',args.commit,'release-'+args.commit+'-runtime')] 

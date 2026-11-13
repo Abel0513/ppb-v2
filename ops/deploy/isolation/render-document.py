@@ -11,7 +11,7 @@ def document():
     # Retain existing validated prepare/download envelope and immutable S3 paths.
     d['description']='V2 isolated controlled release: fixed root file coordinator, nonroot lifecycle, scoped SQL grants, data-only acceptance'
     steps=d['mainSteps'][:2]
-    files=['boundary.py','db-probe.php','lifecycle.py','release.py']
+    files=['global-metadata.php','boundary.py','db-probe.php','lifecycle.py','release.py']
     lines=['set -eu','umask 077']
     for name in files:
         sha=hashlib.sha256((ROOT/name).read_bytes()).hexdigest()

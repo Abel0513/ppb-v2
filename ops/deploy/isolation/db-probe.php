@@ -14,7 +14,7 @@ try {
     $q=$pdo->prepare('SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_TYPE=?');
     $q->execute([$row['db'],'BASE TABLE']);
     $engines=$q->fetchAll(PDO::FETCH_COLUMN);$definers=[];
-    foreach(['SELECT DEFINER FROM information_schema.VIEWS WHERE TABLE_SCHEMA=?','SELECT DEFINER FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA=?','SELECT DEFINER FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=?','SELECT DEFINER FROM information_schema.EVENTS WHERE EVENT_SCHEMA=?'] as $sql){$q=$pdo->prepare($sql);$q->execute([$row['db']]);$definers=array_merge($definers,$q->fetchAll(PDO::FETCH_COLUMN));}
+    foreach(['SELECT DEFINER FROM information_schema.VIEWS WHERE TABLE_SCHEMA=?','SELECT DEFINER FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA=? AND ROUTINE_NAME<>\'ppb_v2_metadata_audit_v1\'','SELECT DEFINER FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=?','SELECT DEFINER FROM information_schema.EVENTS WHERE EVENT_SCHEMA=?'] as $sql){$q=$pdo->prepare($sql);$q->execute([$row['db']]);$definers=array_merge($definers,$q->fetchAll(PDO::FETCH_COLUMN));}
     $q=$pdo->prepare('SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA <> UNIQUE_CONSTRAINT_SCHEMA AND (CONSTRAINT_SCHEMA=? OR UNIQUE_CONSTRAINT_SCHEMA=?)');$q->execute([$row['db'],$row['db']]);$cross=(int)$q->fetchColumn();
     echo json_encode(['current_user'=>$row['actor'],'definers'=>$definers,'cross_schema_foreign_keys'=>$cross,'database'=>$row['db'],'user'=>explode('@',$row['actor'])[0],'roles'=>$roles,'grants'=>$grants,'table_engines'=>$engines],JSON_THROW_ON_ERROR);
 } catch(Throwable $e) {fwrite(STDERR,"DB_SCOPE_PROBE_FAILED\n");exit(2);}

@@ -19,6 +19,15 @@ ROOT=Path(__file__).resolve().parent
 spec=importlib.util.spec_from_file_location('boundary',ROOT/'boundary.py');b=importlib.util.module_from_spec(spec);spec.loader.exec_module(b)
 PHP='/www/server/php/84/bin/php'
 POLICY=Path('/www/ppb-v2-deploy/policy/isolation.json')
+VHOSTS=['/www/server/panel/vhost/nginx/v2.csdatw.xyz-https.conf','/www/server/panel/vhost/nginx/v2.ppbaos.com.conf']
+def vhost_digest():
+    return hashlib.sha256(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in VHOSTS},sort_keys=True).encode()).hexdigest()
+def metadata(env,call=subprocess.run):
+    p=call([PHP,str(ROOT/'global-metadata.php')],input=json.dumps({'v2':env}),capture_output=True,text=True,timeout=60)
+    b.need(p.returncode==0,'GLOBAL_METADATA_PROBE_FAILED')
+    result=json.loads(p.stdout)
+    b.need(result.get('result')=='PASS' and result.get('global_fk_visibility_proven') is True and result.get('v2_privileges_scoped') is True,'GLOBAL_METADATA_SCOPE_NOT_VERIFIED')
+    return result
 COMMANDS={
  'verify_feature':['ppb:runtime-check','--no-interaction'],
  'package_discover':['package:discover','--no-interaction'],
@@ -56,19 +65,21 @@ def audit(call=subprocess.run):
     if cached.exists() or cached.is_symlink():
         st=cached.lstat()
         b.need(not cached.is_symlink() and cached.is_file() and st.st_uid==account.pw_uid and st.st_mtime>=POLICY.stat().st_mtime,'CONFIG_CACHE_REQUIRES_ISOLATED_REBUILD')
+    global_scope=metadata(env,call)
     p=call([PHP,str(ROOT/'db-probe.php')],input=json.dumps(env),capture_output=True,text=True,timeout=30)
     b.need(p.returncode==0,'DATABASE_SCOPE_PROBE_FAILED')
     checks=b.validate_probe(policy,env,json.loads(p.stdout))
     service=call(['systemctl','show','ppb-v2-php.service','--property=ActiveState,User,ProtectSystem,NoNewPrivileges,CapabilityBoundingSet,ReadWritePaths,InaccessiblePaths,PrivateTmp,PrivateDevices,IPAddressDeny,BindReadOnlyPaths'],capture_output=True,text=True,timeout=15)
     b.need(service.returncode==0,'V2_WEB_SERVICE_ISOLATION_UNVERIFIED')
     b.validate_service(dict(line.split('=',1) for line in service.stdout.splitlines() if '=' in line))
-    paths=[('/www/server/panel/vhost/nginx/v2.csdatw.xyz.conf','vhost_sha256'),('/etc/ppb-v2/php-fpm.conf','php_config_sha256'),('/etc/systemd/system/ppb-v2-php.service','php_unit_sha256')]
+    b.need(policy['version']==2 and vhost_digest()==policy['vhost_sha256'],'ACTUAL_V2_VHOSTS_CHANGED')
+    paths=[('/etc/ppb-v2/php-fpm.conf','php_config_sha256'),('/etc/systemd/system/ppb-v2-php.service','php_unit_sha256')]
     configs=[]
     for filename,key in paths:
         path=Path(filename);st=path.lstat()
         b.need(path.is_file() and not path.is_symlink() and st.st_uid==0 and st.st_mode&0o022==0 and hashlib.sha256(path.read_bytes()).hexdigest()==policy[key],'WEB_CONFIG_CHANGED_RECHECK_BOUNDARY')
         configs.append(path.read_text())
-    b.validate_web_config(*configs[:2])
+    for vhost in VHOSTS:b.validate_web_config(Path(vhost).read_text(),configs[0])
     drops=call(['systemctl','show','ppb-v2-php.service','--property=DropInPaths','--value'],capture_output=True,text=True,timeout=15)
     b.need(drops.returncode==0 and not drops.stdout.strip(),'UNREVIEWED_V2_SERVICE_DROPINS')
     socket=Path(b.LIVE)/'storage/run/php-fpm.sock'

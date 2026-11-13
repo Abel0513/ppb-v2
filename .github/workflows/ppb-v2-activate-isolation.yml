@@ -29,9 +29,6 @@ jobs:
           digest="$(sha256sum "$RUNNER_TEMP/fixed.tar.gz" | awk '{print $1}')"
           aws s3api put-object --region us-east-1 --bucket ppb-v2-release-artifacts-429724121147-use1 --key "releases/bootstrap/$digest/fixed.tar.gz" --body "$RUNNER_TEMP/fixed.tar.gz" --server-side-encryption AES256 --output json > "$RUNNER_TEMP/bootstrap-upload.json"
       - name: Attempt only the owner-authorized reviewed installation with existing authority
-        env:
-          # Known installed receipt: quarantine prior versions without resending installation.
-          PPB_BOOTSTRAP_RECOVERY_COMMAND_ID: f246d516-1598-4f0a-9abf-dfc53edca689
         run: python3 ops/deploy/activate-isolation.py
       - uses: actions/upload-artifact@v4
         if: always()

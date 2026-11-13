@@ -145,7 +145,8 @@ class BootstrapArtifact(unittest.TestCase):
                 names=archive.getnames();self.assertEqual(set(names),set(m.FILES)|{'SHA256.json'})
                 manifest=json.load(archive.extractfile('SHA256.json'))
                 for name,digest in manifest.items():self.assertEqual(hashlib.sha256(archive.extractfile(name).read()).hexdigest(),digest)
-                self.assertFalse(any(name.endswith(('.env','.sql','.pem','.key')) for name in names))
+                self.assertFalse(any(name.endswith(('.env','.sql','.pem','.key')) and name!='units/metadata-delegation.sql' for name in names))
+                self.assertEqual(archive.extractfile('units/metadata-delegation.sql').read(),(ROOT.parent/'db-audit/DBA_ONCE.mysql57.sql').read_bytes())
 
 class ActivationAuthority(unittest.TestCase):
     def setUp(self):
@@ -244,3 +245,19 @@ class OsPreparation(unittest.TestCase):
         with patch.object(self.m.os,'geteuid',return_value=0),patch.object(self.m.pwd,'getpwnam',return_value=self.account),patch.object(self.m.grp,'getgrgid',return_value=SimpleNamespace(gr_name='www')),patch.object(self.m.subprocess,'run') as call:
             with self.assertRaisesRegex(RuntimeError,'GROUP_SCOPE'):self.m.prepare()
             call.assert_not_called()
+
+class FpmCutover(unittest.TestCase):
+    def setUp(self):self.m=load('fpm_provision_test',ROOT/'isolation/provision.py')
+    def test_shared_php_include_replaced_with_only_dedicated_socket(self):
+        source='server {\nserver_name v2.csdatw.xyz;\nroot /www/wwwroot/ppbaos.com/public;\ninclude enable-php-84.conf;\n}'
+        rendered=self.m.flatten(source)
+        self.assertNotIn('enable-php-84',rendered)
+        b.validate_web_config(rendered,(ROOT/'isolation/units/php-fpm.conf').read_text())
+    def test_unknown_include_cannot_modify_old_vhost(self):
+        for value in ['include /etc/nginx/old.conf;','include /www/server/panel/vhost/nginx/legacy.conf;']:
+            with self.assertRaisesRegex(RuntimeError,'UNREVIEWED_V2_INCLUDE'):self.m.flatten(value)
+    def test_both_actual_v2_hosts_allowed_but_legacy_alias_rejected(self):
+        source='server {\nserver_name v2.ppbaos.com 3-231-229-26.sslip.io v2.csdatw.xyz;\nroot /www/wwwroot/ppbaos.com/public;\ninclude enable-php-84.conf;\n}'
+        text=self.m.flatten(source);pool=(ROOT/'isolation/units/php-fpm.conf').read_text()
+        self.assertTrue(b.validate_web_config(text,pool))
+        with self.assertRaisesRegex(RuntimeError,'VHOST_NOT_EXCLUSIVE'):b.validate_web_config(text.replace('v2.ppbaos.com','old.example'),pool)

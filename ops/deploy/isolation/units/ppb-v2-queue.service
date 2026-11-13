@@ -18,7 +18,7 @@ NoNewPrivileges=true
 CapabilityBoundingSet=
 ReadWritePaths=/www/wwwroot/ppbaos.com
 BindReadOnlyPaths=/www/wwwroot/ppbaos.com/.env
-InaccessiblePaths=/www/wwwroot/3.231.229.26 /www/server/data /www/server/panel /www/ppb-v2-deploy /run/mysqld -/etc/mysql -/etc/my.cnf
+InaccessiblePaths=/www/wwwroot/3.231.229.26 /www/server/data /www/server/panel /www/ppb-v2-deploy -/run/mysqld -/etc/mysql -/etc/my.cnf
 IPAddressDeny=169.254.0.0/16 fd00:ec2::254/128
 UMask=0077
 [Install]

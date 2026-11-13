@@ -21,7 +21,7 @@ def private_json(path):
 
 def validate_policy(p):
     need(set(p)=={'version','live','private','unix_user','database','read_only_schemas','env_sha256','legacy_roots','vhost_sha256','php_config_sha256','php_unit_sha256'},'POLICY_SCHEMA_INVALID')
-    need(p['version']==1 and p['live']==LIVE and p['private']==PRIVATE and p['unix_user']==USER,'POLICY_PATH_OR_USER_INVALID')
+    need(p['version'] in {1,2} and p['live']==LIVE and p['private']==PRIVATE and p['unix_user']==USER,'POLICY_PATH_OR_USER_INVALID')
     need(isinstance(p['database'],str) and re.fullmatch('[A-Za-z0-9_]{1,64}',p['database']),'V2_DATABASE_NOT_ESTABLISHED')
     need(isinstance(p['read_only_schemas'],list) and all(isinstance(x,str) and re.fullmatch('[A-Za-z0-9_]{1,64}',x) for x in p['read_only_schemas']),'READONLY_SCHEMA_INVALID')
     need(p['database'] not in p['read_only_schemas'],'V2_LEGACY_SCHEMA_OVERLAP')
@@ -104,7 +104,7 @@ def sandbox_command(argv):
         'ProtectControlGroups=true','RestrictNamespaces=true','UMask=0077',
         'ReadWritePaths='+LIVE,
         'BindReadOnlyPaths='+LIVE+'/.env',
-        'InaccessiblePaths='+LEGACY+' /www/server/data /www/server/panel /www/ppb-v2-deploy /run/mysqld -/etc/mysql -/etc/my.cnf',
+        'InaccessiblePaths='+LEGACY+' /www/server/data /www/server/panel /www/ppb-v2-deploy -/run/mysqld -/etc/mysql -/etc/my.cnf',
         'IPAddressDeny=169.254.0.0/16 fd00:ec2::254/128',
         'RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX']
     return ['systemd-run','--quiet','--wait','--pipe','--collect','--uid='+USER,'--gid='+USER,
@@ -127,7 +127,8 @@ def validate_service(properties):
 def validate_web_config(vhost,php_config):
     # A configured isolated unit is insufficient if nginx still routes to www's pool.
     active='\n'.join(line.split('#',1)[0] for line in vhost.splitlines())
-    need(len(re.findall(r'\bserver_name\s+v2\.csdatw\.xyz\s*;',active))==1,'V2_VHOST_NOT_EXCLUSIVE')
+    names=re.findall(r'\bserver_name\s+([^;]+);',active)
+    need(len(names)==1 and 'v2.csdatw.xyz' in names[0].split() and set(names[0].split()) <= {'v2.csdatw.xyz','v2.ppbaos.com','3-231-229-26.sslip.io'},'V2_VHOST_NOT_EXCLUSIVE')
     need(re.search(r'\broot\s+/www/wwwroot/ppbaos\.com/public\s*;',active),'V2_WEB_ROOT_MISMATCH')
     fastcgi=re.findall(r'\bfastcgi_pass\s+([^;]+);',active)
     need(fastcgi==['unix:/www/wwwroot/ppbaos.com/storage/run/php-fpm.sock'],'V2_STILL_USES_SHARED_PHP_POOL')
