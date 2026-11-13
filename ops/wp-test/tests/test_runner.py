@@ -112,7 +112,7 @@ class Tests(unittest.TestCase):
         self.assertNotIn('/usr/bin/python3 -I runner.py',commands)
     def test_workflow_has_authorized_automatic_branch_and_pins(self):
         workflow=(Path(__file__).parents[3]/'.github/workflows/ppb-v2-wp-draft-test.yml').read_text()
-        for guard in ["github.event_name == 'push'", "github.ref == 'refs/heads/codex/issue-12-wp-draft'", 'cancel-in-progress: false', 'ops/wp-test/remote.py execute']:
+        for guard in ["github.event_name == 'push'", "github.ref == 'refs/heads/codex/issue-12-wp-draft'", 'cancel-in-progress: false', 'ops/wp-test/interface/client.py journal']:
             self.assertIn(guard,workflow)
     def test_redirects_refused(self):
         self.assertIsNone(r.NoRedirect().redirect_request(None,None,302,'',{},'https://elsewhere.invalid'))
