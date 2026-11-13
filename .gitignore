@@ -41,3 +41,7 @@ Thumbs.db
 *.key
 *.p12
 *.pfx
+
+# Local Python verification output
+__pycache__/
+*.py[cod]
