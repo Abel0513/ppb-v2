@@ -104,11 +104,47 @@ def health():
         result.append({'path':path,'status':status})
     return result
 
+def repair_reviewed_http_vhost():
+    # Exact observed V2-only drift. No arbitrary fingerprint approval or path input.
+    receipt=b.private_json(PRIVATE/'v2-service-isolation.json')
+    name=receipt['backup'];b.need(bool(re.fullmatch('v2-fpm-cutover-[0-9]+',name)),'CUTOVER_BACKUP_ID_INVALID')
+    policy=b.private_json(l.POLICY)
+    expected={path:flatten((PRIVATE/'backups'/name/('original-'+str(i))).read_text()) for i,path in enumerate(VHOSTS)}
+    fingerprint=hashlib.sha256(json.dumps({str(p):hashlib.sha256(text.encode()).hexdigest() for p,text in expected.items()},sort_keys=True).encode()).hexdigest()
+    b.need(fingerprint==policy['vhost_sha256'],'REVIEWED_BACKUP_POLICY_MISMATCH')
+    target=VHOSTS[1];current=checked_file(target)
+    b.need(digest(VHOSTS[0])==hashlib.sha256(expected[VHOSTS[0]].encode()).hexdigest(),'HTTPS_VHOST_UNREVIEWED_DRIFT')
+    if current==expected[target]:return {'result':'NO_CHANGE_REQUIRED'}
+    b.need(hashlib.sha256(current.encode()).hexdigest()=='66aca258881a016a61e484430150354e7495336f322694907ee0eeea13a23a62','HTTP_VHOST_UNREVIEWED_DRIFT')
+    b.need(hashlib.sha256(expected[target].encode()).hexdigest()=='37709c81c620b54e2555fbd0e1d723ab89e59d8fe2e9675bb530708e1def6d83','HTTP_REPAIR_TARGET_NOT_REVIEWED')
+    other={str(p):digest(p) for p in target.parent.glob('*.conf') if p.is_file() and not p.is_symlink() and p not in VHOSTS}
+    directory=PRIVATE/'backups'/('http-vhost-repair-'+str(time.time_ns()));directory.mkdir(mode=0o700)
+    (directory/'before.conf').write_text(current);(directory/'before.conf').chmod(0o600)
+    journal=directory/'journal.json';l.atomic(journal,{'phase':'INTENT','target':str(target),'before_sha256':digest(target)})
+    try:
+        target.write_text(expected[target])
+        command(['/www/server/nginx/sbin/nginx','-t'],'V2_REPAIR_NGINX_TEST_FAILED')
+        command(['/www/server/nginx/sbin/nginx','-s','reload'],'V2_REPAIR_NGINX_RELOAD_FAILED')
+        time.sleep(2);scope=l.audit()[2];http=health()
+        b.need(all(digest(Path(p))==value for p,value in other.items()),'NON_V2_VHOST_CHANGED')
+        l.atomic(journal,{'phase':'VERIFIED','target':str(target),'after_sha256':digest(target),'other_vhosts_unchanged':True})
+        return {'result':'PASS','backup':directory.name,'http':http,'isolation':scope,'other_vhosts_unchanged':True}
+    except Exception:
+        target.write_text(current)
+        command(['/www/server/nginx/sbin/nginx','-t'],'V2_REPAIR_ROLLBACK_TEST_FAILED')
+        command(['/www/server/nginx/sbin/nginx','-s','reload'],'V2_REPAIR_ROLLBACK_RELOAD_FAILED')
+        l.atomic(journal,{'phase':'ROLLED_BACK','target':str(target)})
+        raise
+
 def provision():
     b.need(os.geteuid()==0,'FIXED_ROOT_SETUP_REQUIRED')
     if l.POLICY.exists():
-        policy,env,scope=l.audit()
-        return {'result':'PASS','already_configured':True,'isolation':scope,'http':health(),'database_writes':0}
+        repaired=None
+        try:policy,env,scope=l.audit()
+        except RuntimeError as exc:
+            if str(exc)!='ACTUAL_V2_VHOSTS_CHANGED':raise
+            repaired=repair_reviewed_http_vhost();policy,env,scope=l.audit()
+        return {'result':'PASS','already_configured':True,'isolation':scope,'http':health(),'database_writes':0,'vhost_repair':repaired}
     account=pwd.getpwnam('ppb-v2');b.need(account.pw_uid>0 and account.pw_gid>0,'DEDICATED_V2_ACCOUNT_MISSING')
     env_path=LIVE/'.env';env=b.read_env(env_path,digest(env_path))
     scope=l.metadata(env)
