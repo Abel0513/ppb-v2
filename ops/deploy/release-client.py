@@ -58,30 +58,35 @@ def execute(operation,commit,run,attempt,archive,call=aws,pause=time.sleep):
         result['stage']='SEND_INTENT';save()
         response=call('ssm','send-command','--document-name',DOC,'--document-version',meta['DocumentVersion'],'--document-hash',meta['Hash'],'--document-hash-type','Sha256','--instance-ids',INSTANCE,'--parameters',json.dumps(parameters),'--max-concurrency','1','--max-errors','0','--timeout-seconds','120')
         command=response['Command']['CommandId'];result['ssm_command_id']=command;save();print('SSM_COMMAND_ID='+command,flush=True)
-        for _ in range(390):
-            try:inv=call('ssm','get-command-invocation','--command-id',command,'--instance-id',INSTANCE,'--plugin-name','controlledRelease')
-            except RuntimeError as exc:
-                if str(exc) in {'AWS_InvocationDoesNotExist','AWS_ThrottlingException'}:pause(5);continue
-                raise
-            need(inv.get('CommandId')==command and inv.get('InstanceId')==INSTANCE,'INVOCATION_TARGET_MISMATCH')
-            if inv['Status'] in {'Pending','InProgress','Delayed','Cancelling'}:pause(5);continue
-            lines=[x.split('=',1)[1] for x in inv.get('StandardOutputContent','').splitlines() if x.startswith('PPB_V2_RELEASE_V1=')]
-            need(len(lines)==1,'RELEASE_RESULT_MISSING')
-            data=json.loads(lines[0]);result['remote']=data
-            need(data.get('commit')==commit,'FOREIGN_RELEASE_RESULT')
-            need(inv['Status']=='Success' and inv['ResponseCode']==0,'REMOTE_RELEASE_STOP')
-            expected_result='AUDIT_PASS' if operation=='audit' else 'PPB_V2_ISOLATED_RELEASE_PASS'
-            need(data.get('result')==expected_result,'RELEASE_NOT_VERIFIED')
-            checks=data.get('isolation',{})
-            need(checks.get('legacy_database_write') is False and checks.get('v2_database_write') is True,'DATABASE_BOUNDARY_NOT_VERIFIED')
-            if operation=='deploy':
-                accepted=data.get('acceptance',{})
-                need(accepted.get('COMMIT')==commit and accepted.get('RESULT')=='PPB_V2_FUNCTIONAL_BASELINE_PASS'
-                     and type(accepted.get('CHECKS')) is int and accepted['CHECKS']>=4,'FUNCTIONAL_ACCEPTANCE_NOT_VERIFIED')
-            result.update(result='PASS',stage='VERIFIED');save();return result
-        raise RuntimeError('REMOTE_OUTCOME_UNKNOWN_DO_NOT_RESEND')
+        return collect(result,call,pause,save)
     except Exception as exc:
         reason=str(exc);result['reason']=reason if re.fullmatch('[A-Za-z0-9_]{1,160}',reason) else 'RELEASE_CLIENT_FAILED';save();return result
+
+def collect(result,call=aws,pause=time.sleep,save=lambda:None):
+    operation=result['operation'];commit=result['commit'];command=result['ssm_command_id']
+    for _ in range(390):
+        try:inv=call('ssm','get-command-invocation','--command-id',command,'--instance-id',INSTANCE,'--plugin-name','controlledRelease')
+        except RuntimeError as exc:
+            if str(exc) in {'AWS_InvocationDoesNotExist','AWS_ThrottlingException','AWS_InvalidPluginName'}:pause(5);continue
+            raise
+        need(inv.get('CommandId')==command and inv.get('InstanceId')==INSTANCE,'INVOCATION_TARGET_MISMATCH')
+        if result.get('collection_only'):need(inv.get('DocumentName')==DOC and inv.get('DocumentVersion')==result['document_version'],'RECOVERY_INVOCATION_DOCUMENT_MISMATCH')
+        if inv['Status'] in {'Pending','InProgress','Delayed','Cancelling'}:pause(5);continue
+        lines=[x.split('=',1)[1] for x in inv.get('StandardOutputContent','').splitlines() if x.startswith('PPB_V2_RELEASE_V1=')]
+        need(len(lines)==1,'RELEASE_RESULT_MISSING')
+        data=json.loads(lines[0]);result['remote']=data
+        need(data.get('commit')==commit,'FOREIGN_RELEASE_RESULT')
+        need(inv['Status']=='Success' and inv['ResponseCode']==0,'REMOTE_RELEASE_STOP')
+        expected_result='AUDIT_PASS' if operation=='audit' else 'PPB_V2_ISOLATED_RELEASE_PASS'
+        need(data.get('result')==expected_result,'RELEASE_NOT_VERIFIED')
+        checks=data.get('isolation',{})
+        need(checks.get('legacy_database_write') is False and checks.get('v2_database_write') is True,'DATABASE_BOUNDARY_NOT_VERIFIED')
+        if operation=='deploy':
+            accepted=data.get('acceptance',{})
+            need(accepted.get('COMMIT')==commit and accepted.get('RESULT')=='PPB_V2_FUNCTIONAL_BASELINE_PASS'
+                 and type(accepted.get('CHECKS')) is int and accepted['CHECKS']>=4,'FUNCTIONAL_ACCEPTANCE_NOT_VERIFIED')
+        result.update(result='PASS',stage='VERIFIED');save();return result
+    raise RuntimeError('REMOTE_OUTCOME_UNKNOWN_DO_NOT_RESEND')
 
 def main():
     operation=os.environ['PPB_OPERATION']
