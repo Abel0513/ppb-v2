@@ -64,14 +64,33 @@ def activate(call=c.aws,pause=time.sleep):
         meta=call('ssm','describe-document','--name',c.DOC,'--document-version',version)['Document']
         c.need(meta['HashType']=='Sha256','DOCUMENT_HASH_TYPE_INVALID')
         result.update(stage='INSTALL_INTENT',required_action='ssm:SendCommand');save()
-        sent=call('ssm','send-command','--document-name',c.DOC,'--document-version',version,
-                  '--document-hash',meta['Hash'],'--document-hash-type','Sha256','--instance-ids',c.INSTANCE,
-                  '--max-concurrency','1','--max-errors','0','--timeout-seconds','120',
-                  '--comment','Reviewed V2 bootstrap '+os.environ['GITHUB_RUN_ID'])
-        command=sent['Command']['CommandId'];result['ssm_command_id']=command;save();print('SSM_COMMAND_ID='+command,flush=True)
+        recovery=os.environ.get('PPB_BOOTSTRAP_RECOVERY_COMMAND_ID','')
+        if recovery:
+            import re
+            c.need(re.fullmatch('[a-f0-9-]{36}',recovery),'RECOVERY_COMMAND_INVALID')
+            command=recovery
+        else:
+            sent=call('ssm','send-command','--document-name',c.DOC,'--document-version',version,
+                      '--document-hash',meta['Hash'],'--document-hash-type','Sha256','--instance-ids',c.INSTANCE,
+                      '--max-concurrency','1','--max-errors','0','--timeout-seconds','120',
+                      '--comment','Reviewed V2 bootstrap '+os.environ['GITHUB_RUN_ID'])
+            command=sent['Command']['CommandId']
+        result['ssm_command_id']=command;save();print('SSM_COMMAND_ID='+command,flush=True)
         for _ in range(80):
             try:inv=call('ssm','get-command-invocation','--command-id',command,'--instance-id',c.INSTANCE,'--plugin-name','installReviewedTools')
             except RuntimeError as exc:
+                if str(exc)=='AWS_InvalidPluginName':
+                    # A failed earlier plugin can mean the install plugin never exists.
+                    result['pre_install_plugins']={}
+                    for plugin in ['prepareFixedTools','downloadReviewedTools']:
+                        try:
+                            prior=call('ssm','get-command-invocation','--command-id',command,'--instance-id',c.INSTANCE,'--plugin-name',plugin)
+                            result['pre_install_plugins'][plugin]={key:prior.get(key) for key in ['Status','ResponseCode','StandardOutputContent','StandardErrorContent']}
+                            if prior['Status'] in {'Failed','Cancelled','TimedOut'}:
+                                raise RuntimeError('BOOTSTRAP_PREREQUISITE_FAILED')
+                        except RuntimeError as earlier:
+                            if str(earlier) not in {'AWS_InvalidPluginName','AWS_InvocationDoesNotExist'}:raise
+                    save();pause(3);continue
                 if str(exc)=='AWS_InvocationDoesNotExist':pause(3);continue
                 raise
             if inv['Status'] in {'Pending','InProgress','Delayed'}:pause(3);continue
