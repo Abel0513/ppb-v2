@@ -103,6 +103,9 @@ def provision():
             b.need(len(metadata)<30000,'RUNTIME_PERMISSION_SNAPSHOT_LIMIT')
             st=p.lstat()
             if stat.S_ISLNK(st.st_mode):continue
+            if p==LIVE/'storage/run/php-fpm.sock' and stat.S_ISSOCK(st.st_mode):
+                b.need(st.st_uid==account.pw_uid,'STALE_V2_SOCKET_OWNER_INVALID')
+                continue # Runtime socket is recreated by FPM, not a permission-backup file.
             b.need(stat.S_ISDIR(st.st_mode) or stat.S_ISREG(st.st_mode),'UNEXPECTED_RUNTIME_FILE_TYPE')
             b.need(not stat.S_ISREG(st.st_mode) or st.st_nlink==1,'RUNTIME_HARDLINK_UNSAFE')
             metadata[str(p)]=(st.st_mode,st.st_uid,st.st_gid)
