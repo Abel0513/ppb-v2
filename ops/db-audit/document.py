@@ -33,6 +33,7 @@ print('V2_METADATA='+json.dumps(report))
 policy=b.private_json(root/'policy/isolation.json')
 receipt=b.private_json(root/'v2-service-isolation.json')
 import re
+# NGINX_LEXER
 name=receipt['backup'];assert re.fullmatch(r'v2-fpm-cutover-[0-9]+',name)
 spec=importlib.util.spec_from_file_location('fixed_provision',root/'scripts/isolation/provision.py');v=importlib.util.module_from_spec(spec);spec.loader.exec_module(v)
 files=[];expected_hashes={}
@@ -46,9 +47,9 @@ for i,path in enumerate(v.VHOSTS):
              'shared_php_include':'enable-php-84.conf' in current,
              'front_controller':'/index.php?$query_string' in current}
     strip=lambda text:'\n'.join(line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith('#'))
-    files.append({'path':str(path),'current_sha256':hashlib.sha256(current.encode()).hexdigest(),'expected_sha256':expected_hashes[str(path)],'same_bytes':current==expected,'same_noncomment_lines':strip(current)==strip(expected),'routing':routing})
+    files.append({'path':str(path),'current_sha256':hashlib.sha256(current.encode()).hexdigest(),'expected_sha256':expected_hashes[str(path)],'same_bytes':current==expected,'same_noncomment_lines':strip(current)==strip(expected),'same_tokens':nginx_tokens(current)==nginx_tokens(expected),'routing':routing,'changed_directives':sorted(set(re.findall(r'^[ \t]*([A-Za-z_]+)', '\n'.join(line[2:] for line in __import__('difflib').ndiff(expected.splitlines(),current.splitlines()) if line.startswith(('+ ','- '))),re.M)))})
 print('V2_VHOST_STATE='+json.dumps({'policy_fingerprint':policy['vhost_sha256'],'actual_fingerprint':v.l.vhost_digest(),'expected_reconstructed_fingerprint':hashlib.sha256(json.dumps(expected_hashes,sort_keys=True).encode()).hexdigest(),'files':files}))
 
-'''.replace('PHP_SOURCE',php)
+'''.replace('PHP_SOURCE',php).replace('# NGINX_LEXER',(ROOT/'nginx_lex.py').read_text())
     return dict(schemaVersion='2.2',description='Fixed metadata-only V2 audit; no SQL input, business data, DDL/DML, installation or service writes',parameters={},mainSteps=[dict(action='aws:runShellScript',name='fixedMetadataAudit',inputs=dict(timeoutSeconds='90',runCommand=['set -eu','umask 077',"python3 - <<'FIXED_METADATA'",*code.splitlines(),'FIXED_METADATA']))])
 if __name__=='__main__':print(json.dumps(document(),indent=2))
