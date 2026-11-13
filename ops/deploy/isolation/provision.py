@@ -44,6 +44,20 @@ def flatten(text,depth=0):
     b.need(not re.search(r'\b(?:proxy_pass|content_by_lua|perl|root\s+/www/wwwroot/3\.231\.229\.26)\b',text),'V2_VHOST_UNREVIEWED_UPSTREAM')
     return text
 
+def runtime_permissions(path,uid,gid,mode,root=LIVE):
+    # Walk with openat/O_NOFOLLOW, so runtime symlinks cannot redirect root chown.
+    parts=path.relative_to(root).parts
+    fd=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:
+        for i,part in enumerate(parts):
+            flags=os.O_RDONLY|os.O_NOFOLLOW
+            if i<len(parts)-1:flags|=os.O_DIRECTORY
+            child=os.open(part,flags,dir_fd=fd);os.close(fd);fd=child
+        st=os.fstat(fd)
+        b.need(stat.S_ISDIR(st.st_mode) or (stat.S_ISREG(st.st_mode) and st.st_nlink==1),'RUNTIME_HARDLINK_OR_TYPE_UNSAFE')
+        os.fchown(fd,uid,gid);os.fchmod(fd,mode)
+    finally:os.close(fd)
+
 def command(args,code,timeout=60):
     p=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
     if p.returncode:
@@ -89,6 +103,7 @@ def provision():
             st=p.lstat()
             if stat.S_ISLNK(st.st_mode):continue
             b.need(stat.S_ISDIR(st.st_mode) or stat.S_ISREG(st.st_mode),'UNEXPECTED_RUNTIME_FILE_TYPE')
+            b.need(not stat.S_ISREG(st.st_mode) or st.st_nlink==1,'RUNTIME_HARDLINK_UNSAFE')
             metadata[str(p)]=(st.st_mode,st.st_uid,st.st_gid)
     old_hosts={str(p):digest(p) for p in Path('/www/server/panel/vhost/nginx').glob('*.conf') if p.is_file() and not p.is_symlink() and p not in VHOSTS}
     backup=PRIVATE/'backups'/('v2-fpm-cutover-'+str(time.time_ns()));backup.mkdir(mode=0o700)
@@ -107,9 +122,9 @@ def provision():
         env_path.write_text(text);os.chown(env_path,0,account.pw_gid);env_path.chmod(0o640)
         cached.unlink(missing_ok=True)
         for name,(mode,uid,gid) in metadata.items():
-            p=Path(name);b.need(not p.is_symlink(),'RUNTIME_PATH_CHANGED')
-            os.chown(p,account.pw_uid,account.pw_gid)
-            p.chmod(0o770 if stat.S_ISDIR(mode) else 0o660)
+            p=Path(name)
+            if p==cached:continue  # Deliberately backed up and removed above.
+            runtime_permissions(p,account.pw_uid,account.pw_gid,0o770 if stat.S_ISDIR(mode) else 0o660)
         for p in [LIVE/'storage',LIVE/'storage/app']:
             if p.exists():p.chmod(0o711)
         public=LIVE/'storage/app/public'
@@ -151,7 +166,7 @@ def provision():
         if old_cache is not None:cached.write_bytes(old_cache)
         for name,(mode,uid,gid) in metadata.items():
             p=Path(name)
-            if p.exists() and not p.is_symlink():os.chmod(p,stat.S_IMODE(mode));os.chown(p,uid,gid)
+            if p.exists() and not p.is_symlink():runtime_permissions(p,uid,gid,stat.S_IMODE(mode))
         if started:subprocess.run(['systemctl','disable','--now','ppb-v2-php.service'],capture_output=True,timeout=30)
         for p in reversed(created):p.unlink(missing_ok=True)
         subprocess.run(['systemctl','daemon-reload'],capture_output=True,timeout=30)
