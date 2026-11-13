@@ -145,7 +145,7 @@ class InfrastructureTests(unittest.TestCase):
         self.assertNotIn('Controlled-Deploy',text);self.assertNotIn('AWS-RunShellScript',text)
         self.assertNotIn('iam:',text);self.assertNotIn('CreateDocument',text)
         subjects=trust['Statement'][0]['Condition']['StringEquals']['token.actions.githubusercontent.com:sub']
-        self.assertEqual(subjects,['repo:Abel0513/ppb-v2:ref:refs/heads/codex/issue-12-wp-draft','repo:Abel0513/ppb-v2:ref:refs/heads/main'])
+        self.assertEqual(subjects,['repo:Abel0513@55256582/ppb-v2@1454285732:ref:refs/heads/codex/issue-12-wp-draft','repo:Abel0513@55256582/ppb-v2@1454285732:ref:refs/heads/main'])
         self.assertNotIn('pull_request',json.dumps(trust));self.assertNotIn('*',json.dumps(trust))
         self.assertEqual(read['Statement'][0]['Action'],['s3:GetObject'])
     def test_only_same_repo_branch_push_can_execute_automatically(self):

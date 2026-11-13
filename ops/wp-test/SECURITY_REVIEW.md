@@ -29,3 +29,11 @@ AWS 管理者、現有 root 管理員及已核准程式本身仍是信任邊界�
 - 執行實際 SSM shell verifier 的離線前綴：核准 bytes 通過；替換 bytes／自選 SHA／假冒核准 SHA 拒絕；不執行 package。
 - 管理工具測試：既有 role 先 Deny 再改 trust；刪除舊版本在 grant 前；撤除失敗不恢復執行權限。
 - 真正 PHP → JSON → Python 整合測試與完整 CI，另於 VALIDATION.md 與 Actions 記錄。離線驗證不是已套用 AWS 的證明。
+
+
+實測 OIDC 身分修正：Run 43346941338 證實 GitHub 發出的 sub 前綴是
+`repo:Abel0513@55256582/ppb-v2@1454285732:ref:refs/heads/`。
+先前 name-only trust 不相符，造成已完成設定後仍遭 STS 拒絕。
+修正後仍只接受原先兩個精確 ref，不使用 wildcard，也不變更 WP 套件或 SSM 文件。
+這項 AWS trust 修正需要既有 WP role 上的 `iam:UpdateAssumeRolePolicy` 管理權限；
+日常 WP role 刻意沒有此權限，不能自行提權。Cloud 目前亦無 AWS 管理身分，現場修正尚未執行。

@@ -11,8 +11,8 @@
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
           "token.actions.githubusercontent.com:sub": [
-            "repo:Abel0513/ppb-v2:ref:refs/heads/codex/issue-12-wp-draft",
-            "repo:Abel0513/ppb-v2:ref:refs/heads/main"
+            "repo:Abel0513@55256582/ppb-v2@1454285732:ref:refs/heads/codex/issue-12-wp-draft",
+            "repo:Abel0513@55256582/ppb-v2@1454285732:ref:refs/heads/main"
           ]
         }
       }

@@ -17,12 +17,14 @@ PROVIDER = f'arn:aws:iam::{ACCOUNT}:oidc-provider/token.actions.githubuserconten
 DOC_ARN = f'arn:aws:ssm:{REGION}:{ACCOUNT}:document/{DOCUMENT}'
 
 def policies():
+    # Observed signed GitHub OIDC sub (Run 43346941338): immutable owner/repo IDs.
+    # A legacy name-only sub does not match this repository's issued identity.
     trust = {'Version': '2012-10-17', 'Statement': [{
         'Effect': 'Allow', 'Principal': {'Federated': PROVIDER}, 'Action': 'sts:AssumeRoleWithWebIdentity',
         'Condition': {'StringEquals': {'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
             'token.actions.githubusercontent.com:sub': [
-                'repo:Abel0513/ppb-v2:ref:refs/heads/codex/issue-12-wp-draft',
-                'repo:Abel0513/ppb-v2:ref:refs/heads/main']}}}]}
+                'repo:Abel0513@55256582/ppb-v2@1454285732:ref:refs/heads/codex/issue-12-wp-draft',
+                'repo:Abel0513@55256582/ppb-v2@1454285732:ref:refs/heads/main']}}}]}
     runtime = {'Version': '2012-10-17', 'Statement': [
         {'Sid': 'OnlyFixedWpDocumentAndInstance', 'Effect': 'Allow', 'Action': ['ssm:SendCommand'],
          'Resource': [DOC_ARN, f'arn:aws:ec2:{REGION}:{ACCOUNT}:instance/{INSTANCE}']},

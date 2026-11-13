@@ -58,3 +58,11 @@ Actions 會辨識失敗層級：
 4. 重新列出版本並 GET 核對內容完全一致後，最後才開放固定 document／instance／S3 前綴的日常政策。中途失敗保持 Deny，不能半套開放。
 
 日常 WP role 沒有以上 IAM／SSM 管理權限。單次管理核准授權的是這一份可審查的固定程式；同一套件之後自動重跑／回收，不需登入 EC2。若將來修改可執行套件或 SSM shell／collector，必須重新審查其固定內容，不能以「開發分支已通過 CI」取代 root 程式授權。純文件更新不會改變 runtime 套件 SHA。
+
+
+實測 OIDC 身分修正：Run 43346941338 證實 GitHub 發出的 sub 前綴是
+`repo:Abel0513@55256582/ppb-v2@1454285732:ref:refs/heads/`。
+先前 name-only trust 不相符，造成已完成設定後仍遭 STS 拒絕。
+修正後仍只接受原先兩個精確 ref，不使用 wildcard，也不變更 WP 套件或 SSM 文件。
+這項 AWS trust 修正需要既有 WP role 上的 `iam:UpdateAssumeRolePolicy` 管理權限；
+日常 WP role 刻意沒有此權限，不能自行提權。Cloud 目前亦無 AWS 管理身分，現場修正尚未執行。
