@@ -252,6 +252,9 @@ class FpmCutover(unittest.TestCase):
         source='server {\nserver_name v2.csdatw.xyz;\nroot /www/wwwroot/ppbaos.com/public;\ninclude enable-php-84.conf;\n}'
         rendered=self.m.flatten(source)
         self.assertNotIn('enable-php-84',rendered)
+        self.assertIn('location / { try_files $uri $uri/ /index.php?$query_string; }',rendered)
+        existing=source.replace('include enable-php-84.conf;', 'location / { try_files $uri /index.php?$query_string; }\ninclude enable-php-84.conf;')
+        self.assertEqual(self.m.flatten(existing).count('location / {'),1)
         b.validate_web_config(rendered,(ROOT/'isolation/units/php-fpm.conf').read_text())
     def test_unknown_include_cannot_modify_old_vhost(self):
         for value in ['include /etc/nginx/old.conf;','include /www/server/panel/vhost/nginx/legacy.conf;']:
@@ -272,6 +275,22 @@ class FpmCutover(unittest.TestCase):
             os.link(target,root/'storage/old.php')
             with self.assertRaisesRegex(RuntimeError,'HARDLINK'):self.m.runtime_permissions(root/'storage/old.php',os.getuid(),os.getgid(),0o600,root=root)
             self.assertEqual(target.stat().st_mode&0o777,0o644)
+
+    def test_readonly_code_permissions_exclude_credentials_and_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)/'v2';root.mkdir()
+            for rel in ['app','public','bootstrap/cache','resources/views']:(root/rel).mkdir(parents=True,exist_ok=True)
+            for rel in ['app/New.php','public/index.php','bootstrap/cache/config.php','.env']:(root/rel).write_text('fixture')
+            outside=Path(tmp)/'old.php';outside.write_text('legacy');outside.chmod(0o600)
+            (root/'app/old.php').symlink_to(outside)
+            snapshot=self.m.code_snapshot(root)
+            self.assertNotIn(str(root/'.env'),snapshot)
+            self.assertNotIn(str(root/'bootstrap/cache/config.php'),snapshot)
+            self.assertNotIn(str(root/'app/old.php'),snapshot)
+            self.m.normalize_code(snapshot,os.getgid(),root=root,owner=os.getuid())
+            self.assertEqual((root/'app/New.php').stat().st_mode&0o777,0o640)
+            self.assertEqual((root/'public/index.php').stat().st_mode&0o777,0o644)
+            self.assertEqual(outside.stat().st_mode&0o777,0o600)
 
 class SocketAcl(unittest.TestCase):
     def setUp(self):self.m=load('fixed_socket_acl_test',ROOT/'isolation/socket-acl.py')
