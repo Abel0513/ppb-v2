@@ -118,8 +118,7 @@ jobs:
           role-to-assume: arn:aws:iam::429724121147:role/PPB-V2-GitHub-Deploy-Role
           aws-region: us-east-1
           allowed-account-ids: '429724121147'
-      - name: Validate installed isolation, upload pinned release and collect actual EC2 result
-        if: ${{ github.event_name == 'pull_request' || inputs.operation == 'audit' || inputs.operation == 'deploy' }}
+      - name: Store package or execute pinned isolated release and collect actual result
         env:
           PPB_OPERATION: ${{ github.event_name == 'pull_request' && 'deploy' || inputs.operation }}
         run: python3 ops/deploy/release-client.py

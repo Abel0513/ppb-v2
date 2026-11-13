@@ -85,6 +85,15 @@ def execute(operation,commit,run,attempt,archive,call=aws,pause=time.sleep):
 
 def main():
     operation=os.environ['PPB_OPERATION']
+    if operation=='package_only':
+        commit=os.environ['GITHUB_SHA'];run=os.environ['GITHUB_RUN_ID'];attempt=os.environ['GITHUB_RUN_ATTEMPT']
+        need(re.fullmatch('[a-f0-9]{40}',commit) and re.fullmatch('[1-9][0-9]*',run) and re.fullmatch('[1-9][0-9]*',attempt),'PACKAGE_ID_INVALID')
+        need(aws('sts','get-caller-identity')['Account']==ACCOUNT,'WRONG_ACCOUNT')
+        archive=Path(os.environ['RELEASE_ARCHIVE']);key=f'releases/{commit}/run-{run}-attempt-{attempt}.tar.gz'
+        aws('s3api','put-object','--bucket',BUCKET,'--key',key,'--body',str(archive),'--if-none-match','*','--server-side-encryption','AES256')
+        result=dict(result='PACKAGE_STORED',commit=commit,key=key,ssm_command_id=None,database_writes=0)
+        Path('v2-result').mkdir(exist_ok=True);Path('v2-result/result.json').write_text(json.dumps(result))
+        print(json.dumps(result));return 0
     result=execute(operation,os.environ['GITHUB_SHA'],os.environ['GITHUB_RUN_ID'],os.environ['GITHUB_RUN_ATTEMPT'],Path(os.environ['RELEASE_ARCHIVE']))
     print(json.dumps(result))
     with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as out:out.write('\nV2 controlled result: '+json.dumps(result)+'\n')

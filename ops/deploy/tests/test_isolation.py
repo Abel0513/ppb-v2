@@ -34,19 +34,19 @@ class Boundary(unittest.TestCase):
         self.assertTrue(b.validate_grants('v2_prod',set(),['GRANT ALL PRIVILEGES ON `v2\\_prod`.* TO x'])['v2_database_write'])
     def test_actual_connection_and_transactional_engines(self):
         p=self.policy();env=dict(DB_DATABASE='v2prod',DB_USERNAME='worker')
-        probe=dict(database='v2prod',user='worker',roles='NONE',grants=['GRANT ALL PRIVILEGES ON `v2prod`.* TO x'],table_engines=['InnoDB'])
+        probe=dict(database='v2prod',user='worker',roles='NONE',current_user='worker@localhost',definers=[],cross_schema_foreign_keys=0,grants=['GRANT ALL PRIVILEGES ON `v2prod`.* TO x'],table_engines=['InnoDB'])
         self.assertEqual(b.validate_probe(p,env,probe)['tables'],1)
-        for change in [dict(database='legacy'),dict(user='root'),dict(roles='admin'),dict(table_engines=['MyISAM'])]:
+        for change in [dict(database='legacy'),dict(user='root'),dict(roles='admin'),dict(table_engines=['MyISAM']),dict(definers=['root@localhost']),dict(cross_schema_foreign_keys=1)]:
             with self.assertRaises(RuntimeError):b.validate_probe(p,env,dict(probe,**change))
     def test_data_only_env_parser_and_no_password_output(self):
         import hashlib
         text='DB_CONNECTION=mysql\nDB_HOST=127.0.0.1\nDB_DATABASE=v2prod\nDB_USERNAME=worker\nDB_PASSWORD="fixture-password"\n'
         with tempfile.TemporaryDirectory() as tmp:
             p=Path(tmp)/'.env';p.write_text(text)
-            data=b.read_env(p,hashlib.sha256(p.read_bytes()).hexdigest());self.assertEqual(data['DB_USERNAME'],'worker')
-            with self.assertRaisesRegex(RuntimeError,'ENV_CHANGED'):b.read_env(p,'0'*64)
+            data=b.read_env(p,hashlib.sha256(p.read_bytes()).hexdigest(),owner=os.geteuid());self.assertEqual(data['DB_USERNAME'],'worker')
+            with self.assertRaisesRegex(RuntimeError,'ENV_CHANGED'):b.read_env(p,'0'*64,owner=os.geteuid())
             p.write_text(text.replace('DB_USERNAME=worker','DB_USERNAME=root'))
-            with self.assertRaisesRegex(RuntimeError,'HIGH_PRIVILEGE'):b.read_env(p,hashlib.sha256(p.read_bytes()).hexdigest())
+            with self.assertRaisesRegex(RuntimeError,'HIGH_PRIVILEGE'):b.read_env(p,hashlib.sha256(p.read_bytes()).hexdigest(),owner=os.geteuid())
     def test_web_service_identity_and_write_scope(self):
         good=dict(User='ppb-v2',ProtectSystem='strict',NoNewPrivileges='yes',CapabilityBoundingSet='',ReadWritePaths=b.LIVE,InaccessiblePaths=b.LEGACY+' /www/ppb-v2-deploy /www/server/panel',PrivateTmp='yes',PrivateDevices='yes',IPAddressDeny='169.254.0.0/16 fd00:ec2::254/128',BindReadOnlyPaths=b.LIVE+'/.env')
         self.assertTrue(b.validate_service(good))

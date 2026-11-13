@@ -29,9 +29,10 @@ def validate_policy(p):
     need(p['legacy_roots']==[LEGACY],'LEGACY_PATH_POLICY_MISMATCH')
     return p
 
-def read_env(path,expected):
+def read_env(path,expected,owner=0,require_low_privilege=True):
     # Parse data, never source shell/PHP or run application's autoloader as root.
     need(path.is_file() and not path.is_symlink(),'ENV_NOT_REGULAR')
+    st=path.lstat();need(st.st_uid==owner and st.st_mode&0o022==0,'ENV_OWNER_OR_WRITE_MODE_UNSAFE')
     raw=path.read_bytes();need(len(raw)<200000 and hashlib.sha256(raw).hexdigest()==expected,'ENV_CHANGED_RECHECK_ISOLATION')
     result={}
     for line in raw.decode().splitlines():
@@ -40,7 +41,7 @@ def read_env(path,expected):
         m=re.fullmatch(r'(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=\s*(.*)',line)
         if not m:continue
         name,value=m.groups()
-        if not (name.startswith('DB_') or name in {'APP_KEY'}):continue
+        if not name.startswith('DB_'):continue
         need(name not in result,'DUPLICATE_DATABASE_SETTING')
         if value.startswith(('"',"'")):
             quote=value[0];need(len(value)>=2 and value[-1]==quote,'UNSUPPORTED_ENV_QUOTING')
@@ -49,7 +50,8 @@ def read_env(path,expected):
             need(not re.search(r'[\s#$\\]',value),'ENV_INTERPOLATION_NEEDS_REVIEW')
         result[name]=value
     need(result.get('DB_CONNECTION') in {'mysql','mariadb'} and not result.get('DB_URL') and not result.get('DB_SOCKET'),'ONLY_EXPLICIT_TCP_MYSQL_SUPPORTED')
-    need(result.get('DB_USERNAME') not in {None,'','root','mysql','admin'} and re.fullmatch('[A-Za-z0-9_]{1,32}',result.get('DB_USERNAME','')),'HIGH_PRIVILEGE_DB_IDENTITY')
+    need(re.fullmatch('[A-Za-z0-9_]{1,32}',result.get('DB_USERNAME','')),'DB_IDENTITY_INVALID')
+    if require_low_privilege:need(result['DB_USERNAME'] not in {'root','mysql','admin'},'HIGH_PRIVILEGE_DB_IDENTITY')
     need(re.fullmatch('[a-zA-Z0-9._:-]+',result.get('DB_HOST','')) and re.fullmatch('[0-9]{1,5}',result.get('DB_PORT','3306')),'DATABASE_ENDPOINT_INVALID')
     need(result.get('DB_PASSWORD') is not None,'DB_PASSWORD_MISSING')
     return result
@@ -83,6 +85,9 @@ def validate_probe(p,env,probe):
     need(env.get('DB_DATABASE')==p['database'] and probe.get('database')==p['database'],'ACTUAL_DATABASE_MISMATCH')
     need(probe.get('user')==env['DB_USERNAME'] and probe.get('roles') in [None,'NONE'],'ACTUAL_DATABASE_USER_OR_ROLES_MISMATCH')
     checks=validate_grants(p['database'],set(p['read_only_schemas']),probe.get('grants'))
+    need(isinstance(probe.get('current_user'),str) and probe['current_user'].split('@',1)[0]==env['DB_USERNAME'],'DATABASE_ACTOR_UNVERIFIED')
+    need(isinstance(probe.get('definers'),list) and all(x==probe['current_user'] for x in probe['definers']),'PRIVILEGED_OBJECT_DEFINER_OUTSIDE_V2')
+    need(probe.get('cross_schema_foreign_keys')==0,'CROSS_SCHEMA_CASCADE_NOT_ISOLATED')
     # Transactional data tests/backups cannot silently assume MyISAM rollback.
     need(all(x=='InnoDB' for x in probe.get('table_engines',[])),'NONTRANSACTIONAL_V2_TABLES_REQUIRE_BACKUP_POLICY')
     return dict(checks,database=p['database'],user=env['DB_USERNAME'],tables=len(probe.get('table_engines',[])))

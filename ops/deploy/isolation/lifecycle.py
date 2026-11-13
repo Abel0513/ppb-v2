@@ -76,7 +76,7 @@ def inspect_host():
     if path.is_file() and not path.is_symlink():
         digest=hashlib.sha256(path.read_bytes()).hexdigest()
         try:
-            env=b.read_env(path,digest)
+            env=b.read_env(path,digest,require_low_privilege=False)
             result['database_configuration']={key:env.get(key) for key in ['DB_CONNECTION','DB_HOST','DB_PORT','DB_DATABASE','DB_USERNAME']}
             result['env_sha256']=digest
         except RuntimeError as exc:result['database_configuration']={'reason':str(exc)}
