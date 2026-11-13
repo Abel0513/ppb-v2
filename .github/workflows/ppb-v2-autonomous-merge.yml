@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   merge:
-    if: github.repository_id == '1454285732' && github.repository_owner_id == '55256582' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
+    if: vars.PPB_AUTO_DEPLOY != 'false' && github.repository_id == '1454285732' && github.repository_owner_id == '55256582' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-24.04
     permissions:
       contents: write

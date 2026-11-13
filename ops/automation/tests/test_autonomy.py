@@ -54,3 +54,17 @@ class ManifestAcceptance(unittest.TestCase):
     def test_false_content_and_old_route_regression_fail(self):
         with self.assertRaises(ValueError):accept.verify(SHA,{'commit':SHA},self.get,[dict(path='/v2/example',status=200,contains='wrong')])
         with self.assertRaises(ValueError):accept.verify(SHA,{'commit':SHA},lambda _: (200,{},b''),[])
+
+class PrivilegeSplit(unittest.TestCase):
+    def test_build_has_no_oidc_and_delivery_executes_no_application_code(self):
+        text=(ROOT.parents[1]/'.github/workflows/ppb-v2-release-package.yml').read_text()
+        build=text.split('  build:',1)[1].split('  deliver:',1)[0]
+        deliver=text.split('  deliver:',1)[1].split('  acceptance-report:',1)[0]
+        self.assertNotIn('id-token: write',build)
+        self.assertNotIn('configure-aws-credentials',build)
+        self.assertIn('id-token: write',deliver)
+        self.assertNotIn('composer install',deliver)
+        self.assertNotIn('php -r',deliver)
+        self.assertNotIn('npm run',deliver)
+        self.assertIn('release-client.py',deliver)
+        self.assertIn('download-artifact',deliver)
