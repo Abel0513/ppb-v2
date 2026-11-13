@@ -94,6 +94,8 @@
         "runCommand": [
           "set -eu",
           "umask 077",
+          "test -f /www/ppb-v2-deploy/scripts/isolation/socket-acl.py && test ! -L /www/ppb-v2-deploy/scripts/isolation/socket-acl.py",
+          "printf '%s  %s\\n' 05ddcba530c08e450bf5e92bed114d9a50da9e50defd4f855feb9febe098b49b /www/ppb-v2-deploy/scripts/isolation/socket-acl.py | sha256sum -c - >/dev/null",
           "test -f /www/ppb-v2-deploy/scripts/isolation/global-metadata.php && test ! -L /www/ppb-v2-deploy/scripts/isolation/global-metadata.php",
           "printf '%s  %s\\n' 50644a282986f9386419221d68c6766af0f88eb9abb6ef5ee9ddd55260cf79a9 /www/ppb-v2-deploy/scripts/isolation/global-metadata.php | sha256sum -c - >/dev/null",
           "test -f /www/ppb-v2-deploy/scripts/isolation/boundary.py && test ! -L /www/ppb-v2-deploy/scripts/isolation/boundary.py",

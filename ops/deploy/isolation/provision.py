@@ -132,7 +132,7 @@ def provision():
             for p in [public,*public.rglob('*')]:
                 if not p.is_symlink():p.chmod(0o755 if p.is_dir() else 0o644)
         run=LIVE/'storage/run';run.mkdir(mode=0o711,exist_ok=True);os.chown(run,account.pw_uid,account.pw_gid);run.chmod(0o711)
-        command(['/www/server/php/84/sbin/php-fpm','--test','--fpm-config',str(config)],'V2_FPM_CONFIG_TEST_FAILED')
+        command(b.sandbox_command(['/www/server/php/84/sbin/php-fpm','--test','--fpm-config',str(config)]),'V2_FPM_CONFIG_TEST_FAILED')
         command(['systemctl','daemon-reload'],'V2_UNIT_RELOAD_FAILED')
         started=True;command(['systemctl','start','ppb-v2-php.service'],'V2_FPM_START_FAILED')
         for _ in range(30):
