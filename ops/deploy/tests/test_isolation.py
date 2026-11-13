@@ -261,3 +261,14 @@ class FpmCutover(unittest.TestCase):
         text=self.m.flatten(source);pool=(ROOT/'isolation/units/php-fpm.conf').read_text()
         self.assertTrue(b.validate_web_config(text,pool))
         with self.assertRaisesRegex(RuntimeError,'VHOST_NOT_EXCLUSIVE'):b.validate_web_config(text.replace('v2.ppbaos.com','old.example'),pool)
+
+    def test_runtime_permission_walk_rejects_symlink_and_hardlink_escape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)/'v2';root.mkdir();outside=Path(tmp)/'old';outside.mkdir()
+            target=outside/'old.php';target.write_text('legacy');target.chmod(0o644)
+            (root/'storage').symlink_to(outside,target_is_directory=True)
+            with self.assertRaises(OSError):self.m.runtime_permissions(root/'storage/old.php',os.getuid(),os.getgid(),0o600,root=root)
+            (root/'storage').unlink();(root/'storage').mkdir()
+            os.link(target,root/'storage/old.php')
+            with self.assertRaisesRegex(RuntimeError,'HARDLINK'):self.m.runtime_permissions(root/'storage/old.php',os.getuid(),os.getgid(),0o600,root=root)
+            self.assertEqual(target.stat().st_mode&0o777,0o644)
