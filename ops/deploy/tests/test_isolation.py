@@ -180,3 +180,18 @@ class ActivationAuthority(unittest.TestCase):
         with patch.dict(os.environ,GITHUB_RUN_ID='1'),redirect_stdout(io.StringIO()):result=self.m.activate(aws,lambda _:None)
         self.assertEqual(result['result'],'TOOLS_INSTALLED_ISOLATION_PENDING')
         self.assertFalse(any(x[:2] in [('ssm','update-document-default-version'),('ssm','delete-document')] for x in self.calls))
+
+    def test_recovery_reads_prior_receipt_without_resending(self):
+        bootstrap=(ROOT/'PPB-V2-Controlled-Deploy.bootstrap.ssm.json').read_text()
+        def aws(*args):
+            self.calls.append(args)
+            if args[:2]==('sts','get-caller-identity'):return {'Account':r.ACCOUNT,'Arn':'fixture'}
+            if args[:2]==('ssm','get-document'):return {'Content':bootstrap,'DocumentVersion':'5'}
+            if args[:2]==('ssm','describe-document'):return {'Document':{'Hash':'a'*64,'HashType':'Sha256'}}
+            if args[:2]==('ssm','get-command-invocation'):return dict(Status='Success',ResponseCode=0,StandardOutputContent='V2_FIXED_TOOLS_INSTALLED=YES\nV2_INVENTORY={"result":"INVENTORY_ONLY_ISOLATION_UNVERIFIED"}')
+            self.fail('Recovery must not send a new command')
+        from contextlib import redirect_stdout
+        import io
+        with patch.dict(os.environ,GITHUB_RUN_ID='1',PPB_BOOTSTRAP_RECOVERY_COMMAND_ID='ff2db294-03d8-4f4a-9bb3-09ccbd93c5fe'),redirect_stdout(io.StringIO()):result=self.m.activate(aws,lambda _:None)
+        self.assertEqual(result['result'],'TOOLS_INSTALLED_ISOLATION_PENDING')
+        self.assertFalse(any(x[:2]==('ssm','send-command') for x in self.calls))
