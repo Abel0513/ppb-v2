@@ -10,7 +10,7 @@ class PpbRuntimeCheck extends Command
     protected $description = 'Verify actual Laravel database identity and transaction rollback without data writes';
     public function handle(): int
     {
-        $commit = (string) getenv('PPB_V2_RELEASE_COMMIT');
+        $commit = (string) ($_SERVER['PPB_V2_RELEASE_COMMIT'] ?? $_ENV['PPB_V2_RELEASE_COMMIT'] ?? (function_exists('getenv') ? getenv('PPB_V2_RELEASE_COMMIT') : ''));
         if (!preg_match('/^[a-f0-9]{40}$/D', $commit)) {
             $this->line('V2_FEATURE_V1='.json_encode(['result'=>'STOP','reason'=>'RELEASE_CONTEXT_REQUIRED']));
             return self::FAILURE;

@@ -174,6 +174,13 @@ def run(operation,commit,request_id,call=subprocess.run):
         argv=b.sandbox_command([PHP,str(Path(b.LIVE)/'artisan'),*COMMANDS[operation]])
         argv.insert(argv.index('--'),'--setenv=PPB_V2_RELEASE_COMMIT='+commit)
         p=call(argv,capture_output=True,text=True,timeout=900)
+        diagnostic={'commit':commit,'operation':operation,'request_id':request_id,'returncode':p.returncode,'stdout_bytes':len(p.stdout),'stderr_bytes':len(p.stderr)}
+        text=p.stdout+'\n'+p.stderr
+        diagnostic['markers']=[token for token in ['Permission denied','Failed at step','Failed to set up mount namespace','Could not open input file','CommandNotFoundException','is not defined','undefined function','syntax error','V2_FEATURE_V1='] if token in text]
+        diagnostic['undefined_functions']=re.findall(r'undefined function ([A-Za-z0-9_\\]+)\(',text)
+        atomic(Path(b.PRIVATE)/'last-lifecycle-diagnostic.json',diagnostic)
+        # Full diagnostics stay root-private, never in the report/artifact.
+        atomic(Path(b.PRIVATE)/'last-lifecycle-output.private',{'commit':commit,'stdout':p.stdout,'stderr':p.stderr})
         feature=None
         if operation=='verify_feature':
             lines=[line.split('=',1)[1] for line in p.stdout.splitlines() if line.startswith('V2_FEATURE_V1=')]

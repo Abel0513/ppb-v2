@@ -79,6 +79,14 @@ def release(args):
         current=json.loads((Path(b.PRIVATE)/'current-release.json').read_text()) if (Path(b.PRIVATE)/'current-release.json').exists() else {}
         if current.get('commit')==args.commit:
             b.need(not actions,'SAME_COMMIT_CONTENT_DRIFT')
+            required=[('verify_feature','runtime')]
+            if plan['migrate']:required.append(('migrate','migrate'))
+            required += [('cache_'+target,'cache-'+target) for target in plan['cache']]
+            if plan['queue_restart']:required.append(('queue_restart','queue'))
+            for operation,suffix in required:
+                request='release-'+args.commit+'-'+suffix
+                record=b.private_json(Path(b.PRIVATE)/'lifecycle'/(request+'.json'))
+                b.need(record.get('phase')=='VERIFIED' and record.get('intent')==dict(operation=operation,commit=args.commit,request_id=request),'PRIOR_RELEASE_LIFECYCLE_NOT_VERIFIED')
             a=module('acceptance_repeat',HERE.parents[1]/'automation/accept-v2.py')
             path=Path(b.LIVE)/'resources/ppb/acceptance.json'
             accepted=a.verify(args.commit,current,a.get,json.loads(path.read_text()) if path.is_file() else [])
@@ -121,6 +129,10 @@ def main():
         # Raw app/DB messages and backup contents remain private; never export them.
         reason=str(exc)
         result=dict(result='STOP',reason=reason if __import__('re').fullmatch('[A-Z0-9_]{1,160}',reason) else 'ISOLATED_RELEASE_FAILED',commit=args.commit)
+        diagnostic=Path(b.PRIVATE)/'last-lifecycle-diagnostic.json'
+        if diagnostic.is_file():
+            data=b.private_json(diagnostic)
+            if data.get('commit')==args.commit:result['lifecycle_diagnostic']=data
     print('PPB_V2_RELEASE_V1='+json.dumps(result,separators=(',',':')))
     return 0 if result['result'] in {'AUDIT_PASS','PPB_V2_ISOLATED_RELEASE_PASS'} else 2
 if __name__=='__main__':raise SystemExit(main())
