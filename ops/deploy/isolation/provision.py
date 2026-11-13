@@ -115,6 +115,11 @@ def provision():
     created=[];started=False;vhost_changed=False
     try:
         config.parent.mkdir(mode=0o755,exist_ok=True)
+        directory=os.open(config.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+        try:
+            b.need(os.fstat(directory).st_uid==0,'V2_CONFIG_DIRECTORY_NOT_ROOT_OWNED')
+            os.fchmod(directory,0o755) # Bootstrap umask077 otherwise strips directory traversal.
+        finally:os.close(directory)
         config.write_text(pool);config.chmod(0o644);created.append(config)
         unit.write_bytes((PRIVATE/'units/ppb-v2-php.service').read_bytes());unit.chmod(0o644);created.append(unit)
         text=env_path.read_text();b.need(len(re.findall(r'^DB_HOST=.*$',text,re.M))==1,'DATABASE_HOST_SETTING_AMBIGUOUS')
