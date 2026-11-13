@@ -16,7 +16,7 @@ l=load('lifecycle_test',ROOT/'isolation/lifecycle.py')
 r=load('release_client_test',ROOT/'release-client.py')
 
 class Boundary(unittest.TestCase):
-    def policy(self):return dict(version=1,live=b.LIVE,private=b.PRIVATE,unix_user='ppb-v2',database='v2prod',read_only_schemas=['legacy'],env_sha256='a'*64,legacy_roots=[b.LEGACY])
+    def policy(self):return dict(version=1,live=b.LIVE,private=b.PRIVATE,unix_user='ppb-v2',database='v2prod',read_only_schemas=['legacy'],env_sha256='a'*64,legacy_roots=[b.LEGACY],vhost_sha256='a'*64,php_config_sha256='b'*64)
     def test_no_unverified_or_shared_database_policy(self):
         p=self.policy();self.assertEqual(b.validate_policy(p)['database'],'v2prod')
         for changes in [dict(database=None),dict(database='legacy'),dict(unix_user='root'),dict(live=b.LEGACY),dict(env_sha256=None)]:
@@ -52,6 +52,13 @@ class Boundary(unittest.TestCase):
         self.assertTrue(b.validate_service(good))
         for change in [dict(User='www'),dict(User='root'),dict(ProtectSystem='no'),dict(ReadWritePaths='/www/wwwroot'),dict(InaccessiblePaths='')]:
             with self.assertRaises(RuntimeError):b.validate_service(dict(good,**change))
+    def test_nginx_must_really_route_to_the_isolated_pool(self):
+        vhost='server_name v2.csdatw.xyz;\nroot /www/wwwroot/ppbaos.com/public;\nfastcgi_pass unix:/www/wwwroot/ppbaos.com/storage/run/php-fpm.sock;'
+        fpm='clear_env = yes\nlisten = /www/wwwroot/ppbaos.com/storage/run/php-fpm.sock'
+        self.assertTrue(b.validate_web_config(vhost,fpm))
+        for bad in [vhost.replace('/www/wwwroot/ppbaos.com/storage/run/php-fpm.sock','/tmp/php-cgi-84.sock'),vhost+'\ninclude enable-php-84.conf;',vhost.replace('/ppbaos.com/public','/3.231.229.26')]:
+            with self.assertRaises(RuntimeError):b.validate_web_config(bad,fpm)
+        with self.assertRaises(RuntimeError):b.validate_web_config(vhost,fpm+'\nenv[DB_USERNAME] = root')
     def test_no_general_shell_and_no_old_root_write_mount(self):
         cmd=b.sandbox_command(['/www/server/php/84/bin/php',b.LIVE+'/artisan','migrate','--force'])
         self.assertIn('--uid=ppb-v2',cmd);self.assertIn('--property=ProtectSystem=strict',cmd)

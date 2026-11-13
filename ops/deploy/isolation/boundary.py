@@ -20,13 +20,14 @@ def private_json(path):
     return json.loads(path.read_text())
 
 def validate_policy(p):
-    need(set(p)=={'version','live','private','unix_user','database','read_only_schemas','env_sha256','legacy_roots'},'POLICY_SCHEMA_INVALID')
+    need(set(p)=={'version','live','private','unix_user','database','read_only_schemas','env_sha256','legacy_roots','vhost_sha256','php_config_sha256'},'POLICY_SCHEMA_INVALID')
     need(p['version']==1 and p['live']==LIVE and p['private']==PRIVATE and p['unix_user']==USER,'POLICY_PATH_OR_USER_INVALID')
     need(isinstance(p['database'],str) and re.fullmatch('[A-Za-z0-9_]{1,64}',p['database']),'V2_DATABASE_NOT_ESTABLISHED')
     need(isinstance(p['read_only_schemas'],list) and all(isinstance(x,str) and re.fullmatch('[A-Za-z0-9_]{1,64}',x) for x in p['read_only_schemas']),'READONLY_SCHEMA_INVALID')
     need(p['database'] not in p['read_only_schemas'],'V2_LEGACY_SCHEMA_OVERLAP')
     need(isinstance(p['env_sha256'],str) and re.fullmatch('[a-f0-9]{64}',p['env_sha256']),'ENV_NOT_APPROVED')
     need(p['legacy_roots']==[LEGACY],'LEGACY_PATH_POLICY_MISMATCH')
+    need(all(isinstance(p.get(k),str) and re.fullmatch('[a-f0-9]{64}',p[k]) for k in ['vhost_sha256','php_config_sha256']),'WEB_ROUTING_NOT_APPROVED')
     return p
 
 def read_env(path,expected,owner=0,require_low_privilege=True):
@@ -117,4 +118,18 @@ def validate_service(properties):
     need(properties.get('PrivateTmp')=='yes' and properties.get('PrivateDevices')=='yes','V2_WEB_NAMESPACE_UNVERIFIED')
     need({'169.254.0.0/16','fd00:ec2::254/128'} <= set(properties.get('IPAddressDeny','').split()),'INSTANCE_METADATA_NOT_BLOCKED')
     need(properties.get('BindReadOnlyPaths')==LIVE+'/.env','ENV_NOT_READONLY_IN_WEB_SANDBOX')
+    return True
+
+
+def validate_web_config(vhost,php_config):
+    # A configured isolated unit is insufficient if nginx still routes to www's pool.
+    active='\n'.join(line.split('#',1)[0] for line in vhost.splitlines())
+    need(len(re.findall(r'\bserver_name\s+v2\.csdatw\.xyz\s*;',active))==1,'V2_VHOST_NOT_EXCLUSIVE')
+    need(re.search(r'\broot\s+/www/wwwroot/ppbaos\.com/public\s*;',active),'V2_WEB_ROOT_MISMATCH')
+    fastcgi=re.findall(r'\bfastcgi_pass\s+([^;]+);',active)
+    need(fastcgi==['unix:/www/wwwroot/ppbaos.com/storage/run/php-fpm.sock'],'V2_STILL_USES_SHARED_PHP_POOL')
+    need(not re.search(r'include\s+[^;]*(?:enable-php|php[0-9_-])',active),'HIDDEN_SHARED_PHP_INCLUDE')
+    active_php='\n'.join(line.split(';',1)[0] for line in php_config.splitlines())
+    need(re.search(r'^\s*clear_env\s*=\s*yes\s*$',active_php,re.M) and not re.search(r'env\s*\[',active_php),'FPM_INHERITED_CREDENTIALS_UNVERIFIED')
+    need(re.search(r'^\s*listen\s*=\s*/www/wwwroot/ppbaos\.com/storage/run/php-fpm\.sock\s*$',active_php,re.M),'FPM_SOCKET_MISMATCH')
     return True
