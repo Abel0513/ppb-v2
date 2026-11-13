@@ -177,6 +177,7 @@ def run(operation,commit,request_id,call=subprocess.run):
         diagnostic={'commit':commit,'operation':operation,'request_id':request_id,'returncode':p.returncode,'stdout_bytes':len(p.stdout),'stderr_bytes':len(p.stderr)}
         text=p.stdout+'\n'+p.stderr
         diagnostic['markers']=[token for token in ['Permission denied','Failed at step','Failed to set up mount namespace','Could not open input file','CommandNotFoundException','is not defined','undefined function','syntax error','V2_FEATURE_V1='] if token in text]
+        diagnostic['source_paths']=[name for name in ['composer.json','composer.lock','artisan','bootstrap/app.php','storage/logs/laravel.log'] if str(Path(b.LIVE)/name) in text]
         diagnostic['undefined_functions']=re.findall(r'undefined function ([A-Za-z0-9_\\]+)\(',text)
         atomic(Path(b.PRIVATE)/'last-lifecycle-diagnostic.json',diagnostic)
         # Full diagnostics stay root-private, never in the report/artifact.

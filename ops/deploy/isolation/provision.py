@@ -64,7 +64,7 @@ def runtime_permissions(path,uid,gid,mode,root=LIVE):
 
 def code_snapshot(root=LIVE):
     result={}
-    for name in ['app','bootstrap','config','routes','resources','vendor','public','artisan']:
+    for name in ['app','bootstrap','config','routes','resources','vendor','public','database','lang','artisan','composer.json','composer.lock']:
         start=root/name
         if not start.exists() or start.is_symlink():continue
         for base,dirs,files in os.walk(start,followlinks=False) if start.is_dir() else []:
