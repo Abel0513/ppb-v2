@@ -95,7 +95,7 @@
           "set -eu",
           "umask 077",
           "test -f /www/ppb-v2-deploy/scripts/isolation/boundary.py && test ! -L /www/ppb-v2-deploy/scripts/isolation/boundary.py",
-          "printf '%s  %s\\n' 751c600bd29c8c137de4331b1423cbcf87f2ac0f0e8faa0d840240b758f5b55e /www/ppb-v2-deploy/scripts/isolation/boundary.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' 80d40cec288ab3e626c07f59f9147f4964cf37fea4dc46f0159cef41aeebd6f2 /www/ppb-v2-deploy/scripts/isolation/boundary.py | sha256sum -c - >/dev/null",
           "test -f /www/ppb-v2-deploy/scripts/isolation/db-probe.php && test ! -L /www/ppb-v2-deploy/scripts/isolation/db-probe.php",
           "printf '%s  %s\\n' 0443cccea5ba992331a2f3ac23055ca4019d904bad537f3930630837a07937f7 /www/ppb-v2-deploy/scripts/isolation/db-probe.php | sha256sum -c - >/dev/null",
           "test -f /www/ppb-v2-deploy/scripts/isolation/lifecycle.py && test ! -L /www/ppb-v2-deploy/scripts/isolation/lifecycle.py",

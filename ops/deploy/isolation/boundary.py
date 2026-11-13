@@ -64,7 +64,7 @@ def exact_schema(raw):
 
 def validate_grants(database,readonly,grants):
     need(isinstance(grants,list) and bool(grants),'DATABASE_GRANTS_MISSING')
-    own_write=False
+    own_write=False;metadata_visible=False
     for grant in grants:
         need(isinstance(grant,str) and 'WITH GRANT OPTION' not in grant.upper(),'GRANT_OPTION_FORBIDDEN')
         m=re.fullmatch(r'GRANT (.+?) ON (`(?:``|[^`])+`|\*)\.(`(?:``|[^`])+`|\*) TO .+',grant,re.I)
@@ -76,9 +76,11 @@ def validate_grants(database,readonly,grants):
         if schema==database:
             need(not permissions & {'FILE','SUPER','SYSTEM_USER','CREATE USER','PROXY'},'ADMIN_DATABASE_PRIVILEGE_FORBIDDEN')
             own_write=own_write or bool(permissions & {'ALL PRIVILEGES','CREATE','ALTER','INSERT','UPDATE','DELETE'})
+            metadata_visible=metadata_visible or (table=='*' and ('ALL PRIVILEGES' in permissions or {'TRIGGER','EVENT','SHOW VIEW','EXECUTE','CREATE ROUTINE','ALTER ROUTINE'}<=permissions))
         else:
             need(schema in readonly and permissions <= {'SELECT','SHOW VIEW'},'WRITE_OR_EXECUTE_OUTSIDE_V2_DATABASE')
     need(own_write,'V2_WRITE_PRIVILEGE_MISSING')
+    need(metadata_visible,'V2_OBJECT_METADATA_PRIVILEGES_INCOMPLETE')
     return {'v2_database_write':True,'legacy_database_write':False,'global_privileges':False}
 
 def validate_probe(p,env,probe):

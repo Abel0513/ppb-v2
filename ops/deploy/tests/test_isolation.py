@@ -29,6 +29,8 @@ class Boundary(unittest.TestCase):
         bad=['GRANT ALL PRIVILEGES ON *.* TO `worker`@`localhost`','GRANT FILE ON *.* TO `worker`@`localhost`','GRANT UPDATE ON `legacy`.* TO `worker`@`localhost`','GRANT EXECUTE ON `legacy`.* TO `worker`@`localhost`',own+' WITH GRANT OPTION','GRANT `adminrole`@`%` TO `worker`@`localhost`','GRANT PROXY ON root TO worker']
         for grant in bad:
             with self.assertRaises(RuntimeError):b.validate_grants('v2prod',{'legacy'},[own,grant])
+    def test_hidden_trigger_or_definer_metadata_cannot_be_treated_as_safe(self):
+        with self.assertRaisesRegex(RuntimeError,'METADATA_PRIVILEGES'):b.validate_grants('v2prod',set(),['GRANT INSERT ON `v2prod`.* TO x'])
     def test_schema_patterns_fail_closed(self):
         with self.assertRaisesRegex(RuntimeError,'WILDCARD'):b.validate_grants('v2_prod',set(),['GRANT ALL PRIVILEGES ON `v2_prod`.* TO x'])
         self.assertTrue(b.validate_grants('v2_prod',set(),['GRANT ALL PRIVILEGES ON `v2\\_prod`.* TO x'])['v2_database_write'])
