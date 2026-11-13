@@ -32,7 +32,26 @@ class Autonomy(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'DRAFT_PR'):a.validate_pr(p,[{'filename':'routes/web.php'}],self.checks(),SHA)
     def test_publication_waits_for_actual_acceptance(self):
         import json
-        self.assertFalse(json.loads((ROOT/'V2_AUTOMATION_ACCEPTANCE.json').read_text())['ready'])
+        evidence=json.loads((ROOT/'V2_AUTOMATION_ACCEPTANCE.json').read_text())
+        if evidence['ready']:
+            self.assertRegex(evidence['deployed_commit'],r'^[a-f0-9]{40}$')
+            self.assertTrue(evidence['metadata_audit']['global_metadata_coverage'])
+            for key in ['metadata_audit','isolation','release','repeat']:
+                self.assertGreater(evidence[key]['run_id'],0)
+                self.assertRegex(evidence[key]['ssm_command_id'],r'^[a-f0-9-]{36}$')
+            for key in ['release','repeat']:
+                self.assertEqual(evidence[key]['result'],'PASS')
+                self.assertGreaterEqual(evidence[key]['http_checks'],5)
+            self.assertTrue(evidence['repeat']['idempotent'])
+            self.assertEqual(evidence['repeat']['program_files_written'],0)
+    def test_late_ci_after_merge_is_a_safe_noop(self):
+        import json, os, tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            event=Path(tmp)/'event.json'
+            event.write_text(json.dumps({'workflow_run':{'conclusion':'success','event':'pull_request','head_repository':{'full_name':a.REPO},'head_branch':'codex/v2-feature'}}))
+            with patch.dict(os.environ,{'GITHUB_EVENT_PATH':str(event)}), patch.object(a.c,'pages',return_value=[]), patch.object(a.c,'api') as api:
+                a.main()
+                api.assert_not_called()
     def test_fork_stale_base_and_forged_checks_denied(self):
         for change in ['fork','base','check']:
             p=self.pr();checks=self.checks()
