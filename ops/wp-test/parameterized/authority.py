@@ -24,6 +24,11 @@ def probe(call=r.aws):
             result['aws_code']=code
     after=call('ssm','get-document','--name',r.DOCUMENT,'--document-version','$LATEST','--document-format','JSON')
     r.require(after['Content']==current['Content'] and after['DocumentVersion']==current['DocumentVersion'],'WP_DOCUMENT_CHANGED_UNEXPECTEDLY')
+    try:
+        role=call('iam','get-role','--role-name','PPB-V2-WP-Interface-Promoter')['Role']
+        result['promotion_role_inspection']={'result':'EXISTS_NOT_ASSUMED','arn':role['Arn']}
+    except r.Stop as exc:
+        result['promotion_role_inspection']={'result':'EXISTENCE_UNKNOWN' if str(exc)=='AWS_AccessDenied' or str(exc)=='AWS_AccessDeniedException' else 'NOT_VERIFIED','action':'iam:GetRole','aws_code':str(exc)}
     r.persist(Path('wp-result/authority.json'),result)
     return result
 if __name__=='__main__':print(json.dumps(probe()))

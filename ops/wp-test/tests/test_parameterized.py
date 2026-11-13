@@ -126,7 +126,7 @@ elseif($path===lookupPath())$body=[$core];
 elseif($path==='/wp-json/wp/v2/expert/'.$fixtureId.'?context=edit')$body=$core;
 elseif($path==='/wp-json/acf/v3/expert/'.$fixtureId){
  if($method==='POST'){
-   if(array_diff(array_keys($payload['fields']),['Bonus推薦投注','分析師1推薦投注']))throw new RuntimeException('EXTRA_WRITE');
+   if(array_diff(array_keys($payload['fields']),['Bonus推薦投注','分析師1推薦投注','分析師2推薦投注','分析師3推薦投注','分析師4推薦投注','分析師5推薦投注']))throw new RuntimeException('EXTRA_WRITE');
    $db['fields']=array_replace($db['fields'],$payload['fields']);
  }
  $body=['acf'=>$db['fields']];
@@ -229,6 +229,7 @@ class AuthorityProbe(unittest.TestCase):
             calls.append(args)
             if args[:2]==('sts','get-caller-identity'):return {'Account':a.r.ACCOUNT,'Arn':'arn:aws:sts::'+a.r.ACCOUNT+':assumed-role/PPB-V2-GitHub-WP-Draft-Test-Role/GitHubActions'}
             if args[:2]==('ssm','get-document'):return {'Content':'{"schemaVersion":"2.2"}','DocumentVersion':'2'}
+            if args[:2]==('iam','get-role'):raise a.r.Stop('AWS_AccessDenied')
             if args[:2]==('ssm','update-document'):
                 self.assertEqual(Path(args[-1][7:]).read_text(),'{"schemaVersion":"2.2"}')
                 raise a.r.Stop('AWS_AccessDeniedException')
@@ -237,7 +238,7 @@ class AuthorityProbe(unittest.TestCase):
             result=a.probe(call)
         self.assertEqual(result['result'],'BLOCKED')
         self.assertFalse(result['document_changed'])
-        self.assertEqual([x[0:2] for x in calls],[('sts','get-caller-identity'),('ssm','get-document'),('ssm','update-document'),('ssm','get-document')])
+        self.assertEqual([x[0:2] for x in calls],[('sts','get-caller-identity'),('ssm','get-document'),('ssm','update-document'),('ssm','get-document'),('iam','get-role')])
 
 class CliParameters(unittest.TestCase):
     def test_cli_supplies_id_fields_and_value_without_manifest_or_source_changes(self):
@@ -270,3 +271,60 @@ class ParameterizedPromotion(unittest.TestCase):
             p.promote(call,parameterized=True)
         self.assertTrue(default)
         self.assertTrue(all(x[0] in ['sts','ssm'] for x in calls))
+
+class SixBetAcceptance(unittest.TestCase):
+    def test_authorized_six_source_bet_fields_preserve_37_and_repeat_without_post(self):
+        php=shutil.which('php')
+        if not php:self.skipTest('PHP required in CI')
+        q=json.loads((ROOT/'request.json').read_text())
+        self.assertEqual(q['expert_id'],30460)
+        self.assertEqual(set(q['fields']),{'分析師'+str(i)+'推薦投注' for i in range(1,6)}|{'Bonus推薦投注'})
+        self.assertEqual(set(q['fields'].values()),{'Codex測試123'})
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);ledger=root/'ledger';ledger.mkdir(mode=0o700)
+            for n in ['run.php','legacy.php','parser.php']:shutil.copyfile(ROOT.parent/'interface/runtime'/n,root/n)
+            shutil.copyfile(ROOT/'worker.php',root/'worker.php');(root/'bridge.php').write_text(BRIDGE)
+            def rpc(op,fields):
+                p=subprocess.run([php,str(root/'bridge.php')],input=json.dumps(dict(operation=op,expert_id=q['expert_id'],fields=fields),ensure_ascii=False),capture_output=True,text=True)
+                self.assertEqual(p.returncode,0,p.stderr);return json.loads(p.stdout)
+            before=rpc('read',{})
+            # These exact keys are independently produced by the real worker's source schema.
+            self.assertTrue(set(q['fields'])<=set(before['writable_fields']))
+            result=e.process(q,ledger,rpc)
+            self.assertEqual(result['checks']['untouched_acf_matched'],37)
+            for op in ['update_acf','verify']:
+                self.assertEqual(e.process(dict(q,operation=op),ledger,rpc)['wp_write_requests'],0)
+            after=rpc('read',{})
+            for key in before['fields']:
+                self.assertEqual(e.canonical(after['fields'][key]),e.canonical(q['fields'].get(key,before['fields'][key])))
+            calls=json.loads((root/'server.json').read_text())['calls']
+            self.assertEqual([path for path,method in calls if method!='GET'],['/wp-json/acf/v3/expert/30460'])
+
+class OnceInstaller(unittest.TestCase):
+    def test_admin_install_changes_only_wp_document_and_is_repeatable(self):
+        s=importlib.util.spec_from_file_location('wp_once_install',ROOT/'install-once.py');a=importlib.util.module_from_spec(s);s.loader.exec_module(a)
+        raw=(ROOT/'document.json').read_bytes();target=json.loads(raw);state={'default':'2','latest':'2'};calls=[]
+        def call(*args):
+            calls.append(args)
+            self.assertIn(args[:2],a.ALLOWED)
+            if args[:2]==('sts','get-caller-identity'):return {'Account':a.ACCOUNT,'Arn':'arn:aws:sts::'+a.ACCOUNT+':assumed-role/ExistingAdministrator/CloudShell'}
+            self.assertEqual(args[args.index('--name')+1],a.DOCUMENT)
+            if args[:2]==('ssm','update-document'):
+                self.assertEqual(json.loads(Path(args[-1][7:]).read_text()),target);state['latest']='3';return {'DocumentDescription':{'DocumentVersion':'3'}}
+            if args[:2]==('ssm','update-document-default-version'):state['default']='3';return {}
+            v=args[args.index('--document-version')+1];v=state.get(v[1:].lower(),v) if v.startswith('$') else v
+            if args[:2]==('ssm','describe-document'):return {'Document':{'Hash':a.OLD_HASH if v=='2' else 'a'*64,'HashType':'Sha256','Status':'Active'}}
+            return {'Content':json.dumps({} if v=='2' else target),'DocumentVersion':v}
+        first=a.install(raw,call)
+        self.assertTrue(first['document_changed']);self.assertEqual(first['wp_writes'],0)
+        self.assertFalse(a.install(raw,call)['document_changed'])
+        self.assertEqual(sum(x[:2]==('ssm','update-document') for x in calls),1)
+        self.assertEqual(sum(x[:2]==('ssm','update-document-default-version') for x in calls),1)
+    def test_no_installer_access_for_v2_or_daily_wp_role_or_wrong_account(self):
+        s=importlib.util.spec_from_file_location('wp_once_guard',ROOT/'install-once.py');a=importlib.util.module_from_spec(s);s.loader.exec_module(a)
+        raw=(ROOT/'document.json').read_bytes()
+        for role,account in [('PPB-V2-GitHub-Deploy-Role',a.ACCOUNT),('PPB-V2-GitHub-WP-Draft-Test-Role',a.ACCOUNT),('ExistingAdministrator','000000000000')]:
+            calls=[]
+            def call(*args):calls.append(args);return {'Account':account,'Arn':'arn:aws:sts::'+account+':assumed-role/'+role+'/session'}
+            with self.assertRaises(RuntimeError):a.install(raw,call)
+            self.assertEqual(calls,[('sts','get-caller-identity')])

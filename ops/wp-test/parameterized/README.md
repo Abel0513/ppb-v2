@@ -37,9 +37,11 @@ Same-value updates do zero writes. Unknown INTENTs block later mutations.
 
 Source meaning: 分析師1推薦投注 through 分析師5推薦投注 and Bonus推薦投注
 are six betting fields. 分析師N推薦 is a separate field. Never infer Bonus-only
-from the user label 推薦投注. The exact current acceptance field selection is
-pending user clarification; request.json is now an explicit GET-only request,
-with no implicit Bonus-only write. Ordinary pushes run read only.
+from the user label 推薦投注. The user has explicitly authorized all six betting fields for Expert30460, each
+exactly Codex測試123. request.json records the fixed unique request ID
+expert30460-six-bets-123-20261114-v1. All six keys must independently pass the
+verified WPF6 source whitelist before any write. Ordinary pushes remain read-only;
+only the explicit authorized update selector invokes this request.
 
 `authority.py` probes ssm:UpdateDocument using EXACTLY the already-installed latest
 content. DuplicateDocumentContent proves authority without a new version; access

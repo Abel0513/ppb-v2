@@ -44,9 +44,9 @@
    the V2 role for WP, change V2 SSM, or use old resume to overwrite all43 fields.
    After that one reviewed interface installation, later allowed text requests
    need only JSON data, without per-value executable/SHA changes.
-5. Exact acceptance field selection awaits clarification: five analyst betting
-   keys plus Bonus betting key are distinct from 分析師N推薦. Current request
-   manifest is GET-only; there is no default implicit Bonus-only write.
+5. Scope is now explicitly confirmed: 分析師1推薦投注 through 分析師5推薦投注
+   plus Bonus推薦投注, all Codex測試123. The manifest uses stable request ID
+   expert30460-six-bets-123-20261114-v1. No further field clarification is needed.
 
 PR13 remains open/unmerged. Legacy code/DB, V2, WP contents and permanent journals
 were not modified by these diagnostics. Offline/CI results are separate evidence.
@@ -56,3 +56,25 @@ Latest local consolidated verification:95 WP tests (including real PHP fixtures)
 These220 local tests do not establish remote ACF update acceptance. The PR merge
 conflict was limited to identical Python cache ignore rules and has been resolved;
 no main merge/deploy or V2 program change is part of this WP PR.
+
+## Minimal existing-administrator operation
+
+The reviewed fixed document is unchanged from700e175, SHA256
+`a9fc80aa20b413233fd15ad5b7df8617d56984ed44d3c05c079ec71a09d353ee`.
+`install-reviewed-once.sh` embeds those exact bytes and checks their SHA. It needs
+no repository checkout, GitHub PAT, EC2 login or credential export. An existing
+AWS administrator can run this one file in CloudShell. It only installs/selects
+the reviewed version of PPB-V2-WP-Draft-Test, verifies account429724121147, old
+default2/hash and final contents/version/hash, and stops on unexpected drift.
+A repeated successful installation is a no-op. No EC2 command is sent.
+
+Required existing management actions on the one WP document: ssm:GetDocument,
+ssm:DescribeDocument, ssm:UpdateDocument, ssm:UpdateDocumentDefaultVersion, plus
+sts:GetCallerIdentity. No IAM mutation or daily-role expansion is requested.
+V2 and daily WP role identities are explicitly rejected by the installer.
+The main workflow inventory currently has no WP promotion workflow; the PR-only
+promotion definition is not evidence of an installed/usable promotion identity.
+
+The original95 tests remain passing; three additional tests cover the six-field
+37-untouched/idempotency fixture and the bounded administrator installer. Fixture
+PASS does not establish a real WP UPDATE_HTTP/READBACK_HTTP or live field values.

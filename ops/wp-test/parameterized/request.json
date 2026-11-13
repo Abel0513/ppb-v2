@@ -1,6 +1,13 @@
 {
-  "operation": "read",
+  "operation": "update_acf",
   "expert_id": 30460,
-  "request_id": "expert30460-read-20261114",
-  "fields": {}
+  "request_id": "expert30460-six-bets-123-20261114-v1",
+  "fields": {
+    "分析師1推薦投注": "Codex測試123",
+    "分析師2推薦投注": "Codex測試123",
+    "分析師3推薦投注": "Codex測試123",
+    "分析師4推薦投注": "Codex測試123",
+    "分析師5推薦投注": "Codex測試123",
+    "Bonus推薦投注": "Codex測試123"
+  }
 }
