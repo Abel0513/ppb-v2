@@ -48,7 +48,7 @@ jobs:
           retention-days: 7
   execute:
     needs: offline
-    # Development pushes may invoke ONLY the installed read-only journal operation.
+    # Pushes default to journal; an explicitly authorized resume marker invokes only installed fixed code.
     # PR/fork events never receive AWS authority; no pull_request_target checkout.
     if: >-
       github.repository == 'Abel0513/ppb-v2' && github.repository_id == '1454285732' &&
@@ -101,10 +101,10 @@ jobs:
           role-duration-seconds: 1800
           retry-max-attempts: 2
       - name: Read existing journal through fixed data-only interface
-        if: steps.aws.outcome == 'success' && github.event_name != 'workflow_dispatch'
+        if: steps.aws.outcome == 'success' && github.event_name != 'workflow_dispatch' && !contains(github.event.head_commit.message, '[wp-resume-existing]')
         run: python3 ops/wp-test/interface/client.py journal
       - name: Resume only the already verified Expert through reviewed installed code
-        if: steps.aws.outcome == 'success' && github.event_name == 'workflow_dispatch' && inputs.confirmation == 'CREATE-ONE-EXPERT-DRAFT'
+        if: steps.aws.outcome == 'success' && ((github.event_name == 'workflow_dispatch' && inputs.confirmation == 'CREATE-ONE-EXPERT-DRAFT') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[wp-resume-existing]')))
         run: python3 ops/wp-test/interface/client.py resume
       - name: Collect credential-free public Expert schema after remote failure
         if: failure() && steps.aws.outcome == 'success'
