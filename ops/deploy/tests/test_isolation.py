@@ -146,3 +146,37 @@ class BootstrapArtifact(unittest.TestCase):
                 manifest=json.load(archive.extractfile('SHA256.json'))
                 for name,digest in manifest.items():self.assertEqual(hashlib.sha256(archive.extractfile(name).read()).hexdigest(),digest)
                 self.assertFalse(any(name.endswith(('.env','.sql','.pem','.key')) for name in names))
+
+class ActivationAuthority(unittest.TestCase):
+    def setUp(self):
+        self.t=tempfile.TemporaryDirectory();self.addCleanup(self.t.cleanup)
+        self.old=os.getcwd();os.chdir(self.t.name);self.addCleanup(os.chdir,self.old)
+        self.m=load('activate_scope_test',ROOT/'activate-isolation.py');self.calls=[]
+    def test_actual_update_denial_is_precise_and_no_root_command_is_sent(self):
+        def aws(*args):
+            self.calls.append(args)
+            if args[:2]==('sts','get-caller-identity'):return {'Account':r.ACCOUNT,'Arn':'arn:aws:sts::429724121147:assumed-role/PPB-V2-GitHub-Deploy-Role/test'}
+            raise RuntimeError('AWS_AccessDeniedException')
+        result=self.m.activate(aws,lambda _:None)
+        self.assertEqual(result['result'],'STOP');self.assertEqual(result['reason'],'AWS_AccessDeniedException')
+        self.assertEqual(result['failed_action'],'ssm:UpdateDocument')
+        self.assertEqual(result['resource'],'arn:aws:ssm:us-east-1:429724121147:document/PPB-V2-Controlled-Deploy')
+        self.assertIsNone(result['ssm_command_id'])
+        self.assertEqual(sum(x[:2]==('ssm','update-document') for x in self.calls),1)
+        self.assertFalse(any(x[:2] in [('ssm','send-command'),('ssm','update-document-default-version')] for x in self.calls))
+        self.assertFalse(any(x[0]=='iam' for x in self.calls))
+    def test_install_success_does_not_activate_unverified_database_or_services(self):
+        bootstrap=(ROOT/'PPB-V2-Controlled-Deploy.bootstrap.ssm.json').read_text()
+        def aws(*args):
+            self.calls.append(args)
+            if args[:2]==('sts','get-caller-identity'):return {'Account':r.ACCOUNT,'Arn':'fixture'}
+            if args[:2]==('ssm','get-document'):return {'Content':bootstrap,'DocumentVersion':'9'}
+            if args[:2]==('ssm','describe-document'):return {'Document':{'Hash':'a'*64,'HashType':'Sha256'}}
+            if args[:2]==('ssm','send-command'):return {'Command':{'CommandId':'fixture-install-command'}}
+            if args[:2]==('ssm','get-command-invocation'):return dict(Status='Success',ResponseCode=0,StandardOutputContent='V2_FIXED_TOOLS_INSTALLED=YES\nV2_INVENTORY={"result":"INVENTORY_ONLY_ISOLATION_UNVERIFIED"}')
+            self.fail('Unexpected authority expansion')
+        from contextlib import redirect_stdout
+        import io
+        with patch.dict(os.environ,GITHUB_RUN_ID='1'),redirect_stdout(io.StringIO()):result=self.m.activate(aws,lambda _:None)
+        self.assertEqual(result['result'],'TOOLS_INSTALLED_ISOLATION_PENDING')
+        self.assertFalse(any(x[:2] in [('ssm','update-document-default-version'),('ssm','delete-document')] for x in self.calls))

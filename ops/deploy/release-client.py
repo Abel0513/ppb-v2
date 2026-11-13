@@ -81,7 +81,7 @@ def execute(operation,commit,run,attempt,archive,call=aws,pause=time.sleep):
             result.update(result='PASS',stage='VERIFIED');save();return result
         raise RuntimeError('REMOTE_OUTCOME_UNKNOWN_DO_NOT_RESEND')
     except Exception as exc:
-        reason=str(exc);result['reason']=reason if re.fullmatch('[A-Z0-9_]{1,160}',reason) else 'RELEASE_CLIENT_FAILED';save();return result
+        reason=str(exc);result['reason']=reason if re.fullmatch('[A-Za-z0-9_]{1,160}',reason) else 'RELEASE_CLIENT_FAILED';save();return result
 
 def main():
     operation=os.environ['PPB_OPERATION']
