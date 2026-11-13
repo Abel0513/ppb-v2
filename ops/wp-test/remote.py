@@ -63,6 +63,7 @@ def validate_envelope(output, result):
     require(data.get('schema_version') == 1, 'RESULT_SCHEMA_MISMATCH')
     # Only return the fixed collector's explicit schema, never raw remote stdout.
     keys = {'schema_version', 'execution', 'result', 'stop_code', 'wp_expert_id', 'candidate_expert_id',
+            'ownership_checks', 'core_author_evidence',
             'wp_status', 'post_type', 'acf_matched', 'recommendations', 'create_http',
             'readback_http', 'media_verified_image_count', 'wp_edit_url', 'reference_30436_unchanged', 'package_exit_code'}
     require(set(data) <= keys, 'RESULT_UNEXPECTED_KEYS')
@@ -70,6 +71,12 @@ def validate_envelope(output, result):
         number = data.get('wp_expert_id')
         require(type(number) is int and number > 0 and number != 30436, 'NEW_ID_INVALID')
         require(data.get('wp_status') == 'draft' and data.get('post_type') == 'expert', 'NOT_EXPERT_DRAFT')
+        author=data.get('core_author_evidence')
+        require(isinstance(author,dict) and type(author.get('expected_author')) is int
+                and author['expected_author']>0 and type(author.get('author_supported')) is bool, 'AUTHOR_EVIDENCE_MISSING')
+        require((author.get('mode')=='CORE_REST_EXACT' and author.get('independently_exposed') is True)
+                or (author.get('mode')=='AUTHENTICATED_WP_DEFAULT_AUTHOR_CONTRACT'
+                    and author.get('independently_exposed') is False and author['author_supported'] is False), 'AUTHOR_EVIDENCE_INCONSISTENT')
         require(data.get('media_verified_image_count') == 6, 'SIX_MEDIA_NOT_VERIFIED')
         require(data.get('acf_matched') == 43 and data.get('readback_http') == 200, 'ACF_READBACK_NOT_VERIFIED')
         require(isinstance(data.get('recommendations'), dict) and len(data['recommendations']) == 6
@@ -164,6 +171,10 @@ def summary(result, path):
              f"| STOP | {result.get('remote_stop_code') or result.get('stop_code') or '—'} |"]
     if result.get('wp'):
         wp = result['wp']
+        author=wp.get('core_author_evidence',{})
+        if author:
+            label='REST 作者欄位精確讀回' if author.get('independently_exposed') else '已驗證登入者的 WP 預設作者契約；REST 不暴露作者，非獨立欄位讀回'
+            lines.append(f"| 作者證據 | {label} |")
         lines.extend([f"| ACF | {wp.get('acf_matched', 0)}/43 |",
                       f"| 六推薦 | {len(wp.get('recommendations', {}))}/6 |",
                       f"| 照片 | {wp.get('media_verified_image_count', 0)}/6 |",

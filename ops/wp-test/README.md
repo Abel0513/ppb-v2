@@ -1,3 +1,5 @@
+> 待核准候選版本：實測 Expert CPT 不公開 author。此 PR 新增依 authenticated type capabilities 判斷的修正與安全診斷；執行套件 SHA 已改變，尚未在 EC2 執行。既有 SSM version 1 與原核准套件維持不變。詳見 CANDIDATE_APPROVAL.md；不得把候選 CI 通過視為真實 WP 驗收。
+
 # WordPress Expert 自動遠端驗收（PR #13）
 
 最新授權：Codex Cloud 完成開發並推送 `codex/issue-12-wp-draft` 後，GitHub Actions 自動以 OIDC → 私人 S3 → 固定 AWS SSM 文件 → EC2 執行 WPN2，再回收真實 WP 結果。使用者不用登入 EC2，不安裝 Codex CLI Runner，也不需要重建 WordPress 授權／evidence 檔。

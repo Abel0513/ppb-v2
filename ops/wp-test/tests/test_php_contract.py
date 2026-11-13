@@ -55,3 +55,32 @@ class PhpPythonContractTests(unittest.TestCase):
     def test_previous_attempt_pass_cannot_satisfy_this_attempt(self):
         report=self.report()
         self.assertEqual(collector.collect(report,dict(EXECUTION,run_attempt='2'),0)['result'],'STOP')
+    def test_unsupported_author_uses_verified_creator_and_labels_rest_limitation(self):
+        report=self.report('unsupported_author')
+        self.assertEqual(report['result'],'PASS')
+        self.assertEqual(report['authenticated_creator_id'],99)
+        self.assertFalse(report['expert_type_capabilities']['author_supported'])
+        evidence=report['core_author_evidence']
+        self.assertEqual(evidence['mode'],'AUTHENTICATED_WP_DEFAULT_AUTHOR_CONTRACT')
+        self.assertFalse(evidence['independently_exposed'])
+        envelope=collector.collect(report,EXECUTION,0)
+        self.assertEqual(envelope['result'],'PASS')
+        self.assertFalse(envelope['core_author_evidence']['independently_exposed'])
+    def test_missing_author_on_supported_type_does_not_use_fallback(self):
+        report=self.report('supported_author_missing')
+        self.assertEqual(report['result'],'STOP')
+        self.assertEqual(report['stop_code'],'NEW_EXPERT_OWNERSHIP_NOT_VERIFIED')
+        envelope=collector.collect(report,EXECUTION,2)
+        self.assertEqual(envelope['result'],'STOP')
+        self.assertFalse(envelope['ownership_checks']['author'])
+        self.assertIsNone(envelope['wp_expert_id'])
+    def test_wrong_exposed_author_still_stops(self):
+        report=self.report('wrong_author')
+        self.assertEqual(report['result'],'STOP')
+        self.assertEqual(report['stop_code'],'NEW_EXPERT_OWNERSHIP_NOT_VERIFIED')
+        self.assertFalse(report['ownership_audit'][-1]['checks']['author'])
+    def test_unsupported_author_and_lost_create_receipt_stops_without_second_create(self):
+        report=self.report('unsupported_author_lost_response')
+        self.assertEqual(report['result'],'STOP')
+        self.assertEqual(report['stop_code'],'NEW_EXPERT_OWNERSHIP_NOT_VERIFIED')
+        self.assertFalse(report['wp_test_success'])

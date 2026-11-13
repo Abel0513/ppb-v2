@@ -24,7 +24,7 @@ EXECUTION = dict(commit=COMMIT, run_id='12345', run_attempt='1')
 def envelope():
     return dict(schema_version=1, execution=EXECUTION, result='PASS', wp_expert_id=40001,
                 wp_status='draft', post_type='expert', acf_matched=43, media_verified_image_count=6, readback_http=200,
-                create_http=201, recommendations={k: 'Codex測試' for k in e.REC_KEYS},
+                create_http=201, core_author_evidence=dict(expected_author=99,mode='CORE_REST_EXACT',independently_exposed=True,author_supported=True), recommendations={k: 'Codex測試' for k in e.REC_KEYS},
                 wp_edit_url='https://csdatw.com/wp-admin/post.php?post=40001&action=edit')
 
 class AWS:

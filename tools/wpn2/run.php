@@ -24,7 +24,7 @@ function allowed(string $path,string $method,?array $payload):bool {
     $id=(int)($GLOBALS['journal']['id']??0);
     if($method==='GET') {
         if(in_array($path,['/wp-json/wp/v2/expert/30436?context=edit','/wp-json/acf/v3/expert/30436'],true))return true;
-        if($path==='/wp-json/wp/v2/users/me?context=edit'||$path===lookupPath())return true;
+        if($path==='/wp-json/wp/v2/users/me?context=edit'||$path==='/wp-json/wp/v2/types/expert?context=edit'||$path===lookupPath())return true;
         if(preg_match('~^/wp-json/wp/v2/media/([1-9][0-9]*)(?:\?context=edit)?$~D',$path,$m))return in_array((int)$m[1],$GLOBALS['allowedMediaIds']??[],true);
         if(preg_match('~^/wp-json/wp/v2/users/([1-9][0-9]*)\?context=edit$~D',$path,$m))return in_array((int)$m[1],$GLOBALS['allowedAuthors']??[],true);
         return $id>0&&$id!==30436&&in_array($path,['/wp-json/wp/v2/expert/'.$id.'?context=edit','/wp-json/acf/v3/expert/'.$id],true);
@@ -53,7 +53,33 @@ function lookup(array $ctx):array {
 }
 function ownDraft(array $body,int $author):int {
     $id=(int)($body['id']??0);
-    if($id<1||$id===30436||($body['type']??'')!=='expert'||($body['status']??'')!=='draft'||($body['slug']??'')!==SLUG||($body['title']['raw']??'')!==TITLE||($body['content']['raw']??'')!=='<!-- '.MARKER.' -->'||(int)($body['author']??0)!==$author)stop('NEW_EXPERT_OWNERSHIP_NOT_VERIFIED');
+    $checks=[
+        'new_id'=>$id>0&&$id!==30436,
+        'expert_type'=>($body['type']??'')==='expert',
+        'draft'=>($body['status']??'')==='draft',
+        'slug'=>($body['slug']??'')===SLUG,
+        'title'=>($body['title']['raw']??'')===TITLE,
+        'content_marker'=>($body['content']['raw']??'')==='<!-- '.MARKER.' -->',
+    ];
+    $exposed=array_key_exists('author',$body);
+    $cap=$GLOBALS['verifiedExpertCapabilities']??null;
+    // WordPress omits author for CPTs without author support. In that case
+    // verify the authenticated creator and journal, and label the REST limit;
+    // never silently accept a missing author on a type that supports it.
+    $defaultContract=!$exposed&&is_array($cap)&&$cap['author_supported']===false
+        &&($GLOBALS['verifiedWpCreator']??0)===$author
+        &&($GLOBALS['journal']['author']??0)===$author
+        &&($GLOBALS['journal']['create_http']??0)===201
+        &&(!isset($GLOBALS['journal']['creation_receipt_id'])||$GLOBALS['journal']['creation_receipt_id']===$id);
+    $checks['author']=$exposed?(int)$body['author']===$author:$defaultContract;
+    $GLOBALS['state']['ownership_audit'][]=['returned_id'=>$id,'checks'=>$checks,
+        'author_exposed'=>$exposed,'returned_author'=>$exposed?(int)$body['author']:null];
+    $identity=$checks;unset($identity['author']);
+    if(!in_array(false,$identity,true))$GLOBALS['state']['candidate_expert_id']=$id;
+    if(in_array(false,$checks,true))stop('NEW_EXPERT_OWNERSHIP_NOT_VERIFIED');
+    $GLOBALS['state']['core_author_evidence']=['expected_author'=>$author,
+        'mode'=>$exposed?'CORE_REST_EXACT':'AUTHENTICATED_WP_DEFAULT_AUTHOR_CONTRACT',
+        'independently_exposed'=>$exposed,'author_supported'=>$cap['author_supported']??null];
     return $id;
 }
 function run(?array $fixture=null):void {
@@ -66,6 +92,15 @@ function run(?array $fixture=null):void {
     $GLOBALS['allowedAuthors']=array_values(array_unique(array_map('intval',array_column($people,'author_id'))));
     $me=wpCall($ctx,'/wp-json/wp/v2/users/me?context=edit');
     if($me['status']!==200||$me['network_error']||(int)($me['json']['id']??0)<1)stop('WP_AUTH_FAILED');
+    $type=wpCall($ctx,'/wp-json/wp/v2/types/expert?context=edit');$tb=$type['json']??null;
+    if($type['network_error']||$type['status']!==200||!is_array($tb)||!is_array($tb['supports']??null))stop('EXPERT_TYPE_CAPABILITIES_UNVERIFIED');
+    if(($tb['slug']??'')!=='expert'||($tb['rest_base']??'')!=='expert'||($tb['rest_namespace']??'')!=='wp/v2')stop('EXPERT_REST_BASE_NOT_VERIFIED');
+    $GLOBALS['verifiedExpertCapabilities']=['author_supported'=>!empty($tb['supports']['author']),
+        'editor_supported'=>!empty($tb['supports']['editor'])];
+    if(!$GLOBALS['verifiedExpertCapabilities']['editor_supported'])stop('EXPERT_CONTENT_MARKER_NOT_SUPPORTED');
+    $GLOBALS['verifiedWpCreator']=(int)$me['json']['id'];
+    $state['expert_type_capabilities']=$GLOBALS['verifiedExpertCapabilities'];
+    $state['authenticated_creator_id']=$GLOBALS['verifiedWpCreator'];
     foreach($people as $p){
         if(($p['author_id']??0)<1)stop('REAL_ANALYST_AUTHOR_MISSING');
         $u=wpCall($ctx,'/wp-json/wp/v2/users/'.$p['author_id'].'?context=edit');
@@ -106,8 +141,12 @@ function run(?array $fixture=null):void {
         if($found)stop('EXISTING_MARKER_WITHOUT_JOURNAL_NO_CREATE');
         $journal=['fingerprint'=>$fp,'phase'=>'CREATE_INTENT','marker'=>MARKER,'slug'=>SLUG,'author'=>$author,'created_at'=>gmdate('c')];
         journalSave(); // Durable intent BEFORE the only create attempt, even on timeout.
-        $r=wpCall($ctx,'/wp-json/wp/v2/expert','POST',['title'=>TITLE,'status'=>'draft','slug'=>SLUG,'content'=>'<!-- '.MARKER.' -->','author'=>$author]);
-        $journal['create_http']=$r['status'];journalSave();
+        $corePayload=['title'=>TITLE,'status'=>'draft','slug'=>SLUG,'content'=>'<!-- '.MARKER.' -->'];
+        if($GLOBALS['verifiedExpertCapabilities']['author_supported'])$corePayload['author']=$author;
+        $r=wpCall($ctx,'/wp-json/wp/v2/expert','POST',$corePayload);
+        $journal['create_http']=$r['status'];
+        if(!$r['network_error']&&$r['status']===201&&(int)($r['json']['id']??0)>0)$journal['creation_receipt_id']=(int)$r['json']['id'];
+        journalSave();
         if(!$r['network_error']&&$r['status']===201){$journal['id']=ownDraft($r['json']??[],$author);$journal['phase']='CREATED';journalSave();}
         $found=lookup($ctx);
     }

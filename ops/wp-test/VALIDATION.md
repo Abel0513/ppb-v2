@@ -1,3 +1,11 @@
+## 2026-11-13 OIDC 已通過後的真實 WP 失敗與候選修正
+
+真實遠端 Run 43347305073 attempt 2 已通過 OIDC、S3、SSM；Command ID 4939edd6-c116-47b4-afb4-d91f69914995。WPN2 STOP=NEW_EXPERT_OWNERSHIP_NOT_VERIFIED。attempt 3 用同一 journal 續跑，Command ID 29d38152-76c1-4187-8d4c-84387603d1e3，同一 STOP。後續診斷 Run 43348944311 的 Command ID b7e8486b-8099-433a-95c0-bb59ab75abd6，亦為同一錯誤，未取得已驗證 Expert ID。
+
+只讀 Run 43349393440 沒有執行 SSM，證明實際 GET 是 expert／publish 文章形狀，含 title／content／status，不含 author；同名 taxonomy 也共用 rest_base=expert，OPTIONS 最後顯示 term schema，但第一個 POST 是文章 endpoint（不含 author arg）。因此原驗證器無條件要求 author 必然失敗，不能由此宣稱真實 WP PASS。
+
+候選修正增加 authenticated type-capabilities GET、嚴格作者支援判斷與標示、201／journal／receipt 綁定、失敗安全診斷。65 項本機回歸通過，含缺作者的支援／不支援兩種狀態、錯誤作者拒絕、不明建立回應拒絕。它改變執行 SHA，尚未獲 AWS 固定文件核准，沒有在 EC2 執行；目前仍無 43/43／六推薦真實結果。
+
 ## 2026-11-13 PHP → Python 契約與 root 執行限制
 
 run.php 明確計算／持久化 media_verified_image_count，初始化為 0；Python 缺欄位或型態不符會回報明確 STOP，不能默認為六張。新增實際 PHP writer → JSON → Python collector → controller 整合測試，包含六張成功、五張照片失敗、欄位缺漏、推薦／43 欄／HTTP 不符與舊 attempt 拒絕。

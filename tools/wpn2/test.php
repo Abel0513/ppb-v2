@@ -9,17 +9,20 @@ $groups=[];
 foreach(['','照片','狀態','推薦','推薦投注','推薦短文'] as $suffix){$g=[];for($i=1;$i<=5;$i++){$g[]='分析師'.$i.$suffix;$keys[]='分析師'.$i.$suffix;}$groups[]=$g;}
 $people=[];for($i=2;$i<=7;$i++)$people[$i]=['id'=>$i,'name'=>'Real source analyst '.$i,'photo'=>(string)(100+$i),'author_id'=>200+$i];
 $fixture=['definition'=>['static'=>array_slice($keys,0,13),'groups'=>$groups,'all_keys'=>$keys,'url'=>'https://csdatw.com','user'=>'fixture','password'=>'fixture'],'people'=>$people];
-$server=null;$stored=[];$calls=[];$creates=0;$writes=0;$lost=false;$bad=false;$badMedia=false;
-$GLOBALS['transport']=function($ctx,$path,$method,$payload)use(&$server,&$stored,&$calls,&$creates,&$writes,&$lost,&$bad,&$badMedia){
+$server=null;$stored=[];$calls=[];$creates=0;$writes=0;$lost=false;$bad=false;$badMedia=false;$hideAuthor=false;$typeAuthorSupported=true;$wrongAuthor=false;
+$GLOBALS['transport']=function($ctx,$path,$method,$payload)use(&$server,&$stored,&$calls,&$creates,&$writes,&$lost,&$bad,&$badMedia,&$hideAuthor,&$typeAuthorSupported,&$wrongAuthor){
     $calls[]=[$path,$method];$body=null;$status=200;$error=false;
     if($path==='/wp-json/wp/v2/expert/30436?context=edit'){$body=['id'=>30436,'status'=>'private'];}
     elseif($path==='/wp-json/acf/v3/expert/30436'){$body=['acf'=>[]];}
     elseif($path==='/wp-json/wp/v2/users/me?context=edit')$body=['id'=>99];
+    elseif($path==='/wp-json/wp/v2/types/expert?context=edit')$body=['slug'=>'expert','rest_base'=>'expert','rest_namespace'=>'wp/v2','supports'=>['author'=>$typeAuthorSupported,'editor'=>true]];
     elseif(preg_match('~/users/(\d+)~',$path,$m))$body=['id'=>(int)$m[1]];
     elseif(preg_match('~/media/(\d+)~',$path,$m)){$body=['id'=>(int)$m[1],'media_type'=>'image','source_url'=>'https://csdatw.com/wp-content/uploads/'.$m[1].'.jpg'];if($badMedia&&(int)$m[1]===107){$status=404;$body=['code'=>'rest_post_invalid_id'];}}
     elseif($path===lookupPath())$body=$server?[$server]:[];
     elseif($path==='/wp-json/wp/v2/expert'&&$method==='POST'){
-        $creates++;$server=['id'=>40123,'type'=>'expert','status'=>'draft','slug'=>$payload['slug'],'title'=>['raw'=>$payload['title']],'content'=>['raw'=>$payload['content']],'author'=>$payload['author']];
+        $creates++;$server=['id'=>40123,'type'=>'expert','status'=>'draft','slug'=>$payload['slug'],'title'=>['raw'=>$payload['title']],'content'=>['raw'=>$payload['content']],'author'=>$payload['author']??99];
+        if($hideAuthor)unset($server['author']);
+        if($wrongAuthor)$server['author']=999;
         $body=$server;$status=201;if($lost){$status=0;$body=null;$error=true;}
     }elseif($path==='/wp-json/wp/v2/expert/40123?context=edit')$body=$server;
     elseif($path==='/wp-json/acf/v3/expert/40123'){
@@ -35,7 +38,12 @@ function resetTest():void {
 }
 try{
     if(($argv[1]??'')==='--emit-report'){
-        $badMedia=($argv[2]??'success')==='media_failure';
+        $case=$argv[2]??'success';
+        $badMedia=$case==='media_failure';
+        $hideAuthor=in_array($case,['unsupported_author','supported_author_missing','unsupported_author_lost_response'],true);
+        $typeAuthorSupported=!in_array($case,['unsupported_author','unsupported_author_lost_response'],true);
+        $lost=$case==='unsupported_author_lost_response';
+        $wrongAuthor=$case==='wrong_author';
         try{run($fixture);}catch(RuntimeException $e){$state['result']='STOP';$state['stop_code']=$e->getMessage();}
         saveReport();
         echo file_get_contents(JOURNAL_DIR.'/report.json');

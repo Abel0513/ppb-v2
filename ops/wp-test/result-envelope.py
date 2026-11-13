@@ -17,6 +17,17 @@ def collect(report, execution, exit_code):
         return dict(result,stop_code='REPORT_SCHEMA_INVALID')
     if report.get('execution') != execution:
         return dict(result, stop_code='CURRENT_EXECUTION_REPORT_MISSING')
+    candidate=report.get('candidate_expert_id')
+    if type(candidate) is int and candidate>0 and candidate!=30436:
+        result['candidate_expert_id']=candidate
+    audit=report.get('ownership_audit',[])
+    if isinstance(audit,list) and audit:
+        last=audit[-1]
+        if isinstance(last,dict) and isinstance(last.get('checks'),dict):
+            result['ownership_checks']={k:v for k,v in last['checks'].items() if type(v) is bool}
+    evidence=report.get('core_author_evidence')
+    if isinstance(evidence,dict):
+        result['core_author_evidence']={k:evidence.get(k) for k in ['expected_author','mode','independently_exposed','author_supported']}
     code = report.get('stop_code', 'WP_VERIFICATION_NOT_COMPLETE')
     result['stop_code'] = code if re.fullmatch('[A-Za-z0-9_]{1,120}', str(code)) else 'REMOTE_STOP'
     if 'media_verified_image_count' not in report:

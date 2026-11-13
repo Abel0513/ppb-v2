@@ -45,3 +45,12 @@ Cloud PHP 8.4.24：所有 PHP 語法通過、原 WPF6 日期／媒體 selftest �
 ## 回復範圍
 
 不修改既有應用、DB、LINE、Cron 或舊 WP 文章。交付執行會留下恰一筆新的測試草稿；不提供自動刪除或回復寫入。若測試中斷，不要移除 journal；重跑同一執行檔即可查驗／接續。
+
+
+## 待核准：Expert CPT 的作者欄位限制
+
+實際公開 GET 顯示 Expert 是文章，具有 title／content／status，但不含 author；POST endpoint args 亦未宣告 author。候選版本先以相同 Basic Auth 讀取 `/wp-json/wp/v2/types/expert?context=edit`，嚴格核對 slug／rest_base／namespace／editor 支援，再決定作者欄位的語意。
+
+支援 author 時，缺少或錯誤的 author 都停止。明確不支援 author 時，僅在 journal 已記錄本次建立 HTTP 201、已驗證登入者與 journal 作者一致、建立回應 ID（若已保存）一致，而且新 ID／expert／draft／slug／title／content marker 全部符合時，採用 WordPress authenticated default-author contract。這不是獨立 GET 讀到了作者，報告會明確標示 independently_exposed=false；不得在驗收說明中冒稱作者欄位讀回通過。不明／遺失的 create 回應不套用這個 fallback，也不重新 create。
+
+六位來源分析師 author_id 仍逐一 GET user 驗證；原草稿、來源 DB、LINE、Cron 不改。新建立回應的 ID 會先記錄為 receipt 再驗證，避免只留 201 而遺失識別。STOP 可回收未完成驗收的 candidate ID 與各身份判定布林值；只有完成全部驗收才會有已驗證 new_expert_id。
