@@ -32,7 +32,12 @@ class Audit(unittest.TestCase):
         d=load('proc_document_test','document.py').document()
         source='\n'.join(d['mainSteps'][0]['inputs']['runCommand'])
         self.assertIn('information_schema',base64.b64decode(source.split("base64.b64decode('")[1].split("'")[0]).decode())
-        self.assertNotIn('EXPECTED_PROCEDURE_SHA256',source)
+        rendered=base64.b64decode(source.split("base64.b64decode('")[1].split("'")[0]).decode()
+        self.assertIn(hashlib.sha256(body.encode()).hexdigest(),rendered)
+        self.assertIn(hashlib.sha256(body.replace('\n','\r\n').encode()).hexdigest(),rendered)
+        self.assertEqual(hashlib.sha256(body.replace('\n','\r\n').encode()).hexdigest(),'7898665d7cc83bbb492f2b87dc7d4c3c309df67c1f2ad2854f4cef07371f47dc')
+        self.assertNotIn('EXPECTED_PROCEDURE_SHA256',rendered)
+        self.assertNotIn('EXPECTED_PROCEDURE_CRLF_SHA256',rendered)
     def test_filtered_empty_result_never_becomes_pass_and_sha_is_pinned(self):
         m=load('metadata_run_test','run.py');calls=[];value=m.d.document()
         def call(*args):

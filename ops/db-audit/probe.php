@@ -62,7 +62,7 @@ try {
         if(count($sets)<5||count($sets[0])!==1||count($sets[2])!==1)throw new Exception();
         $metaActor=$sets[0][0]['actor'];$metaGrants=array_map(fn($x)=>array_values($x)[0],$sets[1]);
         $fingerprint=$sets[2][0]['definition_sha256']??null;
-        $covered=referenceOnly($metaGrants,$metaActor,'NONE')&&supportedServer($identity['version'])&&hash_equals('EXPECTED_PROCEDURE_SHA256',(string)$fingerprint);
+        $covered=referenceOnly($metaGrants,$metaActor,'NONE')&&supportedServer($identity['version'])&&in_array($fingerprint,['EXPECTED_PROCEDURE_SHA256','EXPECTED_PROCEDURE_CRLF_SHA256'],true);
         $out['metadata_authentication']='LOCKED_DEFINER_FIXED_PARAMETERLESS_PROCEDURE';
         $out['metadata_actor']=$metaActor;$out['procedure_definition_sha256']=$fingerprint;
         $out['global_fk_visibility_proven']=$covered;
