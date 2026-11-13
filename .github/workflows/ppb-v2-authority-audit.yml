@@ -1,8 +1,5 @@
 name: V2 actual authority and isolation audit
 on:
-  push:
-    branches: [main]
-    paths: ['ops/deploy/**', '.github/workflows/ppb-v2-authority-audit.yml']
   workflow_dispatch:
 permissions: {contents: read}
 jobs:

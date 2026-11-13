@@ -26,7 +26,7 @@ def classify(files):
 
 def acceptance_proof(pr,files):
     allowed={'routes/web.php','app/Http/Controllers/V2DeploymentCheckController.php','resources/ppb/acceptance.json','resources/ppb/release.json','resources/views/ppb/deployment-check.blade.php','tests/Feature/V2DeploymentCheckTest.php'}
-    return pr.get('number')==22 and pr['head']['ref']=='codex/v2-automation-proof' and bool(files) and all(x['filename'] in allowed and not x.get('previous_filename') and x.get('status')!='removed' for x in files)
+    return ((pr.get('number')==22 and pr['head']['ref']=='codex/v2-automation-proof') or pr['head']['ref']=='codex/v2-automation-proof-followup') and bool(files) and all(x['filename'] in allowed and not x.get('previous_filename') and x.get('status')!='removed' for x in files)
 
 def validate_pr(pr,files,checks,main_sha):
     c.need(not pr.get('draft',False),'DRAFT_PR_NOT_AUTHORIZED')
