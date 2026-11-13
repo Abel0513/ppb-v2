@@ -1,3 +1,11 @@
+# Latest result: PASS — six-field update and GET-only replays
+
+The installation blockers recorded below were resolved by the administrator
+without IAM changes. Actual update43519237581/329ce1bd-bb71-487b-b6ab-3bf4aee6215c
+returned POST200 and independentGET200; six fields exact,37 unchanged. Verify
+43519593734 attempts1/2 bothPASS, zeroPOSTs. See LIVE_ACCEPTANCE.md/live-evidence.json.
+The following sections preserve historical BLOCKED evidence, not current status.
+
 # Real status — 2026-11-14 Asia/Taipei
 
 **WP update acceptance: BLOCKED / NOT PASS. No new Expert was created.**

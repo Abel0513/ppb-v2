@@ -1,0 +1,161 @@
+{
+  "result": "PASS",
+  "expert_id": 30460,
+  "request_id": "expert30460-six-bets-123-20261114-v1",
+  "update": {
+    "result": "PASS",
+    "execution": {
+      "operation": "update_acf",
+      "commit": "547c5810ff46955be555b4763dba44154b47c47d",
+      "run_id": "43519237581",
+      "run_attempt": "1",
+      "request_id": "expert30460-six-bets-123-20261114-v1"
+    },
+    "ssm_command_id": "329ce1bd-bb71-487b-b6ab-3bf4aee6215c",
+    "expert_id": 30460,
+    "installed_ssm_version": "3",
+    "installed_ssm_hash": "a9fc80aa20b413233fd15ad5b7df8617d56984ed44d3c05c079ec71a09d353ee",
+    "stage": "VERIFIED",
+    "remote": {
+      "schema_version": 1,
+      "execution": {
+        "operation": "update_acf",
+        "commit": "547c5810ff46955be555b4763dba44154b47c47d",
+        "run_id": "43519237581",
+        "run_attempt": "1",
+        "request_id": "expert30460-six-bets-123-20261114-v1"
+      },
+      "result": "PASS",
+      "expert_id": 30460,
+      "request_id": "expert30460-six-bets-123-20261114-v1",
+      "fields": {
+        "分析師1推薦投注": "Codex測試123",
+        "分析師2推薦投注": "Codex測試123",
+        "分析師3推薦投注": "Codex測試123",
+        "分析師4推薦投注": "Codex測試123",
+        "分析師5推薦投注": "Codex測試123",
+        "Bonus推薦投注": "Codex測試123"
+      },
+      "checks": {
+        "readback_http": 200,
+        "create_http": 201,
+        "acf_matched": 43,
+        "untouched_acf_matched": 37,
+        "analysts_verified": 6,
+        "media_verified": 6,
+        "reference_30436_unchanged": true,
+        "journal_unchanged": true,
+        "fingerprint_unchanged": true
+      },
+      "wp_write_requests": 1,
+      "reconciled": false,
+      "update_http": 200
+    },
+    "wp_edit_url": "https://csdatw.com/wp-admin/post.php?post=30460&action=edit"
+  },
+  "verify": {
+    "result": "PASS",
+    "execution": {
+      "operation": "verify",
+      "commit": "3075d77aebb2ebe2fce2c0b6b854c88fbac31856",
+      "run_id": "43519593734",
+      "run_attempt": "1",
+      "request_id": "expert30460-six-bets-123-20261114-v1"
+    },
+    "ssm_command_id": "b500f68f-6a33-4b45-b5f9-79ca0eb1c17d",
+    "expert_id": 30460,
+    "installed_ssm_version": "3",
+    "installed_ssm_hash": "a9fc80aa20b413233fd15ad5b7df8617d56984ed44d3c05c079ec71a09d353ee",
+    "stage": "VERIFIED",
+    "remote": {
+      "schema_version": 1,
+      "execution": {
+        "operation": "verify",
+        "commit": "3075d77aebb2ebe2fce2c0b6b854c88fbac31856",
+        "run_id": "43519593734",
+        "run_attempt": "1",
+        "request_id": "expert30460-six-bets-123-20261114-v1"
+      },
+      "result": "PASS",
+      "expert_id": 30460,
+      "request_id": "expert30460-six-bets-123-20261114-v1",
+      "fields": {
+        "分析師1推薦投注": "Codex測試123",
+        "分析師2推薦投注": "Codex測試123",
+        "分析師3推薦投注": "Codex測試123",
+        "分析師4推薦投注": "Codex測試123",
+        "分析師5推薦投注": "Codex測試123",
+        "Bonus推薦投注": "Codex測試123"
+      },
+      "checks": {
+        "readback_http": 200,
+        "create_http": 201,
+        "acf_matched": 43,
+        "untouched_acf_matched": 37,
+        "analysts_verified": 6,
+        "media_verified": 6,
+        "reference_30436_unchanged": true,
+        "journal_unchanged": true,
+        "fingerprint_unchanged": true
+      },
+      "wp_write_requests": 0
+    },
+    "wp_edit_url": "https://csdatw.com/wp-admin/post.php?post=30460&action=edit"
+  },
+  "repeat_verify": {
+    "result": "PASS",
+    "execution": {
+      "operation": "verify",
+      "commit": "3075d77aebb2ebe2fce2c0b6b854c88fbac31856",
+      "run_id": "43519593734",
+      "run_attempt": "2",
+      "request_id": "expert30460-six-bets-123-20261114-v1"
+    },
+    "ssm_command_id": "65717cd8-e55e-4d3f-9c8b-91002ccced39",
+    "expert_id": 30460,
+    "installed_ssm_version": "3",
+    "installed_ssm_hash": "a9fc80aa20b413233fd15ad5b7df8617d56984ed44d3c05c079ec71a09d353ee",
+    "stage": "VERIFIED",
+    "remote": {
+      "schema_version": 1,
+      "execution": {
+        "operation": "verify",
+        "commit": "3075d77aebb2ebe2fce2c0b6b854c88fbac31856",
+        "run_id": "43519593734",
+        "run_attempt": "2",
+        "request_id": "expert30460-six-bets-123-20261114-v1"
+      },
+      "result": "PASS",
+      "expert_id": 30460,
+      "request_id": "expert30460-six-bets-123-20261114-v1",
+      "fields": {
+        "分析師1推薦投注": "Codex測試123",
+        "分析師2推薦投注": "Codex測試123",
+        "分析師3推薦投注": "Codex測試123",
+        "分析師4推薦投注": "Codex測試123",
+        "分析師5推薦投注": "Codex測試123",
+        "Bonus推薦投注": "Codex測試123"
+      },
+      "checks": {
+        "readback_http": 200,
+        "create_http": 201,
+        "acf_matched": 43,
+        "untouched_acf_matched": 37,
+        "analysts_verified": 6,
+        "media_verified": 6,
+        "reference_30436_unchanged": true,
+        "journal_unchanged": true,
+        "fingerprint_unchanged": true
+      },
+      "wp_write_requests": 0
+    },
+    "wp_edit_url": "https://csdatw.com/wp-admin/post.php?post=30460&action=edit"
+  },
+  "scope": {
+    "expert_create_requests": 0,
+    "core_publish_requests": 0,
+    "v2_business_db_write_statements": 0,
+    "legacy_business_db_write_statements": 0
+  },
+  "author_limit": "Expert REST does not expose author; retained previously accepted authenticated creator/201 receipt contract, not independent author REST readback."
+}

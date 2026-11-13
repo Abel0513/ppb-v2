@@ -1,3 +1,11 @@
+# Receipt-bound parameterized WP operations — LIVE ACCEPTED
+
+Expert30460 six-field update and repeated GET-only verification passed on
+2026-11-14 Asia/Taipei. Installed document3 SHA256
+a9fc80aa20b413233fd15ad5b7df8617d56984ed44d3c05c079ec71a09d353ee.
+See LIVE_ACCEPTANCE.md and live-evidence.json for actual HTTP, SSM and comparison
+receipts. Historical installation blockers below are superseded by this acceptance.
+
 # Receipt-bound parameterized WP operations
 
 The installed WP document is still version 2 (journal/resume). This candidate is

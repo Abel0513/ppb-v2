@@ -1,8 +1,7 @@
 name: PPB WordPress Expert remote acceptance
 on:
-  push:
-    branches: ['codex/issue-12-wp-draft']
-    paths: ['tools/wpn2/**', 'ops/wp-test/**', '.github/workflows/ppb-v2-wp-draft-test.yml']
+  # Historical v2 journal/resume client: keep offline/manual safeguards, but
+  # stop automatic remote calls after approved parameterized document v3.
   pull_request:
     paths: ['tools/wpn2/**', 'ops/wp-test/**', '.github/workflows/ppb-v2-wp-draft-test.yml']
   workflow_dispatch:

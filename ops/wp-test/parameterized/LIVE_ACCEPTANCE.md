@@ -21,3 +21,24 @@ Core author remains under the previously accepted authenticated WP default-autho
 contract: the Expert CPT does not independently expose author in REST. All core
 fields actually exposed by REST and source analyst identities are compared;
 no independent REST readback of the unexposed author property is claimed.
+
+## GET-only replay evidence
+
+| Operation | Actions run | Attempt | SSM command | HTTP | POST count |
+| --- | --- | --- | --- | --- | --- |
+| update_acf + independent GET | 43519237581 | 1 | 329ce1bd-bb71-487b-b6ab-3bf4aee6215c | POST200 / GET200 | 1 |
+| verify | 43519593734 | 1 | b500f68f-6a33-4b45-b5f9-79ca0eb1c17d | GET200 | 0 |
+| verify repeat | 43519593734 | 2 | 65717cd8-e55e-4d3f-9c8b-91002ccced39 | GET200 | 0 |
+
+All requests use the same fixed request ID. Every verification independently
+compares current43 ACF fields against the saved original baseline: six exact
+requested strings,37 untouched values AND exact JSON types, six analysts/media,
+reference30436, original creation journal and fingerprint. Durable INTENT and
+baseline remain in the private update ledger; original journal is never changed.
+Raw baseline/business data and credentials are not exported. Machine-readable
+actual sanitized receipts: live-evidence.json. RESULT=PASS.
+
+The old v2 journal workflow correctly rejected the new default content before any
+SSM call. Its redundant push trigger is retired; historical source/receipts and
+offline/manual safeguards remain. Only the parameterized client runs automatic
+remote operations. No root executor/package/document change is required.
