@@ -46,6 +46,7 @@ jobs:
           QUEUE_CONNECTION: sync
         run: |
           set -euo pipefail
+          mkdir -p bootstrap/cache storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs
           php artisan route:list --except-vendor --json | tee "$RUNNER_TEMP/v2-routes.json"
           # No SQLite/test DB, migrations, seeds or persistent tables.
           vendor/bin/phpunit --do-not-cache-result
