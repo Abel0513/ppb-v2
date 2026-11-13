@@ -2,7 +2,7 @@ name: Promote reviewed fixed WP interface
 on:
   push:
     branches: ['main']
-    paths: ['ops/wp-test/interface/**', 'ops/wp-test/result-envelope.py', '.github/workflows/ppb-wp-interface-promote.yml']
+    paths: ['ops/wp-test/parameterized/**', 'ops/wp-test/interface/**', 'ops/wp-test/result-envelope.py', '.github/workflows/ppb-wp-interface-promote.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -18,11 +18,15 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with: {php-version: '8.4', coverage: none}
+      - run: python3 -m unittest discover -s ops/wp-test/tests -v
       - run: python3 ops/wp-test/interface/render.py --check
+      - run: python3 ops/wp-test/parameterized/render.py --check
       - uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
           role-to-assume: arn:aws:iam::429724121147:role/PPB-V2-WP-Interface-Promoter
           aws-region: us-east-1
           allowed-account-ids: '429724121147'
           role-duration-seconds: 900
-      - run: python3 ops/wp-test/interface/promote.py
+      - run: python3 ops/wp-test/interface/promote.py --parameterized

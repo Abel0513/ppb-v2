@@ -8,15 +8,17 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parent
 s=importlib.util.spec_from_file_location('remote',ROOT.parent/'remote.py');r=importlib.util.module_from_spec(s);s.loader.exec_module(r)
 
-def promote(call=r.aws):
+def promote(call=r.aws,parameterized=False):
     r.require(os.environ.get('GITHUB_REF')=='refs/heads/main' and os.environ.get('GITHUB_EVENT_NAME') in {'workflow_dispatch','push'},'PROTECTED_MAIN_REQUIRED')
-    r.require(call('sts','get-caller-identity')['Account']==r.ACCOUNT,'WRONG_ACCOUNT')
-    local=json.loads((ROOT/'document.json').read_text())
+    actor=call('sts','get-caller-identity')
+    r.require(actor['Account']==r.ACCOUNT and '/PPB-V2-WP-Interface-Promoter/' in actor['Arn'],'WP_PROMOTION_ROLE_REQUIRED')
+    target=ROOT.parent/'parameterized/document.json' if parameterized else ROOT/'document.json'
+    local=json.loads(target.read_text())
     old=call('ssm','get-document','--name',r.DOCUMENT,'--document-version','$DEFAULT','--document-format','JSON')
     if json.loads(old['Content'])==local:version=old['DocumentVersion']
     else:
         changed=call('ssm','update-document','--name',r.DOCUMENT,'--document-version','$LATEST','--document-format','JSON',
-                     '--content','file://'+str(ROOT/'document.json'))
+                     '--content','file://'+str(target))
         version=changed['DocumentDescription']['DocumentVersion']
     for _ in range(30):
         meta=call('ssm','describe-document','--name',r.DOCUMENT,'--document-version',version)['Document']
@@ -27,5 +29,9 @@ def promote(call=r.aws):
     actual=call('ssm','get-document','--name',r.DOCUMENT,'--document-version',version,'--document-format','JSON')
     r.require(json.loads(actual['Content'])==local,'PROMOTION_READBACK_MISMATCH')
     call('ssm','update-document-default-version','--name',r.DOCUMENT,'--document-version',version)
+    default=call('ssm','get-document','--name',r.DOCUMENT,'--document-version','$DEFAULT','--document-format','JSON')
+    r.require(default['DocumentVersion']==version and json.loads(default['Content'])==local,'PROMOTION_DEFAULT_READBACK_MISMATCH')
     print('FIXED_INTERFACE_PROMOTED_VERSION='+version)
-if __name__=='__main__':promote()
+if __name__=='__main__':
+    import argparse
+    p=argparse.ArgumentParser();p.add_argument('--parameterized',action='store_true');a=p.parse_args();promote(parameterized=a.parameterized)

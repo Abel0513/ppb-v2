@@ -1,6 +1,6 @@
 {
-  "operation": "update_acf",
+  "operation": "read",
   "expert_id": 30460,
-  "request_id": "expert30460-bonus-123-v1",
-  "fields": {"Bonus推薦投注": "Codex測試123"}
+  "request_id": "expert30460-read-20261114",
+  "fields": {}
 }

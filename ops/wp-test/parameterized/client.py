@@ -60,8 +60,12 @@ def invoke(req,call=r.aws,pause=time.sleep):
         result['stop_code']=str(exc) if isinstance(exc,(r.Stop,RuntimeError)) else 'CLIENT_FAILED';save();return result
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('operation',choices=['read','update_acf','verify']);p.add_argument('--request',type=Path,required=True);args=p.parse_args()
-    req=json.loads(args.request.read_text());req['operation']=args.operation
+    p=argparse.ArgumentParser();p.add_argument('operation',choices=['read','update_acf','verify']);p.add_argument('--request',type=Path);p.add_argument('--expert-id',type=int);p.add_argument('--request-id');p.add_argument('--fields-json');args=p.parse_args()
+    req=json.loads(args.request.read_text()) if args.request else dict(operation=args.operation,expert_id=args.expert_id,request_id=args.request_id,fields={})
+    if args.expert_id is not None:req['expert_id']=args.expert_id
+    if args.request_id is not None:req['request_id']=args.request_id
+    if args.fields_json is not None:req['fields']=json.loads(args.fields_json)
+    req['operation']=args.operation
     if args.operation=='read':req['fields']={}
     result=invoke(req)
     print(json.dumps(result,ensure_ascii=False))

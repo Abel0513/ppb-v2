@@ -12,6 +12,18 @@ on:
         options: [read, update_acf, verify]
         default: read
         required: true
+      expert_id:
+        description: 'Existing Expert ID matching the permanent creation receipt'
+        type: string
+        required: false
+      request_id:
+        description: 'Stable unique mutation request ID; reused for verify/reconciliation'
+        type: string
+        required: false
+      fields_json:
+        description: 'Exact ACF fields/value JSON map; no URL/code parameters'
+        type: string
+        required: false
 permissions:
   contents: read
 jobs:
@@ -45,19 +57,20 @@ jobs:
       - name: Check WP document installation authority without changing its content
         if: contains(github.event.head_commit.message, '[wp-authority-audit]')
         run: python3 ops/wp-test/parameterized/authority.py
-      - name: Read configuration evidence without deploying V2 or assuming its role
-        env:
-          PPB_DEPLOY_DOCUMENT_VERSION_VALUE: ${{ vars.PPB_DEPLOY_DOCUMENT_VERSION }}
-          PPB_DEPLOY_DOCUMENT_SHA256_VALUE: ${{ vars.PPB_DEPLOY_DOCUMENT_SHA256 }}
-          PPB_AUTO_DEPLOY_VALUE: ${{ vars.PPB_AUTO_DEPLOY }}
-          PPB_SUBSCRIPTION_RUNNER_READY_VALUE: ${{ vars.PPB_SUBSCRIPTION_RUNNER_READY }}
-          PPB_PUBLISH_TOKEN_PRESENT: ${{ secrets.CODEX_GITHUB_TOKEN != '' }}
-          GH_TOKEN: ${{ github.token }}
-        run: python3 ops/wp-test/audit-v2-capabilities.py
       - name: Invoke reviewed installed operation only if document matches
         env:
           OPERATION: ${{ github.event_name == 'workflow_dispatch' && inputs.operation || contains(github.event.head_commit.message, '[wp-update-acf]') && 'update_acf' || contains(github.event.head_commit.message, '[wp-verify-acf]') && 'verify' || 'read' }}
-        run: python3 ops/wp-test/parameterized/client.py "$OPERATION" --request ops/wp-test/parameterized/request.json
+          REQUEST_EXPERT_ID: ${{ inputs.expert_id }}
+          REQUEST_ID: ${{ inputs.request_id }}
+          REQUEST_FIELDS_JSON: ${{ inputs.fields_json }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=("$OPERATION" --request ops/wp-test/parameterized/request.json)
+          if [[ -n "$REQUEST_EXPERT_ID" ]]; then args+=(--expert-id "$REQUEST_EXPERT_ID"); fi
+          if [[ -n "$REQUEST_ID" ]]; then args+=(--request-id "$REQUEST_ID"); fi
+          if [[ -n "$REQUEST_FIELDS_JSON" ]]; then args+=(--fields-json "$REQUEST_FIELDS_JSON"); fi
+          python3 ops/wp-test/parameterized/client.py "${args[@]}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -21,7 +21,10 @@ create is separate and rejected by this document. No new POST/create is possible
 
 `client.py read|update_acf|verify --request PATH` reads data JSON containing exactly
 operation, expert_id, request_id, fields. The CLI operation overrides only the
-operation; read clears fields. The manifest is data, not remote executable code.
+operation; read clears fields. --expert-id, --request-id and --fields-json
+can supply/override request data without changing any runtime code. The same
+parameters are exposed as workflow_dispatch inputs and passed via environment
+variables and quoted argument arrays, never interpolated into shell code. The manifest is data, not remote executable code.
 Fields map contains one or multiple exact ACF source keys, with nonempty text.
 The SSM client checks exact installed document content and pins version/hash before
 any upload/SendCommand. It refuses the old journal/resume document.
@@ -35,8 +38,8 @@ Same-value updates do zero writes. Unknown INTENTs block later mutations.
 Source meaning: 分析師1推薦投注 through 分析師5推薦投注 and Bonus推薦投注
 are six betting fields. 分析師N推薦 is a separate field. Never infer Bonus-only
 from the user label 推薦投注. The exact current acceptance field selection is
-pending user clarification; request.json currently retains the old Bonus-only
-request as historical data and ordinary pushes run read only.
+pending user clarification; request.json is now an explicit GET-only request,
+with no implicit Bonus-only write. Ordinary pushes run read only.
 
 `authority.py` probes ssm:UpdateDocument using EXACTLY the already-installed latest
 content. DuplicateDocumentContent proves authority without a new version; access

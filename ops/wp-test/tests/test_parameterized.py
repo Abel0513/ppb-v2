@@ -238,3 +238,35 @@ class AuthorityProbe(unittest.TestCase):
         self.assertEqual(result['result'],'BLOCKED')
         self.assertFalse(result['document_changed'])
         self.assertEqual([x[0:2] for x in calls],[('sts','get-caller-identity'),('ssm','get-document'),('ssm','update-document'),('ssm','get-document')])
+
+class CliParameters(unittest.TestCase):
+    def test_cli_supplies_id_fields_and_value_without_manifest_or_source_changes(self):
+        from unittest.mock import patch
+        s=importlib.util.spec_from_file_location('wp_param_cli',ROOT/'client.py');c=importlib.util.module_from_spec(s);s.loader.exec_module(c)
+        args=['client.py','update_acf','--expert-id','98765','--request-id','parameter-request01','--fields-json','{"分析師1推薦投注":"any text","Bonus推薦投注":"another text"}']
+        with patch('sys.argv',args),patch.object(c,'invoke',return_value={'result':'PASS'}) as invoke,patch('builtins.print'):
+            self.assertEqual(c.main(),0)
+        self.assertEqual(invoke.call_args.args[0],dict(operation='update_acf',expert_id=98765,request_id='parameter-request01',fields={'分析師1推薦投注':'any text','Bonus推薦投注':'another text'}))
+
+class ParameterizedPromotion(unittest.TestCase):
+    def test_reviewed_promotion_installs_candidate_not_old_resume_document(self):
+        from unittest.mock import patch
+        s=importlib.util.spec_from_file_location('wp_candidate_promote',ROOT.parent/'interface/promote.py');p=importlib.util.module_from_spec(s);s.loader.exec_module(p)
+        local=json.loads((ROOT/'document.json').read_text());calls=[];default=False
+        def call(*args):
+            nonlocal default
+            calls.append(args)
+            if args[:2]==('sts','get-caller-identity'):return {'Account':p.r.ACCOUNT,'Arn':'arn:aws:sts::'+p.r.ACCOUNT+':assumed-role/PPB-V2-WP-Interface-Promoter/GitHubActions'}
+            if args[:2]==('ssm','get-document'):
+                if args[args.index('--document-version')+1]=='$DEFAULT' and not default:return {'Content':'{}','DocumentVersion':'2'}
+                return {'Content':json.dumps(local),'DocumentVersion':'3'}
+            if args[:2]==('ssm','update-document'):
+                self.assertEqual(json.loads(Path(args[-1][7:]).read_text()),local)
+                return {'DocumentDescription':{'DocumentVersion':'3'}}
+            if args[:2]==('ssm','describe-document'):return {'Document':{'Status':'Active'}}
+            if args[:2]==('ssm','update-document-default-version'):default=True;return {}
+            self.fail('Unexpected promotion operation')
+        with patch.dict(os.environ,GITHUB_REF='refs/heads/main',GITHUB_EVENT_NAME='workflow_dispatch'),patch('builtins.print'):
+            p.promote(call,parameterized=True)
+        self.assertTrue(default)
+        self.assertTrue(all(x[0] in ['sts','ssm'] for x in calls))
