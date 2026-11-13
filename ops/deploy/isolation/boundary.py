@@ -21,7 +21,7 @@ def private_json(path):
 
 def validate_policy(p):
     need(set(p)=={'version','live','private','unix_user','database','read_only_schemas','env_sha256','legacy_roots','vhost_sha256','php_config_sha256','php_unit_sha256'},'POLICY_SCHEMA_INVALID')
-    need(p['version'] in {1,2} and p['live']==LIVE and p['private']==PRIVATE and p['unix_user']==USER,'POLICY_PATH_OR_USER_INVALID')
+    need(p['version'] in {1,2,3} and p['live']==LIVE and p['private']==PRIVATE and p['unix_user']==USER,'POLICY_PATH_OR_USER_INVALID')
     need(isinstance(p['database'],str) and re.fullmatch('[A-Za-z0-9_]{1,64}',p['database']),'V2_DATABASE_NOT_ESTABLISHED')
     need(isinstance(p['read_only_schemas'],list) and all(isinstance(x,str) and re.fullmatch('[A-Za-z0-9_]{1,64}',x) for x in p['read_only_schemas']),'READONLY_SCHEMA_INVALID')
     need(p['database'] not in p['read_only_schemas'],'V2_LEGACY_SCHEMA_OVERLAP')
@@ -143,3 +143,10 @@ def validate_web_config(vhost,php_config):
     need(re.search(r'^\s*clear_env\s*=\s*yes\s*$',active_php,re.M) and not re.search(r'env\s*\[|^\s*include\s*=',active_php,re.M),'FPM_INHERITED_CREDENTIALS_UNVERIFIED')
     need(re.search(r'^\s*listen\s*=\s*/www/wwwroot/ppbaos\.com/storage/run/php-fpm\.sock\s*$',active_php,re.M),'FPM_SOCKET_MISMATCH')
     return True
+
+def omit_empty_v2_extension(text):
+    pattern=r'(?m)^[ \t]*include[ \t]+/www/server/panel/vhost/nginx/extension/v2\.ppbaos\.com/\*\.conf[ \t]*;[ \t]*(?:#[^\n]*)?$'
+    if re.search(pattern,text):
+        need(not list(Path('/www/server/panel/vhost/nginx/extension/v2.ppbaos.com').glob('*.conf')),'V2_EXTENSION_NOT_EMPTY_REQUIRES_REVIEW')
+        text=re.sub(pattern,'',text)
+    return text

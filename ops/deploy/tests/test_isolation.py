@@ -347,3 +347,14 @@ class ExistingReleaseRecovery(unittest.TestCase):
         self.assertEqual(result['result'],'PASS');self.assertEqual(len(polls),2)
         self.assertFalse(result['send_command_requested'])
         self.assertTrue(all(x[:2] in [('sts','get-caller-identity'),('ssm','describe-document'),('ssm','get-document'),('ssm','get-command-invocation')] for x in calls))
+
+class EmptyExtensionBoundary(unittest.TestCase):
+    def test_only_empty_exact_v2_extension_is_semantically_inert(self):
+        base='server { server_name v2.csdatw.xyz; root /www/wwwroot/ppbaos.com/public; }'
+        ref='\ninclude /www/server/panel/vhost/nginx/extension/v2.ppbaos.com/*.conf;'
+        with patch.object(l.b.Path,'glob',return_value=[]):
+            old=l.vhost_digest(canonical=True,texts={'v2':base})
+            self.assertEqual(old,l.vhost_digest(canonical=True,texts={'v2':base+ref}))
+            self.assertNotEqual(old,l.vhost_digest(canonical=True,texts={'v2':base.replace('/ppbaos.com','/old')}))
+        with patch.object(l.b.Path,'glob',return_value=[Path('unreviewed.conf')]):
+            with self.assertRaisesRegex(RuntimeError,'EXTENSION_NOT_EMPTY'):l.vhost_digest(canonical=True,texts={'v2':base+ref})

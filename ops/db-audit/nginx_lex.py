@@ -12,10 +12,10 @@ def nginx_tokens(text):
             if ch==quote:quote=None
             continue
         if ch in {'"',"'"}:word+=ch;quote=ch;continue
-        if ch=='#':
+        if ch=='#' and not word:
             if word:tokens.append(word);word=''
             comment=True;continue
-        if ch.isspace() or ch in '{};':
+        if ch in ' \t\r\n' or ch in '{};':
             if word:tokens.append(word);word=''
             if ch in '{};':tokens.append(ch)
         else:word+=ch
