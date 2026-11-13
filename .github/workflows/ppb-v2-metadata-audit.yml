@@ -19,6 +19,7 @@ jobs:
         with: {php-version: '8.4', coverage: none}
       - run: python3 -m unittest discover -s ops/db-audit/tests -v
       - run: php -l ops/db-audit/probe.php
+      - run: php ops/db-audit/tests/policy.php
   audit:
     needs: validate
     if: github.repository_id == '1454285732' && github.repository_owner_id == '55256582' && github.ref == 'refs/heads/main'
