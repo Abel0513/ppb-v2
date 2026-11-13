@@ -37,6 +37,10 @@ def execute(operation,commit,run,attempt,archive,call=aws,pause=time.sleep):
         # IAM SendCommand scopes to document ARN, not a verified JSON body.
         # Old versions evaluating app autoloaders as root must not remain callable.
         approved=[expected,json.loads((Path(__file__).parent/'PPB-V2-Controlled-Deploy.bootstrap.ssm.json').read_text())]
+        import importlib.util
+        module_path=Path(__file__).parents[1]/'db-audit/document.py'
+        spec=importlib.util.spec_from_file_location('approved_metadata_document',module_path);metadata_document=importlib.util.module_from_spec(spec);spec.loader.exec_module(metadata_document)
+        approved.append(metadata_document.document())
         token=None;seen=[]
         for _ in range(20):
             args=['ssm','list-document-versions','--name',DOC]

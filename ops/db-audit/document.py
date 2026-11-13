@@ -29,6 +29,26 @@ p=subprocess.run(['/www/server/php/84/bin/php','-r',base64.b64decode('PHP_SOURCE
 try:report=json.loads(p.stdout)
 except Exception:report={'result':'STOP','reason':'METADATA_OUTPUT_INVALID'}
 print('V2_METADATA='+json.dumps(report))
+# Inspect only the two V2 vhosts and their reviewed cutover backup, never env backup.
+policy=b.private_json(root/'policy/isolation.json')
+receipt=b.private_json(root/'v2-service-isolation.json')
+import re
+name=receipt['backup'];assert re.fullmatch(r'v2-fpm-cutover-[0-9]+',name)
+spec=importlib.util.spec_from_file_location('fixed_provision',root/'scripts/isolation/provision.py');v=importlib.util.module_from_spec(spec);spec.loader.exec_module(v)
+files=[];expected_hashes={}
+for i,path in enumerate(v.VHOSTS):
+    old=(root/'backups'/name/('original-'+str(i))).read_text()
+    expected=v.flatten(old);current=v.checked_file(path)
+    expected_hashes[str(path)]=hashlib.sha256(expected.encode()).hexdigest()
+    # Report only directive classes, not raw configuration/headers/certificate data.
+    routing={'root_is_v2':bool(re.search(r'\broot\s+/www/wwwroot/ppbaos\.com/public\s*;',current)),
+             'dedicated_socket':current.count('fastcgi_pass unix:/www/wwwroot/ppbaos.com/storage/run/php-fpm.sock;'),
+             'shared_php_include':'enable-php-84.conf' in current,
+             'front_controller':'/index.php?$query_string' in current}
+    strip=lambda text:'\n'.join(line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith('#'))
+    files.append({'path':str(path),'current_sha256':hashlib.sha256(current.encode()).hexdigest(),'expected_sha256':expected_hashes[str(path)],'same_bytes':current==expected,'same_noncomment_lines':strip(current)==strip(expected),'routing':routing})
+print('V2_VHOST_STATE='+json.dumps({'policy_fingerprint':policy['vhost_sha256'],'actual_fingerprint':v.l.vhost_digest(),'expected_reconstructed_fingerprint':hashlib.sha256(json.dumps(expected_hashes,sort_keys=True).encode()).hexdigest(),'files':files}))
+
 '''.replace('PHP_SOURCE',php)
     return dict(schemaVersion='2.2',description='Fixed metadata-only V2 audit; no SQL input, business data, DDL/DML, installation or service writes',parameters={},mainSteps=[dict(action='aws:runShellScript',name='fixedMetadataAudit',inputs=dict(timeoutSeconds='90',runCommand=['set -eu','umask 077',"python3 - <<'FIXED_METADATA'",*code.splitlines(),'FIXED_METADATA']))])
 if __name__=='__main__':print(json.dumps(document(),indent=2))

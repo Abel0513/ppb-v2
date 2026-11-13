@@ -40,6 +40,8 @@ def run(call=c.aws,pause=time.sleep):
             c.need(inv['Status']=='Success' and inv['ResponseCode']==0,'FIXED_METADATA_EXECUTION_FAILED')
             rows=[x.split('=',1)[1] for x in inv.get('StandardOutputContent','').splitlines() if x.startswith('V2_METADATA=')]
             c.need(len(rows)==1,'METADATA_RECEIPT_MISSING')
+            vhosts=[x.split('=',1)[1] for x in inv.get('StandardOutputContent','').splitlines() if x.startswith('V2_VHOST_STATE=')]
+            if len(vhosts)==1:result['vhost_state']=json.loads(vhosts[0])
             result['metadata']=json.loads(rows[0]);result['reason']=result['metadata'].get('reason')
             if result['metadata'].get('result')=='PASS' and result['metadata'].get('global_fk_visibility_proven') is True and result['metadata'].get('v2_object_metadata_coverage_proven') is True:result['result']='PASS'
             save();return result
