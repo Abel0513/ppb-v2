@@ -53,6 +53,7 @@ with tarfile.open(archive,'r:gz') as tf:
         with os.fdopen(fd,'wb') as out:out.write(data);out.flush();os.fsync(out.fileno())
         os.replace(temp,target)
 for name,digest in expected.items():assert hashlib.sha256((root/name).read_bytes()).hexdigest()==digest
+subprocess.run(['python3',str(root/'scripts/isolation/prepare-os.py')],check=True,timeout=30)
 print('V2_FIXED_TOOLS_INSTALLED=YES')
 print('V2_DB_AND_SERVICE_ISOLATION=NOT_YET_VERIFIED')
 p=subprocess.run(['python3',str(root/'scripts/isolation/lifecycle.py'),'inventory','--commit','COMMIT_VALUE','--request-id','bootstrap-inventory-APPROVED_SHORT'],capture_output=True,text=True,timeout=60)
