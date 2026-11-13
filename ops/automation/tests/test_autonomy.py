@@ -20,6 +20,12 @@ class Autonomy(unittest.TestCase):
             with self.assertRaises(RuntimeError):a.classify([{'filename':name}])
         p=self.pr();p['head']['ref']='codex/issue-12-wp-draft'
         with self.assertRaises(RuntimeError):a.validate_pr(p,[{'filename':'app/new.php'}],self.checks(),SHA)
+    def test_draft_cannot_auto_merge(self):
+        p=self.pr();p['draft']=True
+        with self.assertRaisesRegex(RuntimeError,'DRAFT_PR'):a.validate_pr(p,[{'filename':'routes/web.php'}],self.checks(),SHA)
+    def test_publication_waits_for_actual_acceptance(self):
+        import json
+        self.assertFalse(json.loads((ROOT/'V2_AUTOMATION_ACCEPTANCE.json').read_text())['ready'])
     def test_fork_stale_base_and_forged_checks_denied(self):
         for change in ['fork','base','check']:
             p=self.pr();checks=self.checks()

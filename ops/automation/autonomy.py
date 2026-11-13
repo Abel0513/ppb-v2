@@ -25,6 +25,7 @@ def classify(files):
     return dict(application=any(n.split('/')[0] in {'app','routes','resources','public','config','database'} or n in {'composer.json','composer.lock','package.json','package-lock.json'} for n in names),migrations=any(n.startswith('database/') for n in names),dependencies=any(n in {'composer.json','composer.lock','package.json','package-lock.json'} for n in names))
 
 def validate_pr(pr,files,checks,main_sha):
+    c.need(not pr.get('draft',False),'DRAFT_PR_NOT_AUTHORIZED')
     c.need(pr.get('state')=='open' and pr['base']['ref']=='main' and pr['head']['repo']['full_name']==REPO,'PR_SCOPE_MISMATCH')
     c.need(bool(re.fullmatch('codex/(?:v2-[a-z0-9-]+|issue-[1-9][0-9]*)',pr['head']['ref'])),'BRANCH_NOT_AUTHORIZED')
     c.need(pr.get('_verified_merge_base')==main_sha,'BASE_CHANGED_RETEST_REQUIRED')
@@ -41,6 +42,10 @@ def main():
     matches=c.pages('pulls?state=open&head=Abel0513:'+run['head_branch'])
     c.need(len(matches)==1,'PR_NOT_UNIQUE');pr=c.api('pulls/'+str(matches[0]['number']))
     c.need(pr['head']['sha']==run['head_sha'],'STALE_RUN')
+    if pr.get('draft'):return
+    readiness=json.loads((ROOT/'V2_AUTOMATION_ACCEPTANCE.json').read_text())
+    if not readiness['ready']:
+        print('V2_AUTOMATIC_PUBLICATION_PENDING_REAL_ACCEPTANCE');return
     files=c.pages('pulls/'+str(pr['number'])+'/files')
     # This policy never auto-merges its own privileged controller changes.
     if any(x['filename'].split('/')[0] not in {'app','routes','resources','public','config','database','tests','docs'} and x['filename'] not in {'composer.json','composer.lock','package.json','package-lock.json'} for x in files):return

@@ -195,3 +195,22 @@ class ActivationAuthority(unittest.TestCase):
         with patch.dict(os.environ,GITHUB_RUN_ID='1',PPB_BOOTSTRAP_RECOVERY_COMMAND_ID='ff2db294-03d8-4f4a-9bb3-09ccbd93c5fe'),redirect_stdout(io.StringIO()):result=self.m.activate(aws,lambda _:None)
         self.assertEqual(result['result'],'TOOLS_INSTALLED_ISOLATION_PENDING')
         self.assertFalse(any(x[:2]==('ssm','send-command') for x in self.calls))
+
+class OsPreparation(unittest.TestCase):
+    def setUp(self):
+        from types import SimpleNamespace
+        self.m=load('prepare_os_test',ROOT/'isolation/prepare-os.py')
+        self.account=SimpleNamespace(pw_uid=998,pw_gid=998,pw_shell='/usr/sbin/nologin')
+    def test_only_dedicated_nonlogin_account_created_and_no_services_started(self):
+        from types import SimpleNamespace
+        from contextlib import redirect_stdout
+        import io
+        with patch.object(self.m.os,'geteuid',return_value=0),patch.object(self.m.pwd,'getpwnam',side_effect=[KeyError(),self.account]),patch.object(self.m.grp,'getgrgid',return_value=SimpleNamespace(gr_name='ppb-v2')),patch.object(self.m.os,'getgrouplist',return_value=[998]),patch.object(self.m.subprocess,'run') as call,redirect_stdout(io.StringIO()):
+            self.m.prepare()
+            self.assertEqual(call.call_count,1)
+            self.assertEqual(call.call_args.args[0],['/usr/sbin/useradd','--system','--no-create-home','--home-dir','/nonexistent','--shell','/usr/sbin/nologin','--user-group','ppb-v2'])
+    def test_shared_legacy_group_is_rejected(self):
+        from types import SimpleNamespace
+        with patch.object(self.m.os,'geteuid',return_value=0),patch.object(self.m.pwd,'getpwnam',return_value=self.account),patch.object(self.m.grp,'getgrgid',return_value=SimpleNamespace(gr_name='www')),patch.object(self.m.subprocess,'run') as call:
+            with self.assertRaisesRegex(RuntimeError,'GROUP_SCOPE'):self.m.prepare()
+            call.assert_not_called()

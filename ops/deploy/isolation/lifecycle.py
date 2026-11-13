@@ -95,8 +95,15 @@ def inspect_host():
             probe=subprocess.run([PHP,str(ROOT/'inventory-db.php')],input=json.dumps(env),capture_output=True,text=True,timeout=45)
             result['database_metadata']=json.loads(probe.stdout) if probe.returncode==0 else {'result':'METADATA_INVENTORY_FAILED'}
         except RuntimeError as exc:result['database_configuration']={'reason':str(exc)}
+    result['env_key_names']=sorted(set(re.findall(r'^([A-Z][A-Z0-9_]*)=',path.read_text(),re.M))) if path.is_file() else []
     result['web']={}
-    for filename in ['/www/server/panel/vhost/nginx/v2.csdatw.xyz.conf','/www/server/php/84/etc/php-fpm.conf']:
+    vhosts=[]
+    for candidate in Path('/www/server/panel/vhost/nginx').glob('*.conf'):
+        if candidate.is_file() and not candidate.is_symlink():
+            text=candidate.read_text()
+            if re.search(r'\bserver_name\s+[^;]*\bv2\.csdatw\.xyz\b',text):vhosts.append(str(candidate))
+    result['v2_vhost_matches']=vhosts
+    for filename in [*vhosts,'/www/server/php/84/etc/php-fpm.conf']:
         p=Path(filename)
         if p.is_file() and not p.is_symlink():
             # Only approved config keys; never emit certificate/private key/env values.
