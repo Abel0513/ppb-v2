@@ -141,7 +141,7 @@ def run(operation,commit,request_id,call=subprocess.run):
             feature=json.loads(lines[0])
             b.need(feature.get('result')=='PASS' and feature.get('commit')==commit
                    and feature.get('database')==checks['database'] and feature.get('user')==checks['user']
-                   and feature.get('transaction_rolled_back') is True and feature.get('database_writes')==0,'LARAVEL_DATABASE_IDENTITY_MISMATCH')
+                   and feature.get('transaction_rolled_back') is True and feature.get('database_writes_committed')==0,'LARAVEL_DATABASE_IDENTITY_MISMATCH')
         # Never export raw app output (may contain SQL/auth/session data).
         b.need(p.returncode==0,'LIFECYCLE_COMMAND_FAILED_PRIVATE_DIAGNOSIS_REQUIRED')
         _,_,after=audit(call)

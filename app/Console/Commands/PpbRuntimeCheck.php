@@ -25,7 +25,7 @@ class PpbRuntimeCheck extends Command
             $this->line('V2_FEATURE_V1='.json_encode([
                 'result'=>'PASS','commit'=>$commit,'database'=>$row->db,
                 'user'=>explode('@',$row->actor)[0],'transaction_rolled_back'=>true,
-                'database_writes'=>0,'checks'=>2,
+                'database_writes'=>0,'database_writes_committed'=>0,'checks'=>2,
             ], JSON_THROW_ON_ERROR));
             return self::SUCCESS;
         } catch (\Throwable $e) {
