@@ -1,0 +1,44 @@
+name: V2 fixed metadata audit
+on:
+  push:
+    branches: [main]
+    paths: ['ops/db-audit/**', '.github/workflows/ppb-v2-metadata-audit.yml']
+  pull_request:
+    paths: ['ops/db-audit/**', '.github/workflows/ppb-v2-metadata-audit.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency: {group: ppb-v2-private-release, cancel-in-progress: false}
+jobs:
+  validate:
+    name: Fixed metadata audit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with: {persist-credentials: false}
+      - uses: shivammathur/setup-php@v2
+        with: {php-version: '8.4', coverage: none}
+      - run: python3 -m unittest discover -s ops/db-audit/tests -v
+      - run: php -l ops/db-audit/probe.php
+      - run: php ops/db-audit/tests/policy.php
+  audit:
+    needs: validate
+    if: github.repository_id == '1454285732' && github.repository_owner_id == '55256582' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: {contents: read, id-token: write}
+    steps:
+      - uses: actions/checkout@v5
+        with: {persist-credentials: false}
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::429724121147:role/PPB-V2-GitHub-Deploy-Role
+          aws-region: us-east-1
+          allowed-account-ids: '429724121147'
+      - name: Run fixed metadata queries only; no bootstrap reinstall or service changes
+        run: python3 ops/db-audit/run.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v2-metadata-${{ github.run_id }}
+          path: v2-result/metadata.json
+          retention-days: 14
