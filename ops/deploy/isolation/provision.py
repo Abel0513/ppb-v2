@@ -31,15 +31,16 @@ def digest(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def checked_file(p):
     st=p.lstat();b.need(stat.S_ISREG(st.st_mode) and st.st_uid==0 and st.st_mode&0o022==0,'CONFIG_FILE_NOT_ROOT_OWNED')
     return p.read_text()
-def flatten(text,depth=0):
+def flatten(text,depth=0,preserve_extension=False):
     b.need(depth<6,'VHOST_INCLUDE_DEPTH')
     def include(m):
         name=m.group(1).strip()
         if name=='enable-php-84.conf':return PHP_LOCATION
         if name in {'fastcgi_params','/www/server/nginx/conf/fastcgi_params'}:return 'include '+name+';'
         b.need(name in ALLOWED_SNIPPETS,'UNREVIEWED_V2_INCLUDE')
+        if preserve_extension and name.endswith('/extension/v2.ppbaos.com/*.conf'):return 'include '+name+';'
         files=sorted(Path('/').glob(name.lstrip('/'))) if '*' in name else [Path(name)]
-        return '\n'.join(flatten(checked_file(p),depth+1) for p in files if p.exists())
+        return '\n'.join(flatten(checked_file(p),depth+1,preserve_extension) for p in files if p.exists())
     text=re.sub(r'(?m)^\s*include\s+([^;\n]+);',include,text)
     if depth==0 and re.search(r'\broot\s+/www/wwwroot/ppbaos\.com/public\s*;',text) and not re.search(r'\blocation\s+(?:(?:\^~|=)\s+)?/\s*\{',text):
         b.need(PHP_LOCATION in text,'V2_PHP_LOCATION_MISSING')
@@ -111,15 +112,33 @@ def certify_inert_extension():
     b.need(bool(re.fullmatch('v2-fpm-cutover-[0-9]+',name)),'CUTOVER_BACKUP_ID_INVALID')
     expected={str(path):flatten((PRIVATE/'backups'/name/('original-'+str(i))).read_text()) for i,path in enumerate(VHOSTS)}
     b.need(l.vhost_digest(texts=expected)==policy['vhost_sha256'],'REVIEWED_BACKUP_POLICY_MISMATCH')
-    # A real directive/value change cannot be certified by this operation.
     canonical=l.vhost_digest(canonical=True,texts=expected)
-    b.need(l.vhost_digest(canonical=True)==canonical,'VHOST_EXPANDED_CONFIGURATION_CHANGED')
-    backup=PRIVATE/'backups'/('policy-v2-before-inert-extension-'+str(time.time_ns())+'.json')
-    l.atomic(backup,policy)
-    upgraded=dict(policy,version=3,vhost_sha256=canonical)
-    l.atomic(l.POLICY,upgraded)
-    try:l.audit()
-    except Exception:l.atomic(l.POLICY,policy);raise
+    # Preserve the original V2 extension reference rather than inlining it twice.
+    desired=dict(expected)
+    desired[str(VHOSTS[1])]=flatten((PRIVATE/'backups'/name/'original-1').read_text(),preserve_extension=True)
+    b.need(l.vhost_digest(canonical=True,texts=desired)==canonical,'V2_EXTENSION_CHAIN_NOT_APPROVED')
+    target=VHOSTS[1];before=target.read_bytes();changed=False
+    b.need(digest(VHOSTS[0])==hashlib.sha256(expected[str(VHOSTS[0])].encode()).hexdigest(),'HTTPS_VHOST_UNREVIEWED_DRIFT')
+    if l.vhost_digest(canonical=True)!=canonical:
+        b.need(hashlib.sha256(target.read_text().encode()).hexdigest()=='66aca258881a016a61e484430150354e7495336f322694907ee0eeea13a23a62','HTTP_VHOST_UNREVIEWED_DRIFT')
+        changed=True
+    backup=PRIVATE/'backups'/('policy-v2-before-extension-chain-'+str(time.time_ns()))
+    backup.mkdir(mode=0o700);l.atomic(backup/'policy.json',policy);(backup/'http-before.conf').write_bytes(before)
+    try:
+        if changed:
+            target.write_text(desired[str(target)])
+            command(['/www/server/nginx/sbin/nginx','-t'],'V2_EXTENSION_NGINX_TEST_FAILED')
+            command(['/www/server/nginx/sbin/nginx','-s','reload'],'V2_EXTENSION_NGINX_RELOAD_FAILED');time.sleep(2)
+        b.need(l.vhost_digest(canonical=True)==canonical,'V2_EXTENSION_EFFECTIVE_PROFILE_MISMATCH')
+        upgraded=dict(policy,version=3,vhost_sha256=canonical);l.atomic(l.POLICY,upgraded)
+        l.audit();health()
+    except Exception:
+        l.atomic(l.POLICY,policy)
+        if changed:
+            target.write_bytes(before)
+            command(['/www/server/nginx/sbin/nginx','-t'],'V2_EXTENSION_ROLLBACK_TEST_FAILED')
+            command(['/www/server/nginx/sbin/nginx','-s','reload'],'V2_EXTENSION_ROLLBACK_RELOAD_FAILED')
+        raise
     return True
 
 def repair_reviewed_http_vhost():

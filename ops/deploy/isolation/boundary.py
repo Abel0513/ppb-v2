@@ -145,13 +145,19 @@ def validate_web_config(vhost,php_config):
     need(re.search(r'^\s*listen\s*=\s*/www/wwwroot/ppbaos\.com/storage/run/php-fpm\.sock\s*$',active_php,re.M),'FPM_SOCKET_MISMATCH')
     return True
 
-def omit_empty_v2_extension(text):
+def v2_extension_files():
+    directory=Path('/www/server/panel/vhost/nginx/extension/v2.ppbaos.com')
+    if directory.exists():
+        st=directory.lstat();need(stat.S_ISDIR(st.st_mode) and st.st_uid==0 and st.st_mode&0o022==0,'V2_EXTENSION_DIRECTORY_NOT_PROTECTED')
+    result={}
+    for path in directory.glob('*.conf'):
+        st=path.lstat()
+        need(stat.S_ISREG(st.st_mode) and st.st_uid==0 and st.st_mode&0o022==0 and st.st_nlink==1,'V2_EXTENSION_FILE_NOT_ROOT_PROTECTED')
+        need(st.st_size<100000 and len(result)<30,'V2_EXTENSION_SIZE_LIMIT')
+        result[path.name]=path.read_text()
+    return result
+
+def expand_v2_extension(text):
     pattern=r'(?m)^[ \t]*include[ \t]+/www/server/panel/vhost/nginx/extension/v2\.ppbaos\.com/\*\.conf[ \t]*;[ \t]*(?:#[^\n]*)?$'
-    if re.search(pattern,text):
-        spec=importlib.util.spec_from_file_location('inert_extension_lexer',Path(__file__).with_name('nginx_lex.py'));lexer=importlib.util.module_from_spec(spec);spec.loader.exec_module(lexer)
-        for path in Path('/www/server/panel/vhost/nginx/extension/v2.ppbaos.com').glob('*.conf'):
-            st=path.lstat()
-            need(stat.S_ISREG(st.st_mode) and st.st_uid==0 and st.st_mode&0o022==0 and st.st_nlink==1,'V2_EXTENSION_FILE_NOT_ROOT_PROTECTED')
-            need(not lexer.nginx_tokens(path.read_text()),'V2_EXTENSION_HAS_DIRECTIVES_REQUIRES_REVIEW')
-        text=re.sub(pattern,'',text)
+    if re.search(pattern,text):text=re.sub(pattern,lambda _: '\n'.join(v2_extension_files().values()),text)
     return text

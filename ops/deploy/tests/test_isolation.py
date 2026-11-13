@@ -348,18 +348,16 @@ class ExistingReleaseRecovery(unittest.TestCase):
         self.assertFalse(result['send_command_requested'])
         self.assertTrue(all(x[:2] in [('sts','get-caller-identity'),('ssm','describe-document'),('ssm','get-document'),('ssm','get-command-invocation')] for x in calls))
 
-class EmptyExtensionBoundary(unittest.TestCase):
-    def test_only_empty_exact_v2_extension_is_semantically_inert(self):
-        base='server { server_name v2.csdatw.xyz; root /www/wwwroot/ppbaos.com/public; }'
+class ReviewedExtensionBoundary(unittest.TestCase):
+    def test_expanded_directives_and_raw_include_files_are_both_pinned(self):
+        base='server { root /www/wwwroot/ppbaos.com/public; }'
         ref='\ninclude /www/server/panel/vhost/nginx/extension/v2.ppbaos.com/*.conf;'
-        with patch.object(l.b.Path,'glob',return_value=[]):
-            old=l.vhost_digest(canonical=True,texts={'v2':base})
-            self.assertEqual(old,l.vhost_digest(canonical=True,texts={'v2':base+ref}))
-            self.assertNotEqual(old,l.vhost_digest(canonical=True,texts={'v2':base.replace('/ppbaos.com','/old')}))
-        from types import SimpleNamespace
-        entry=SimpleNamespace(lstat=lambda:SimpleNamespace(st_mode=0o100644,st_uid=0,st_nlink=1),read_text=lambda:'fastcgi_pass unix:/old.sock;')
-        with patch.object(l.b.Path,'glob',return_value=[entry]):
-            with self.assertRaisesRegex(RuntimeError,'EXTENSION_HAS_DIRECTIVES'):l.vhost_digest(canonical=True,texts={'v2':base+ref})
-        entry.read_text=lambda:'# Generated V2 placeholder only\n'
-        with patch.object(l.b.Path,'glob',return_value=[entry]):
-            self.assertEqual(old,l.vhost_digest(canonical=True,texts={'v2':base+ref}))
+        with patch.object(l.b,'v2_extension_files',return_value={}):
+            expected=l.vhost_digest(canonical=True,texts={'v2':base})
+            self.assertEqual(expected,l.vhost_digest(canonical=True,texts={'v2':base+ref}))
+        with patch.object(l.b,'v2_extension_files',return_value={'site_total.conf':'access_log /v2.log main;'}):
+            expanded=l.vhost_digest(canonical=True,texts={'v2':base+'\naccess_log /v2.log main;'})
+            self.assertEqual(expanded,l.vhost_digest(canonical=True,texts={'v2':base+ref}))
+            self.assertNotEqual(expanded,l.vhost_digest(canonical=True,texts={'v2':base.replace('/ppbaos.com','/old')+ref}))
+        with patch.object(l.b,'v2_extension_files',return_value={'site_total.conf':'access_log /other.log main;'}):
+            self.assertNotEqual(expanded,l.vhost_digest(canonical=True,texts={'v2':base+ref}))
