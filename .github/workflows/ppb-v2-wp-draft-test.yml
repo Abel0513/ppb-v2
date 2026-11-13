@@ -32,6 +32,19 @@ jobs:
       - run: python3 tools/wpn2/build-package.py --check
       - run: python3 ops/wp-test/render-ssm.py --check
       - run: bash -n ops/wp-test/ppb_wpn2_verified.sh
+  public-schema:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[wp-schema-only]')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - run: python3 ops/wp-test/public-schema.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wp-public-schema-${{ github.run_id }}
+          path: wp-result/public-expert-schema.json
+          retention-days: 7
   execute:
     needs: offline
     # User explicitly authorized automatic execution on this exact development branch.
@@ -39,6 +52,7 @@ jobs:
     if: >-
       github.repository == 'Abel0513/ppb-v2' && github.repository_id == '1454285732' &&
       github.repository_owner_id == '55256582' &&
+      !contains(github.event.head_commit.message, '[wp-schema-only]') &&
       ((github.event_name == 'push' && github.ref == 'refs/heads/codex/issue-12-wp-draft') ||
        (github.event_name == 'workflow_dispatch' &&
         (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/issue-12-wp-draft') &&
