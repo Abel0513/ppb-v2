@@ -1,35 +1,35 @@
 [
   {
-    "operation": "select",
-    "table": "pay.pay_analyst_profiles",
-    "columns": [
-      "id",
-      "sort_id",
-      "user_type",
-      "rating_level",
-      "analyst_level"
-    ],
+    "operation": "source",
+    "path": "Application/WordPress/Controller/LaborRewardPdfController.class.php",
+    "offset": 1480,
+    "limit": 200
+  },
+  {
+    "operation": "source",
+    "path": "Application/WordPress/Controller/LaborRewardPdfController.class.php",
+    "offset": 1680,
+    "limit": 200
+  },
+  {
+    "operation": "source",
+    "path": "Application/WordPress/Controller/LaborRewardPdfController.class.php",
+    "offset": 1880,
     "limit": 50
   },
   {
-    "operation": "select",
-    "table": "pay.pay_schedule",
-    "columns": [
-      "id",
-      "recommended_time"
-    ],
-    "filters": [
-      {
-        "column": "id",
-        "op": "=",
-        "value": 0
-      }
-    ],
-    "limit": 1
+    "operation": "search",
+    "query": "LaborRewardPdf",
+    "limit": 50
   },
   {
-    "operation": "evaluation_summary",
-    "analyst_id": 2,
-    "month": "2026-05"
+    "operation": "search",
+    "query": "getAnalystData",
+    "limit": 50
+  },
+  {
+    "operation": "search",
+    "query": "analyststatsLiff",
+    "limit": 50
   }
 ]
