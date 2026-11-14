@@ -17,6 +17,10 @@ def run():
   check(p.returncode==0,'MYSQL57_CONTAINER_START_FAILED')
   args=['docker','exec','-i',name,*m.cli_args('mysql',['--no-defaults','--user=root','--skip-password'])]
   for _ in range(60):
+   # The image starts a TEMPORARY mysqld during initialization. Its socket is
+   # not readiness: wait until the entrypoint execs the final mysqld as PID1.
+   process=command(['docker','exec',name,'cat','/proc/1/comm'],timeout=5)
+   if process.returncode or process.stdout.strip()!='mysqld':time.sleep(1);continue
    ready=command(args,input="SELECT 'CLI_PROBE_OK',VERSION(),CURRENT_USER();\n",timeout=5)
    if ready.returncode==0 and 'CLI_PROBE_OK\t5.7.44\troot@localhost' in ready.stdout:break
    time.sleep(1)
@@ -40,7 +44,9 @@ def run():
   check(session('REAL_QUERY','SELECT 42;').strip()=='42','PRODUCTION_SESSION_RESULT_MISMATCH')
   try:session('REAL_ERROR','SELECT definitely_missing_metadata_symbol;')
   except m.SQLFailure as exc:
-   error=m.public_error(exc);check(error.get('stage')=='REAL_ERROR' and error.get('mysql_error_code')==1054 and error.get('sqlstate')=='42S22','REAL_ERROR_DIAGNOSTIC_MISMATCH')
+   error=m.public_error(exc)
+   print(json.dumps(dict(real_cli_error=error)))
+   check(error.get('stage')=='REAL_ERROR' and error.get('mysql_error_code')==1054 and error.get('sqlstate')=='42S22','REAL_ERROR_DIAGNOSTIC_MISMATCH')
   else:raise RuntimeError('SQL_ERROR_DID_NOT_STOP')
   inspect=command(['docker','image','inspect','--format','{{index .RepoDigests 0}}',image])
   check(inspect.returncode==0,'IMAGE_DIGEST_UNVERIFIED')
