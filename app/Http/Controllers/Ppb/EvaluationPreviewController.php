@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Ppb;
 use App\Http\Controllers\Controller;
 use App\Services\Ppb\Evaluation\EvaluationPreviewReport;
 use App\Services\Ppb\Evaluation\EvaluationSubjects;
+use App\Services\Ppb\Evaluation\LegacyReader;
+use App\Models\PpbAnalyst;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -36,11 +38,60 @@ class EvaluationPreviewController extends Controller
     {
         $this->owner();$month=$this->month($r);
         $page=(int)($r->validate(['page'=>['nullable','integer','min:1','max:1000']])['page']??1);
+        $previewError=null;
         try {
             $subjects=array_values(array_filter($this->subjects->all(),fn($s)=>$s['type']==='legacy'));
-        }catch(\Throwable $e){abort(503,'唯讀資料暫時不可用');}
+        }catch(\Throwable $e){
+            // Keep the view accessible for a logged-in owner. Never pretend a failed
+            // legacy read is an empty roster or success, and do not expose SQL/PII.
+            $subjects=[];
+            $previewError='PREVIEW_DATA_UNAVAILABLE';
+        }
         $total=count($subjects);$subjects=array_slice($subjects,($page-1)*5,5);
-        return $this->protect(response()->view('ppb.evaluations.preview.index',compact('subjects','month','page','total')));
+        return $this->protect(response()->view('ppb.evaluations.preview.index',compact('subjects','month','page','total','previewError')));
+    }
+
+
+    /**
+     * Owner-only runtime diagnostic. Only returns bounded stage codes, never
+     * DB/SQL exception text, names, IDs, credentials, paths, or query results.
+     * Each operation is read-only; this route does not use the V2 evaluation tables.
+     */
+    public function health(LegacyReader $reader)
+    {
+        $this->owner();
+        $checks=[
+            ['name'=>'bridge', 'run'=>fn()=> $reader->query(['operation'=>'db_permissions'])],
+            ['name'=>'legacy_roster','run'=>fn()=> $reader->profiles()],
+            ['name'=>'v2_mappings','run'=>fn()=> $this->subjects->mappings()],
+            ['name'=>'v2_analysts','run'=>fn()=> PpbAnalyst::query()->select('id')->limit(1)->get()],
+        ];
+        $verified=[];
+        foreach ($checks as $step) {
+            try {
+                ($step['run'])();
+                $verified[]=$step['name'];
+            } catch (\Throwable $e) {
+                $safe='PREVIEW_STAGE_UNAVAILABLE';
+                // Only pre-approved non-sensitive reader error codes may pass.
+                $message=$e->getMessage();
+                if (preg_match('/\A(?:LEGACY_READER_[A-Z_]+|LEGACY_PROFILE_COVERAGE_LIMIT|READONLY_[A-Z_]+|DB_[A-Z_]+|SELECT_[A-Z_]+)\z/D', $message)) {
+                    $safe=$message;
+                }
+                return $this->protect(response()->json([
+                    'result'=>'STOP',
+                    'stage'=>$step['name'],
+                    'reason'=>$safe,
+                    'checks_passed'=>$verified,
+                    'writes'=>0,
+                ]));
+            }
+        }
+        return $this->protect(response()->json([
+            'result'=>'PASS',
+            'checks_passed'=>$verified,
+            'writes'=>0,
+        ]));
     }
 
     public function show(Request $r,int $id)
