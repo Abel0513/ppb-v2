@@ -1,10 +1,13 @@
 name: V2 actual authority and isolation audit
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['ops/deploy/document-authority.py', '.github/workflows/ppb-v2-authority-audit.yml', 'ops/deploy/document-authority-request.json']
 permissions: {contents: read}
 jobs:
   audit:
-    if: github.repository_id == '1454285732' && github.repository_owner_id == '55256582' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.repository_id == '1454285732' && github.repository_owner_id == '55256582' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions: {contents: read, id-token: write}
@@ -31,4 +34,25 @@ jobs:
         with:
           name: v2-authority-${{ github.run_id }}
           path: v2-result/
+          retention-days: 14
+  document-authority:
+    if: github.event_name == 'push' && github.repository_id == '1454285732' && github.repository_owner_id == '55256582' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: {contents: read, id-token: write}
+    steps:
+      - uses: actions/checkout@v5
+        with: {persist-credentials: false}
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::429724121147:role/PPB-V2-GitHub-Deploy-Role
+          aws-region: us-east-1
+          allowed-account-ids: '429724121147'
+      - name: Read own document authority; publish reviewed candidate data only
+        run: python3 ops/deploy/document-authority.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v2-document-authority-${{ github.run_id }}
+          path: v2-result/document-authority.json
           retention-days: 14
