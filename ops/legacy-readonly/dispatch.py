@@ -41,7 +41,8 @@ def run(q):
     return dict(result='PASS',os_boundary=proof['data'],data=value['data'],legacy_file_writes=0,legacy_db_writes=0)
 if __name__=='__main__':
     try:
-        raw=base64.b64decode(os.environ['SSM_LegacyRequest'],validate=True);need(len(raw)<=10000,'REQUEST_TOO_LARGE')
+        encoded=os.environ['SSM_LegacyRequest'];need(len(encoded)<=14000,'REQUEST_TOO_LARGE')
+        raw=base64.b64decode(encoded,validate=True);need(len(raw)<=10000,'REQUEST_TOO_LARGE')
         q=json.loads(raw);print('PPB_LEGACY_READONLY_V1='+json.dumps(run(q),ensure_ascii=False,separators=(',',':')))
     except Exception as exc:
         code=str(exc);print('PPB_LEGACY_READONLY_V1='+json.dumps(dict(result='STOP',reason=code if re.fullmatch('[A-Z0-9_]{1,100}',code) else 'READONLY_BOUNDARY_NOT_VERIFIED')));raise SystemExit(2)

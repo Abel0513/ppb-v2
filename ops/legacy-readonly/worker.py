@@ -49,7 +49,7 @@ def operate(q,root=ROOT):
         p=subprocess.run([PHP,'-d','auto_prepend_file=','-d','auto_append_file=','-d','display_errors=0','-d','log_errors=0',str(Path(__file__).with_name('db-worker.php'))],input=json.dumps(q),capture_output=True,text=True,timeout=20)
         data=json.loads(p.stdout);need(p.returncode==0 and data.get('result')=='PASS',data.get('reason','READONLY_DB_STOP'));return data['data']
     offset=q.get('offset',0);limit=q.get('limit',30)
-    need(type(offset)is int and 0<=offset<=30000 and type(limit)is int and 1<=limit<=50,'PAGE_LIMIT')
+    need(type(offset)is int and 0<=offset<=30000 and type(limit)is int and 1<=limit<=(200 if op=='source' else 50),'PAGE_LIMIT')
     if op=='permissions':
         need(os.geteuid()>0,'NONROOT_REQUIRED')
         status=dict(line.split(':',1) for line in Path('/proc/self/status').read_text().splitlines() if ':' in line)

@@ -91,3 +91,23 @@ class SQLBoundary(unittest.TestCase):
   self.assertTrue(m.safe_column('assessment','score','decimal','BASE TABLE'))
   for table,col,typ,kind in [('assessment','phone','bigint','BASE TABLE'),('assessment','secret','int','BASE TABLE'),('assessment','notes','text','BASE TABLE'),('assessment','label','varchar','BASE TABLE'),('assessment','score','int','VIEW'),('users','id','int','BASE TABLE')]:
    self.assertFalse(m.safe_column(table,col,typ,kind))
+
+class DocumentContract(unittest.TestCase):
+ def test_ssm_regex_is_compatible_with_bounded_repetition_engine(self):
+  doc=json.loads((ROOT.parent/'deploy/PPB-V2-Controlled-Deploy.isolated.ssm.json').read_text())
+  self.assertEqual(doc['parameters']['Mode']['default'],'release')
+  self.assertEqual(doc['parameters']['Mode']['allowedValues'],['release','legacy_readonly'])
+  for value in doc['parameters'].values():
+   import re
+   for count in re.findall(r'\{[0-9]+,([0-9]+)\}',value.get('allowedPattern','')):self.assertLessEqual(int(count),1000)
+  self.assertIn("len(encoded)<=14000",(ROOT/'dispatch.py').read_text())
+ def test_old_document_is_rejected_before_any_command(self):
+  m=module('client');calls=[]
+  def call(*args):
+   calls.append(args)
+   if args[:2]==('sts','get-caller-identity'):return {'Account':m.c.ACCOUNT}
+   if args[:2]==('ssm','get-document'):return {'Content':'{}'}
+   self.fail('Unexpected AWS operation')
+  result=m.invoke({'operation':'inventory'},call)
+  self.assertEqual(result['reason'],'REVIEWED_READER_NOT_INSTALLED');self.assertIsNone(result['ssm_command_id'])
+  self.assertEqual(len(calls),2)

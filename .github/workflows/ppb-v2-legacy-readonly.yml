@@ -10,6 +10,7 @@ jobs:
   inspect:
     if: github.repository_id == '1454285732' && github.repository_owner_id == '55256582' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions: {contents: read, id-token: write}
     steps:
       - uses: actions/checkout@v5
