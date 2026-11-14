@@ -21,8 +21,12 @@ def read(path,root=ROOT):
         s=os.fstat(fd);need(stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<=500000,'SOURCE_FILE_UNSAFE')
         return os.read(fd,500001)
     finally:os.close(fd)
+def tokenizer_argv(binary=PHP):
+    probe=subprocess.run([binary,'-n','-r','exit(extension_loaded("tokenizer") ? 0 : 3);'],capture_output=True,timeout=5)
+    need(probe.returncode in [0,3],'TOKENIZER_MODULE_PROBE_FAILED')
+    return [binary,'-n']+(['-d','extension=tokenizer'] if probe.returncode==3 else [])
 def sanitize(raw):
-    p=subprocess.run([PHP,'-n',str(Path(__file__).with_name('source-tokens.php'))],input=raw,capture_output=True,timeout=8)
+    p=subprocess.run(tokenizer_argv()+[str(Path(__file__).with_name('source-tokens.php'))],input=raw,capture_output=True,timeout=8)
     need(p.returncode==0,'TOKENIZER_FAILED')
     return json.loads(p.stdout)['source']
 def inventory(root=ROOT):

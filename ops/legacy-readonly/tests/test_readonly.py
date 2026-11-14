@@ -39,7 +39,7 @@ class Redaction(unittest.TestCase):
   self.php=shutil.which('php')
   if not self.php:self.skipTest('PHP required')
  def safe(self,raw):
-  p=subprocess.run([self.php,'-n',str(ROOT/'source-tokens.php')],input=raw,capture_output=True,text=True);self.assertEqual(p.returncode,0,p.stderr);return json.loads(p.stdout)['source']
+  p=subprocess.run(w.tokenizer_argv(self.php)+[str(ROOT/'source-tokens.php')],input=raw,capture_output=True,text=True);self.assertEqual(p.returncode,0,p.stdout+p.stderr);return json.loads(p.stdout)['source']
  def test_password_tokens_names_comments_and_html_never_exported(self):
   raw='''<p>Private Person private@example.com</p><?php
 // secret abc987
