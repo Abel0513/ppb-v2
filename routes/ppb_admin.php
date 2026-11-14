@@ -73,6 +73,13 @@ Route::prefix('admin')->middleware([
     Route::post('/manuscripts/submissions/{submission}/review', [ManuscriptController::class, 'review'])
         ->whereNumber('submission')->middleware('throttle:30,1')->name('ppb.manuscripts.review');
 
+
+    // Owner-only read-only preview. Never requires/migrates ppb_evaluation* tables.
+    Route::get('/evaluations-preview', [\App\Http\Controllers\Ppb\EvaluationPreviewController::class, 'index'])
+        ->middleware(PpbCan::class.':accounts.manage')->name('ppb.evalpreview.index');
+    Route::get('/evaluations-preview/legacy/{id}', [\App\Http\Controllers\Ppb\EvaluationPreviewController::class, 'show'])
+        ->whereNumber('id')->middleware(PpbCan::class.':accounts.manage')->name('ppb.evalpreview.show');
+
     Route::post('/logout', [AdminController::class, 'logout'])
         ->middleware('throttle:10,1')
         ->name('ppb.logout');
