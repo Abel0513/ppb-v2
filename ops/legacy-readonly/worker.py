@@ -46,10 +46,11 @@ def inventory(root=ROOT):
     if (root/framework).is_file() and not (root/framework).is_symlink():rows.append(framework)
     return sorted(rows)
 def operate(q,root=ROOT):
-    need(isinstance(q,dict) and set(q)<= {'operation','path','query','offset','limit','table','columns','filters','analyst_id','start','end'},'REQUEST_SCHEMA')
-    op=q.get('operation');need(op in {'inventory','source','search','permissions','db_permissions','schema','select','video_count'},'OPERATION_DENIED')
-    if op in {'db_permissions','schema','select','video_count'}:
+    need(isinstance(q,dict) and set(q)<= {'operation','path','query','offset','limit','table','columns','filters','analyst_id','start','end','month'},'REQUEST_SCHEMA')
+    op=q.get('operation');need(op in {'inventory','source','search','permissions','db_permissions','schema','select','video_count','evaluation_summary'},'OPERATION_DENIED')
+    if op in {'db_permissions','schema','select','video_count','evaluation_summary'}:
         need(Path('/etc/ppb-legacy-ro/credentials.json').exists(),'READONLY_DBA_PROVISIONING_REQUIRED')
+        if op=='evaluation_summary':q=dict(q,operation='evaluation_snapshot',summary_only=True)
         p=subprocess.run([PHP,'-d','auto_prepend_file=','-d','auto_append_file=','-d','display_errors=0','-d','log_errors=0',str(Path(__file__).with_name('db-worker.php'))],input=json.dumps(q),capture_output=True,text=True,timeout=20)
         data=json.loads(p.stdout);need(p.returncode==0 and data.get('result')=='PASS',data.get('reason','READONLY_DB_STOP'));return data['data']
     offset=q.get('offset',0);limit=q.get('limit',30)
