@@ -1,4 +1,43 @@
 [
-  {"operation":"permissions"},
-  {"operation":"db_permissions"}
+  {
+    "operation": "permissions"
+  },
+  {
+    "operation": "db_permissions"
+  },
+  {
+    "operation": "schema",
+    "table": "pay.pay_analyst_profiles",
+    "limit": 50
+  },
+  {
+    "operation": "schema",
+    "table": "pay.pay_analyst_pick",
+    "limit": 50
+  },
+  {
+    "operation": "schema",
+    "table": "pay.pay_analyst_monthly_evaluation",
+    "limit": 50
+  },
+  {
+    "operation": "schema",
+    "table": "pay.pay_analyst_monthly_rating",
+    "limit": 50
+  },
+  {
+    "operation": "schema",
+    "table": "pay.pay_attendance_record",
+    "limit": 50
+  },
+  {
+    "operation": "select",
+    "table": "pay.pay_analyst_profiles",
+    "columns": [
+      "id",
+      "rating_level",
+      "user_type"
+    ],
+    "limit": 5
+  }
 ]
