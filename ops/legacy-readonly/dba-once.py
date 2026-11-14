@@ -22,7 +22,7 @@ def bootstrap(login_path,mysql,run=subprocess.run):
  need(CONFIG.is_dir() and not CONFIG.is_symlink() and CONFIG.stat().st_uid==0,'READER_INSTALL_REQUIRED')
  for name in ['credentials.json','catalog.json']:need(not (CONFIG/name).exists() and not (CONFIG/name).is_symlink(),'READONLY_SETUP_COLLISION_STOP')
  def sql(query):
-  p=run([mysql,'--no-defaults','--login-path='+login_path,'--batch','--raw','--skip-column-names','--connect-timeout=5'],input=query,text=True,capture_output=True,timeout=30)
+  p=run([mysql,'--no-defaults','--login-path='+login_path,'--protocol=SOCKET','--batch','--raw','--skip-column-names','--connect-timeout=5'],input=query,text=True,capture_output=True,timeout=30)
   need(p.returncode==0,'DBA_SQL_FAILED_STOP_NO_FORCE');return p.stdout
  need(sql('SELECT VERSION();').startswith('5.7.'),'MYSQL57_REQUIRED')
  need(sql("SELECT COUNT(*) FROM mysql.user WHERE User='ppb_legacy_ro';").strip()=='0','READONLY_USER_EXISTS_STOP')
