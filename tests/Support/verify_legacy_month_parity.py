@@ -61,7 +61,7 @@ foreach(['LegacyScheduleCalculator','LegacyRatingCalculator','LegacyMonthSelecto
 $input=json_decode(stream_get_contents(STDIN),true,512,JSON_THROW_ON_ERROR);$rows=[];$schedules=[];$id=0;
 foreach($input['groups'] as $g){[$month,$own,$win,$bonus,$long,$sub,$joined,$market]=$g;$scores=array_slice($g,8,9);$count=$g[17];$gid=++$id;
  if($joined)$schedules['legacy:'.$gid]=['market_type'=>$market];
- for($i=0;$i<$count;$i++)$rows[]=array_combine(App\Services\Ppb\Evaluation\LegacyScheduleCalculator::RATING_FIELDS,$scores)+['_source_type'=>'legacy','_source_id'=>$i,'_author_key'=>$own?'legacy:'.$input['analyst_id']:'legacy:other','_absence_key'=>($sub===$input['analyst_id']&&$sub>1)?'legacy:'.$input['analyst_id']:null,'_is_substitution'=>$sub!==0,'_schedule_key'=>'legacy:'.$gid,'recommended_time'=>$month.'-01 00:00:00','is_win'=>$win,'is_bonus'=>$bonus,'is_long'=>$long];
+ for($i=0;$i<$count;$i++)$rows[]=array_combine(App\Services\Ppb\Evaluation\LegacyScheduleCalculator::RATING_FIELDS,$scores)+['_source_type'=>'legacy','_source_id'=>$i,'_author_key'=>$own?'legacy:'.$input['analyst_id']:'legacy:other','_absence_key'=>($sub===$input['analyst_id']&&$sub>1)?'legacy:'.$input['analyst_id']:null,'_is_substitution'=>$sub===null?null:$sub!==0,'_schedule_key'=>'legacy:'.$gid,'recommended_time'=>$month.'-01 00:00:00','is_win'=>$win,'is_bonus'=>$bonus,'is_long'=>$long];
 }
 $selector=new App\Services\Ppb\Evaluation\LegacyMonthSelector;$reporter=new App\Services\Ppb\Evaluation\EvaluationReport(new App\Services\Ppb\Evaluation\LegacyScheduleCalculator,new App\Services\Ppb\Evaluation\LegacyRatingCalculator);$out=[];
 foreach($input['periods'] as $month=>$period){$attendance=[];foreach($input['attendance'] as $k=>$count)if(str_starts_with($k,$month.':'))for($i=0;$i<$count;$i++)$attendance[]=['attendance_status'=>(int)explode(':',$k)[1]];
@@ -72,6 +72,7 @@ $out['next_rating']=(new App\Services\Ppb\Evaluation\LegacyRatingCalculator)->ra
 echo json_encode($out,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION);
 '''
 def analyze_snapshot(a):
+ need(a.get('summary_flag_nulls_preserved') is True,'SUMMARY_FLAG_PRECISION_NOT_PROVEN')
  a=dict(a);a['attendance_counts']=dict(a['attendance_counts'])
  need(sum(g[17] for g in a['pick_groups'])==a['raw_picks'],'GROUP_COVERAGE_NOT_PROVEN')
  periods={};expected={}
