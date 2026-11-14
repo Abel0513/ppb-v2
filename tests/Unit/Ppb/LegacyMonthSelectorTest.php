@@ -46,4 +46,11 @@ final class LegacyMonthSelectorTest extends TestCase
         $s=(new LegacyMonthSelector)->select([],'legacy:2','2026-05',[]);$report=$r->calculate($s,$manual,[],[['attendance_status'=>0],['attendance_status'=>1],['attendance_status'=>2]],2,null);
         self::assertSame('55.00',$report['cached']['score_delivery_time']);self::assertSame(450,$report['salary']['total']);self::assertSame([-100,-50,-200],$report['deductions']['deductions']);
     }
+    public function test_sql_flag_equals_zero_does_not_treat_null_or_unknown_flags_as_zero(): void
+    {
+        $c=new LegacyMonthSelector;$rows=[$this->pick(['is_long'=>2]),$this->pick(['is_long'=>null]),$this->pick(['is_bonus'=>2]),$this->pick(['is_bonus'=>null]),$this->pick(['_is_substitution'=>null])];
+        $s=$c->select($rows,'legacy:2','2026-05',['legacy:9'=>['market_type'=>1]]);
+        self::assertCount(0,$s['regular']);self::assertCount(0,$s['salary_long']);self::assertCount(2,$s['rated']);self::assertCount(2,$s['salary_short']);
+    }
+
 }

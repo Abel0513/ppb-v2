@@ -12,23 +12,24 @@ final class LegacyMonthSelector
         foreach($rows as $p){
             if(substr($p['recommended_time'],0,7)!==$month)continue;
             $own=$p['_author_key']===$subjectKey;$absence=($p['_absence_key']??null)===$subjectKey;
-            $sub=(bool)$p['_is_substitution'];$long=(int)$p['is_long']===1;$bonus=(int)$p['is_bonus']===1;
+            $nonSub=$p['_is_substitution']===false;$long=$p['is_long']!==null&&(int)$p['is_long']===1;$short=$p['is_long']!==null&&(int)$p['is_long']===0;
+            $bonus=$p['is_bonus']!==null&&(int)$p['is_bonus']===1;$regular=$p['is_bonus']!==null&&(int)$p['is_bonus']===0;
             $resolved=in_array((int)$p['is_win'],[1,2],true);
-            if($absence&&!$bonus)$out['absences'][]=$p;
+            if($absence&&$regular)$out['absences'][]=$p;
             if(!$own)continue;
             $out['records'][]=$p;
             if((float)$p['score_delivery_time']>0){
                 $out['cache_update'][]=$p;
-                if($resolved&&!$long&&!$sub)$out['rated'][]=$p;
+                if($resolved&&$short&&$nonSub)$out['rated'][]=$p;
             }
-            if($resolved&&!$long&&!$bonus){
+            if($resolved&&$short&&$regular){
                 $out['settled_view'][]=$p;
-                if(!$sub){$out['settled_rating'][]=$p;$out['regular'][]=$p;}
+                if($nonSub){$out['settled_rating'][]=$p;$out['regular'][]=$p;}
             }
-            if($resolved&&$bonus&&!$sub)$out['bonus'][]=$p;
+            if($resolved&&$bonus&&$nonSub)$out['bonus'][]=$p;
             if(isset($schedules[$p['_schedule_key']])){
                 if($long)$out['salary_long'][]=$p;
-                elseif(!$sub&&$resolved)$out['salary_short'][]=$p;
+                elseif($short&&$nonSub&&$resolved)$out['salary_short'][]=$p;
             }
         }
         return $out;
@@ -42,7 +43,7 @@ final class LegacyMonthSelector
             $p=array_combine($snapshot['pick_columns'],$values);
             $p['_source_type']='legacy';$p['_source_id']=(int)$p['id'];
             $p['_author_key']='legacy:'.(int)$p['analyst_name'];
-            $p['_is_substitution']=(int)$p['is_substitute']!==0;
+            $p['_is_substitution']=$p['is_substitute']===null?null:(int)$p['is_substitute']!==0;
             $p['_absence_key']=(int)$p['is_substitute']>1?'legacy:'.(int)$p['is_substitute']:null;
             $p['_schedule_key']='legacy:'.(int)$p['gid'];$rows[]=$p;
         }
