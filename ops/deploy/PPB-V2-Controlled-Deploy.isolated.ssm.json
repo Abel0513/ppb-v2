@@ -160,12 +160,12 @@
         "runCommand": [
           "set -eu",
           "umask 077",
-          "printf '%s  %s\\n' f21a5d9b6d77a77cf41fd64b434213afabd54320d40388e6986fd3c4f06e2a0a /www/ppb-v2-deploy/scripts/legacy-readonly/prepare.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' 26e34c23241749b384f423438d21e1f71662875be91e9c497417f16fa8a95a04 /www/ppb-v2-deploy/scripts/legacy-readonly/prepare.py | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' 5e3f47952eabcfb6466423cbdf89d20c1f18658a726d80f32d9af36b8bccd915 /www/ppb-v2-deploy/scripts/legacy-readonly/dispatch.py | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' 9d63a1dfccb06a3f6266814e6a6331ff854e9cd892f6bfa8543e6c359067a0e1 /www/ppb-v2-deploy/scripts/legacy-readonly/worker.py | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' 0edca6e664f72c03726717b27786a024add5e23f09133ed9532f1352bf37a7f4 /www/ppb-v2-deploy/scripts/legacy-readonly/source-tokens.php | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' 6258d1168bed3728682081b9ec08af5c179da87b74fb6ca0911ef491b64d09c5 /www/ppb-v2-deploy/scripts/legacy-readonly/db-worker.php | sha256sum -c - >/dev/null",
-          "printf '%s  %s\\n' a2858d69e6659e49a4597277a13efdbd9383af6f527ccdaf412d8ea19bd88a32 /www/ppb-v2-deploy/scripts/legacy-readonly/dba-once.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' 53b7fddbaf6bd4d6602b3efbd23b8b40c51d05dfaafcbd9e09dabd15694cfc19 /www/ppb-v2-deploy/scripts/legacy-readonly/dba-once.py | sha256sum -c - >/dev/null",
           "exec python3 -I /www/ppb-v2-deploy/scripts/legacy-readonly/dispatch.py"
         ]
       }

@@ -100,3 +100,33 @@ controlled host-management session (they may be the same administrator). AWS IAM
 alone does not supply MySQL authentication. If nobody has such an existing DBA
 session/credential, stop; authorized MySQL credential recovery is a separate
 administrative decision, not something Codex may infer or brute force.
+
+## MySQL5.7 empty-init regression and safe preflight
+
+The real5.7.44 CLI reproduces ERROR1065/42000 with --init-command= and succeeds
+with the fixed readonly --init-command=SELECT 1. Its result is consumed by the
+client initialization and does not pollute SELECT output. The mandatory CI step
+runs the actual client/server from a pinned official image with networking off,
+tmpfs data, and only MySQL system schemas; no application/test database or business
+row is created. A real1054 error also verifies stop-on-error/stage/code reporting.
+Never use --force or accept an empty initializer as equivalent to disabling it.
+
+The LOCAL interactive wrapper now defaults to PREFLIGHT ONLY:
+
+    python3 /www/ppb-v2-deploy/scripts/legacy-readonly/dba-authenticated-once.py
+
+It checks installed helper bytes, real version/identity, global ALL WITH GRANT
+OPTION, absence of ppb_legacy_ro and both private files. It outputs only a filtered
+receipt; no account/config is created. After that real receipt is verified, the
+same command with --apply performs the one-time setup. Apply repeats preflight
+before any write, uses the same local password entry, and stops on any failure or
+collision. Partial outcomes must not be retried blindly. Passwords remain local;
+raw CLI stderr, grants/authentication hashes and client configuration never leave
+the process. CLI failures include fixed stage plus numeric MySQL code/SQLSTATE;
+validation/local setup failures are separately labelled.
+
+The installer receipt records the actual previous/updated public dba-once.py SHA
+and absence of both private files. A remote install success or CI container PASS
+is NOT proof that authenticated EC2 root preflight succeeded; that still needs
+local interactive authentication unless a previously authorized DBA connection
+becomes available. Do not use V2 credentials or guess/root-reset passwords.
