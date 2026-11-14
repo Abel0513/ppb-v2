@@ -1,49 +1,41 @@
 [
   {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 440,
-    "limit": 200
+    "operation": "select",
+    "table": "pay.pay_analyst_profiles",
+    "columns": [
+      "id",
+      "sort_id",
+      "user_type",
+      "rating_level",
+      "analyst_level"
+    ],
+    "limit": 50
   },
   {
-    "operation": "source",
-    "path": "Application/Line/Controller/LiffController.class.php",
-    "offset": 0,
-    "limit": 200
+    "operation": "select",
+    "table": "pay.pay_video_schedule",
+    "columns": [
+      "id",
+      "schedule_date"
+    ],
+    "limit": 1
   },
   {
-    "operation": "source",
-    "path": "Application/Line/Controller/PipibaoController.class.php",
-    "offset": 350,
-    "limit": 150
-  },
-  {
-    "operation": "source",
-    "path": "Application/Line/Controller/CsdaController.class.php",
-    "offset": 200,
-    "limit": 120
-  },
-  {
-    "operation": "source",
-    "path": "Application/WordPress/Controller/LaborRewardPdfController.class.php",
-    "offset": 0,
-    "limit": 180
-  },
-  {
-    "operation": "source",
-    "path": "Application/WordPress/Controller/LaborRewardPdfController.class.php",
-    "offset": 900,
-    "limit": 150
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 3120,
-    "limit": 200
-  },
-  {
-    "operation": "search",
-    "query": "LaborRewardPdf",
-    "limit": 30
+    "operation": "select",
+    "table": "pay.pay_attendance_record",
+    "columns": [
+      "id",
+      "gid",
+      "uid",
+      "attendance_status"
+    ],
+    "filters": [
+      {
+        "column": "attendance_status",
+        "op": "=",
+        "value": 1
+      }
+    ],
+    "limit": 1
   }
 ]
