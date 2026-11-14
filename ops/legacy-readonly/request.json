@@ -1,20 +1,44 @@
 [
   {
-    "operation": "db_permissions"
+    "operation": "search",
+    "query": "attendance_record",
+    "limit": 50
   },
   {
-    "operation": "evaluation_summary",
-    "analyst_id": 2,
-    "month": "2026-05"
+    "operation": "search",
+    "query": "line_id",
+    "limit": 50
   },
   {
-    "operation": "evaluation_summary",
-    "analyst_id": 2,
-    "month": "2026-05"
+    "operation": "search",
+    "query": "line_name",
+    "limit": 50
   },
   {
-    "operation": "evaluation_summary",
-    "analyst_id": 2,
-    "month": "2026-04"
+    "operation": "search",
+    "query": "liffId",
+    "limit": 50
+  },
+  {
+    "operation": "search",
+    "query": "function join",
+    "limit": 50
+  },
+  {
+    "operation": "source",
+    "path": "Application/Admin/Controller/AnalystPerformanceController.class.php",
+    "offset": 0,
+    "limit": 200
+  },
+  {
+    "operation": "source",
+    "path": "ThinkPHP/Library/Think/Model.class.php",
+    "offset": 470,
+    "limit": 180
+  },
+  {
+    "operation": "search",
+    "query": "LaborRewardPdf",
+    "limit": 30
   }
 ]
