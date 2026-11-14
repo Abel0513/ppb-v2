@@ -1,42 +1,42 @@
 [
   {
     "operation": "inventory",
-    "offset": 0,
+    "offset": 400,
     "limit": 50
   },
   {
     "operation": "inventory",
-    "offset": 50,
+    "offset": 450,
     "limit": 50
   },
   {
     "operation": "inventory",
-    "offset": 100,
+    "offset": 500,
     "limit": 50
   },
   {
     "operation": "inventory",
-    "offset": 150,
+    "offset": 550,
     "limit": 50
   },
   {
     "operation": "inventory",
-    "offset": 200,
+    "offset": 600,
     "limit": 50
   },
   {
     "operation": "inventory",
-    "offset": 250,
+    "offset": 650,
     "limit": 50
   },
   {
-    "operation": "inventory",
-    "offset": 300,
+    "operation": "search",
+    "query": "analyststats",
     "limit": 50
   },
   {
-    "operation": "inventory",
-    "offset": 350,
+    "operation": "search",
+    "query": "stylesheet",
     "limit": 50
   }
 ]
