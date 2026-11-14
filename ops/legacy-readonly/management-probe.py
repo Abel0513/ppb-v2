@@ -24,13 +24,19 @@ def admin_capability(grants):
     for line in grants:
         if re.match(r'^GRANT ALL PRIVILEGES ON \*\.\* TO ',line,re.I) and re.search(r'\bWITH GRANT OPTION\s*$',line,re.I):return True
     return False
+def failure(p):
+    if p is None:return 'CLIENT_UNAVAILABLE_OR_TIMEOUT'
+    text=p.stderr.lower()
+    if 'unknown option' in text or 'unknown variable' in text:return 'CLIENT_OPTION_UNSUPPORTED'
+    code=re.search(r'\bERROR\s+(\d{3,5})\b',p.stderr,re.I)
+    return 'MYSQL_ERROR_'+code.group(1) if code else 'CLIENT_FAILED_NO_SAFE_ERROR_CODE'
 def connection(options,socket,method):
     args=[MYSQL,*options,'--protocol=SOCKET','--socket='+socket,'--connect-timeout=2',
           '--batch','--raw','--skip-column-names','--local-infile=0',
           '--init-command=','--skip-tee','--skip-pager',
           '--execute=SELECT VERSION(), CURRENT_USER(), @@socket; SHOW GRANTS FOR CURRENT_USER;']
     p=invoke(args)
-    if p is None or p.returncode:return dict(method=method,result='UNAVAILABLE')
+    if p is None or p.returncode:return dict(method=method,result='UNAVAILABLE',reason=failure(p))
     lines=p.stdout.splitlines()
     if not lines:return dict(method=method,result='UNVERIFIED')
     row=lines[0].split('\t')
@@ -57,8 +63,20 @@ def run():
         except FileNotFoundError:pass
         except OSError:output['conventional_files'].append(dict(path=value,status='STAT_UNAVAILABLE'))
     p=invoke([EDITOR,'print','--all'])
-    output['standard_login_file_present']=Path('/root/.mylogin.cnf').exists()
+    login=Path('/root/.mylogin.cnf')
+    output['standard_login_file_present']=login.exists()
+    try:
+        s=login.lstat();output['standard_login_file_metadata']=dict(root_owned=s.st_uid==0,mode=oct(stat.S_IMODE(s.st_mode)),regular=stat.S_ISREG(s.st_mode),symlink=stat.S_ISLNK(s.st_mode),empty=s.st_size==0)
+    except OSError:pass
     output['login_path_inventory']='VERIFIED' if p is not None and p.returncode==0 else 'UNAVAILABLE'
+    # Never output warnings: client warnings can include private option values.
+    if p is not None:
+        warning=(p.stderr+'\n'+p.stdout).lower()
+        output['login_file_ignored_warning']='ignored' in warning
+        output['login_file_permissions_warning']=any(x in warning for x in ['world-writable','world writable','owner','permissions'])
+        output['editor_return_code']=p.returncode
+        output['editor_output_empty']=not bool(p.stdout.strip())
+        if 'ignored' in warning:output['login_path_inventory']='FILE_IGNORED_NOT_VERIFIED'
     names=profile_names(p.stdout) if p is not None and p.returncode==0 else []
     output['login_paths']=names[:16];output['login_paths_truncated']=len(names)>16
     sockets=[]
