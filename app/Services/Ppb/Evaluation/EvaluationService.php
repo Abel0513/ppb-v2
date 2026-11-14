@@ -20,7 +20,7 @@ class EvaluationService
             ['picks'=>[],'pick_columns'=>[],'schedules'=>[],'attendance'=>[],'evaluations'=>[],'ratings'=>[],'video_counts'=>[],'recent'=>[],'source_sha256'=>hash('sha256',$key.':'.$month)];
         $rows=$this->selector->legacyRows($snapshot);$schedules=[];
         foreach($snapshot['schedules'] as $s)$schedules['legacy:'.$s['id']]=$s;
-        [$native,$nativeSchedules]=$this->nativeRows($date);
+        [$native,$nativeSchedules]=$this->nativeRows($date,$subject);
         $rows=array_merge($rows,$native);$schedules+=$nativeSchedules;
         $overrides=DB::table('ppb_evaluation_ratings')->where('subject_type',$subject['type'])->where('subject_id',$subject['id'])->whereIn('month',[$prior,$month])->get();
         $bySource=[];foreach($overrides as $r)$bySource[$r->source_type.':'.$r->source_id]=(array)$r;
@@ -59,9 +59,12 @@ class EvaluationService
         return null; // Source salary falls back to2; do not invent stored history.
     }
 
-    private function nativeRows(CarbonImmutable $date): array
+    private function nativeRows(CarbonImmutable $date,array $subject): array
     {
+        if(($subject['native_id']??null)===null)return [[],[]];
+        $nativeId=(int)$subject['native_id'];
         $records=DB::table('ppb_submissions as p')->join('ppb_games as g','g.id','=','p.game_id')->join('ppb_assignments as a','a.id','=','p.assignment_id')
+            ->where(fn($q)=>$q->where('p.submitted_analyst_id',$nativeId)->orWhere('a.original_analyst_id',$nativeId))
             ->whereNull('p.legacy_source_pick_id')->whereNotNull('p.submitted_at')->whereNotNull('p.submitted_analyst_id')
             ->whereBetween('g.recommended_at',[$date->subMonth()->startOfMonth()->utc()->format('Y-m-d H:i:s'),$date->endOfMonth()->utc()->format('Y-m-d H:i:s')])
             ->orderBy('g.recommended_at')->orderBy('p.id')->limit(2001)

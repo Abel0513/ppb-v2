@@ -26,6 +26,9 @@ class EvaluationWriter
             if($again)return $this->receipt($again,$fingerprint);
             abort_unless($evaluation->revision===$revision,409,'評鑑已由其他操作更新，請重新讀取。');
             $before=$evaluation->getAttributes();$changes=$revision===0?$report['manual']:[];
+            // A first record-rating must recompute against the source manual
+            // baseline, not the newly inserted row's nullable SQL defaults.
+            if($revision===0){$evaluation->fill($report['manual']);$evaluation->save();}
             if($operation==='manual'){
                 $weeks=array_intersect_key($payload,array_fill_keys(array_map(fn($w)=>'score_interaction_w'.$w,range(1,5)),true));
                 $changes=array_replace($changes,$this->interaction->manual($weeks,$payload['score_interaction_feedback']??0));

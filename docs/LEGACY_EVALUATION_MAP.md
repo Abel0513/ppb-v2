@@ -126,3 +126,66 @@ Live schema also shows schedule.market_type VARCHAR; the source uses intval with
 2 as the three-market branch. It is outside current numeric/date SELECT grants.
 A narrow typed-business-key extension and private aggregate-only name join are
 required before full monthly/salary parity; no broad free-text grant is justified.
+
+## Current checkpoint — supersedes earlier provisioning blockers (2026-11-14)
+
+The eight reviewed column grants are installed and live. Do not repeat DBA setup.
+Run43591147112 proved four typed business keys, four private aggregate-only join
+columns, actual ppb_legacy_ro@localhost, no global/write/GRANT OPTION authority.
+Private names cannot be selected or filtered by a general query. No credentials
+or old business data rows are stored in this repository.
+
+Reviewed fixed reader PR77 is installed through the existing control channel:
+run43595013120, SSM95719919-049e-47e3-a894-838d46fa9f09, runtime58. V2 UID999 reaches
+the same nonroot SQL compiler via a root-owned group-restricted Unix socket;
+root and unrelated peers are denied. No new root-shell API or DB credential share.
+The permanent original catalog hash remains
+22fec733d8c5f3f9b2d862fc5248cc7c4378b76c4ee11adafd6f2bdf8cfc9e3f.
+
+Actual month evidence: run43605575359:
+
+- grants: SSM301e7d68-0c77-428d-b2b6-03f2e513644e;
+- May snapshot: SSMc7e96041-aa44-4ac6-b0a6-2ce8337403eb;
+- independent repeat: SSMc8ac29bc-abdb-470e-a8b2-6a4f9cb2f8ed;
+- April overlap: SSM367b225e-866c-416c-98d7-bb9271f8c3fa.
+
+All PASS. Seven underlying tables are visibly InnoDB, queries run in one
+REPEATABLE READ / READ ONLY transaction. Complete bounded two-month coverage,
+repeat fingerprint equality and overlapping-month selection agree. The independent
+Python source-formula oracle and V2 PHP selectors/calculators agree in78 comparisons
+for analyst2 /2026-04 and2026-05 (scores, explicit selector counts, short/long/video/
+attendance pay). Input fingerprint:
+fb50a2940589d62c6321b018040227e170207caf1b22af2106e25595bf166292.
+Verifier: tests/Support/verify_legacy_month_parity.py. This is real source-data
+calculation parity, NOT full production persistence or deployed-UI acceptance.
+
+Exact source filters from runs43593168357/43594145748:
+
+- source months use naive local YYYY-MM-01 00:00:00 through lastday23:59:59;
+  native V2 UTC dates are converted explicitly, never shift legacy timestamps;
+- rated/view profile: own delivery>0, short, resolved, non-substitute, bonus included;
+- cached-update profile: ALL own delivery>0; no rows preserves existing cached3;
+- absence: substitute points to subject with legacy reserved-ID>1, bonus0;
+- view settled denominator includes substitutions; rating denominator excludes them;
+- short salary: resolved short non-substitute, schedule join required, bonus may pay
+  only the source win component; long salary: own long, schedule join required,
+  no outcome/bonus/substitute predicate;
+- recent10 and streak use global resolved regular non-substitute short rows;
+  the original streak considers at most20 rows;
+- attendance dates come from schedule join, status1 late; every other status absent;
+- private video guest aggregate counts schedules once, never host/editor names.
+
+Draft implementation now includes independent source identity domains, proven
+archive-bijection mappings only, native imported-pick deduplication, admin routes/
+Blade/forms/CSV/print, V2-only manual and record-rating receipts with unique request
+IDs, source fingerprints and optimistic revision checks. GET never creates rows.
+The same request only reads its receipt. Native V2 author IDs may equal legacy IDs
+without becoming the same person. Analyst account_id remains optional; no LINE,
+LIFF, legacy auth/config/entrypoint was changed or replaced.
+
+Still pending, explicitly NOT accepted: native attendance/video entry integration;
+complete original entry/PDF/self-service identity mapping; all-analyst coverage;
+V2 production migration/persistence; full deployed HTTP/browser acceptance.
+The page warns that native salary is incomplete until those inputs exist. PR58
+remains Draft. Owner comment6877548981 authorizes continuation, CI and pushing,
+not final merge, production migration/writes or publication.
