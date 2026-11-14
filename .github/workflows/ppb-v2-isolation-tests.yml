@@ -19,6 +19,9 @@ jobs:
           coverage: none
       - run: python3 -m unittest discover -s ops/deploy/tests -v
       - run: python3 -m unittest discover -s ops/automation/tests -v
+      - run: python3 -m unittest discover -s ops/legacy-readonly/tests -v
+      - run: php -l ops/legacy-readonly/db-worker.php
+      - run: php -l ops/legacy-readonly/source-tokens.php
       - run: php -l ops/deploy/isolation/db-probe.php
       - run: php -l ops/deploy/isolation/global-metadata.php
       - run: python3 ops/db-audit/render-probe.py --check

@@ -1,0 +1,28 @@
+name: V2 controlled legacy readonly
+on:
+  push:
+    branches: [main]
+    paths: ['ops/legacy-readonly/request.json']
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency: {group: ppb-v2-legacy-readonly, cancel-in-progress: false}
+jobs:
+  inspect:
+    if: github.repository_id == '1454285732' && github.repository_owner_id == '55256582' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions: {contents: read, id-token: write}
+    steps:
+      - uses: actions/checkout@v5
+        with: {persist-credentials: false}
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::429724121147:role/PPB-V2-GitHub-Deploy-Role
+          aws-region: us-east-1
+          allowed-account-ids: '429724121147'
+      - run: python3 ops/legacy-readonly/client.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: legacy-readonly-${{ github.run_id }}-${{ github.run_attempt }}
+          path: legacy-result/
+          retention-days: 7

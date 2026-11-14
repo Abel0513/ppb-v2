@@ -26,6 +26,16 @@ def document():
               'f="/www/ppb-v2-deploy/releases/ssm-incoming-${SSM_RunId}-${SSM_RunAttempt}/run-${SSM_RunId}-attempt-${SSM_RunAttempt}.tar.gz"',
               'exec python3 /www/ppb-v2-deploy/scripts/isolation/release.py --operation "$SSM_Operation" --archive "$f" --sha256 "$SSM_Sha256" --commit "$SSM_Commit" --run-id "$SSM_RunId" --run-attempt "$SSM_RunAttempt" --confirmation "$SSM_Approval"']
     steps.append(dict(action='aws:runShellScript',name='controlledRelease',inputs=dict(timeoutSeconds='1800',runCommand=lines)))
+    d['parameters']['Mode']=dict(type='String',default='release',allowedValues=['release','legacy_readonly'],interpolationType='ENV_VAR')
+    d['parameters']['LegacyRequest']=dict(type='String',default='e30=',allowedPattern='^[A-Za-z0-9+/=]{1,14000}$',interpolationType='ENV_VAR')
+    for step in steps:step['precondition']={'StringEquals':['{{ Mode }}','release']}
+    legacy=ROOT.parents[1]/'legacy-readonly'
+    guarded=['set -eu','umask 077']
+    for name in ['prepare.py','dispatch.py','worker.py','source-tokens.php','db-worker.php','dba-once.py']:
+        sha=hashlib.sha256((legacy/name).read_bytes()).hexdigest()
+        guarded += [f"printf '%s  %s\\n' {sha} /www/ppb-v2-deploy/scripts/legacy-readonly/{name} | sha256sum -c - >/dev/null"]
+    guarded += ['exec python3 -I /www/ppb-v2-deploy/scripts/legacy-readonly/dispatch.py']
+    steps.append(dict(action='aws:runShellScript',name='legacyReadonly',precondition={'StringEquals':['{{ Mode }}','legacy_readonly']},inputs=dict(timeoutSeconds='180',runCommand=guarded)))
     d['mainSteps']=steps
     return d
 if __name__=='__main__':
