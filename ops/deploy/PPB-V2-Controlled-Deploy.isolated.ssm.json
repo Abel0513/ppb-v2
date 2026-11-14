@@ -163,7 +163,7 @@
           "printf '%s  %s\\n' b9199418f9a171f7fdad22b89e288f391233d6abe71e49ed38ae929aeb895898 /www/ppb-v2-deploy/scripts/legacy-readonly/prepare.py | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' 9db55d4f2e9ed48e118a2a3779e24fd4b4c286a51ffc1744067c2de12ab5acae /www/ppb-v2-deploy/scripts/legacy-readonly/dispatch.py | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' a452cb0be13c63a8637658a1ca3c6116591dc5319f4466f921f241ffcecc0199 /www/ppb-v2-deploy/scripts/legacy-readonly/worker.py | sha256sum -c - >/dev/null",
-          "printf '%s  %s\\n' 8ae9a22cfc022b7af3d5ae9441be72a2b577d51bb8881cefe529df609cfbc759 /www/ppb-v2-deploy/scripts/legacy-readonly/source-tokens.php | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' 73a47efa8cf0c9b5066b3e19bd93fc5f98037ab8a9b39adffc21710a443e725a /www/ppb-v2-deploy/scripts/legacy-readonly/source-tokens.php | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' 47e4cb0c8ceb13d12b0532aee69c6a0baa591784696dfc5a62c548cd46a5f3f6 /www/ppb-v2-deploy/scripts/legacy-readonly/db-worker.php | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' 60df3cabe2f4f57f1b92f3ad7ea52b8361baeed7d4ee3d115ea80a89761903a3 /www/ppb-v2-deploy/scripts/legacy-readonly/dba-once.py | sha256sum -c - >/dev/null",
           "exec python3 -I /www/ppb-v2-deploy/scripts/legacy-readonly/dispatch.py"

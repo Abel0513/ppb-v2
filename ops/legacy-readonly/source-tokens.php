@@ -57,7 +57,7 @@ foreach($tokens as $i=>$t){
         $monthSuffix=$prev==='.'&&in_array($beforePrev,['$month','$targetMonth','$ratingMonth','$scoreMonth'],true)&&in_array($literal,['-01','-01 00:00:00'],true);
         $filter=$call==='i'&&$arg===2&&in_array($literal,['intval','floatval','trim','strval','int','float'],true);
         $operator=in_array('where',array_column($frames,'name'),true)&&in_array($literal,['in','not in','between','not between','eq','neq','gt','lt','egt','elt','like','notlike','exp'],true);
-        if($safe||$format||$relative||$monthSuffix||$filter||$operator)$replacement=$text;
+        if($literal===''||$safe||$format||$relative||$monthSuffix||$filter||$operator)$replacement=$text;
         elseif($call==='field'&&$arg===0||$prev==='=>'&&$lastKey==='_string'||$call==='where'&&$arg===0&&preg_match('/^\s*[A-Za-z_][A-Za-z0-9_.]{0,63}\s*(IN\s*\(|=|<>|!=|>=|<=|>|<|LIKE\b)/i',$literal)||preg_match('/^\s*(SELECT|UPDATE|INSERT|DELETE|WHERE|AND|OR|ORDER BY|GROUP BY|LEFT JOIN|INNER JOIN|CASE|FROM|SET)\b/i',$literal))$replacement=sqlStructure($literal);
         else $replacement="'[REDACTED_LITERAL]'";
         if($next==='=>')$lastKey=$literal;
