@@ -61,3 +61,17 @@ content/version/hash, sends only a base64 JSON parameter, and collects bounded
 stdout. No document update or arbitrary shell is available in the read client.
 DB readiness is NOT implied by source-tool installation. Each operation records
 its actual Actions/SSM result; do not substitute offline tests for host evidence.
+
+## V2 application transport (same fixed reader, no DB credential copy)
+
+The reviewed installer can install a V2-only Unix socket and a dedicated NONROOT
+ppb-legacy-ro service. Only the actual ppb-v2 OS UID is accepted via SO_PEERCRED;
+root/other UIDs are rejected. No TCP endpoint, sudo, source-file operation, shell,
+request SQL/DSN or access to either application tree exists in this transport.
+The PHP query compiler, catalog, column-grant checks, readonly transaction, private
+name denial and limits are the SAME ones used by SSM. V2 receives no credentials.
+Only seven evaluation tables are exposed to the application, not unrelated legacy
+business tables. Peer and privacy-denial probes execute during installation and
+must pass before the installer can report DB readiness. Existing IAM/OIDC/S3/SSM,
+V2 FPM, vhosts and old services are untouched. New own units are hash-pinned and
+backed up; a foreign unit/socket collision stops without overwriting it.

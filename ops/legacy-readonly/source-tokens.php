@@ -25,7 +25,7 @@ function sqlStructure($literal){
         return in_array(substr($m[0],1,-1),['%Y-%m','%Y-%m-%d','%Y','%m','%d'],true)?$m[0]:'[SQL_LITERAL]';
     },$sql);
     $check=preg_replace('/[\x27\x22]%[Ymd](?:-%[md]){0,2}[\x27\x22]/','',$sql);
-    if(preg_match('/[\x27\x22]/',$check))return "'[REDACTED_SQL]'";
+    if(preg_match('/[\x27\x22]/',$check)){$quote='';$blocked=false;return interpolatedSqlFragment($literal,$quote,$blocked);}
     $sql=preg_replace('/[A-Za-z0-9_\-]{24,}|[0-9]{7,}/','[REDACTED]',$sql);
     return '/* SQL STRUCTURE */ '.json_encode($sql,JSON_UNESCAPED_UNICODE);
 }
@@ -55,10 +55,11 @@ foreach($tokens as $i=>$t){
         $format=$call==='date'&&$arg===0&&in_array($literal,['Y-m','Y-m-d','Y-m-t','Y-m-t 23:59:59','Y-m-d H:i:s','Y-m-d H:i','Y','m','n','d','j','w','t','H','i','s','m-d','m/d','Y/m/d'],true);
         $relative=$call==='strtotime'&&$arg===0&&in_array($literal,['-1 month','-2 month','-2 months','-1 day','first day of this month','last day of this month'],true);
         $monthSuffix=$prev==='.'&&in_array($beforePrev,['$month','$targetMonth','$ratingMonth','$scoreMonth'],true)&&in_array($literal,['-01','-01 00:00:00'],true);
+        $joinKind=$call==='join'&&in_array($literal,['INNER','LEFT','RIGHT'],true);
         $filter=$call==='i'&&$arg===2&&in_array($literal,['intval','floatval','trim','strval','int','float'],true);
         $operator=in_array('where',array_column($frames,'name'),true)&&in_array($literal,['in','not in','between','not between','eq','neq','gt','lt','egt','elt','like','notlike','exp'],true);
-        if($literal===''||$safe||$format||$relative||$monthSuffix||$filter||$operator)$replacement=$text;
-        elseif($call==='field'&&$arg===0||$prev==='=>'&&$lastKey==='_string'||$call==='where'&&$arg===0&&preg_match('/^\s*[A-Za-z_][A-Za-z0-9_.]{0,63}\s*(IN\s*\(|=|<>|!=|>=|<=|>|<|LIKE\b)/i',$literal)||preg_match('/^\s*(SELECT|UPDATE|INSERT|DELETE|WHERE|AND|OR|ORDER BY|GROUP BY|LEFT JOIN|INNER JOIN|CASE|FROM|SET)\b/i',$literal))$replacement=sqlStructure($literal);
+        if($literal===''||$safe||$format||$relative||$monthSuffix||$joinKind||$filter||$operator)$replacement=$text;
+        elseif($call==='field'&&$arg===0||$prev==='=>'&&$lastKey==='_string'||in_array('join',array_column($frames,'name'),true)&&preg_match('/^[A-Za-z_][A-Za-z0-9_]*\s+[A-Za-z_][A-Za-z0-9_]*\s+ON\b/i',$literal)||$call==='where'&&$arg===0&&preg_match('/^\s*[A-Za-z_][A-Za-z0-9_.]{0,63}\s*(IN\s*\(|=|<>|!=|>=|<=|>|<|LIKE\b)/i',$literal)||preg_match('/^\s*(SELECT|UPDATE|INSERT|DELETE|WHERE|AND|OR|ORDER BY|GROUP BY|LEFT JOIN|INNER JOIN|CASE|FROM|SET)\b/i',$literal))$replacement=sqlStructure($literal);
         else $replacement="'[REDACTED_LITERAL]'";
         if($next==='=>')$lastKey=$literal;
     }elseif(($kind===T_LNUMBER||$kind===T_DNUMBER)&&preg_match('/[0-9]{7,}/',$text))$replacement='0/*REDACTED_NUMBER*/';
