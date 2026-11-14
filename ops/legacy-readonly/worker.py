@@ -16,7 +16,7 @@ def ui_valid(path):
     if p.is_absolute() or '..' in p.parts or len(p.parts)>16 or UI_PRIVATE.search(path) or DENY.search(path):return False
     parts=[x.lower() for x in p.parts];suffix=p.suffix.lower()
     if parts[0]=='public':
-        return len(parts)>=3 and parts[1] in {'css','js','images','img','icons','fonts','assets'} and suffix in UI_ASSETS
+        return len(parts)>=3 and any(x in {'css','js','images','img','icons','fonts','assets'} for x in parts[1:-1]) and suffix in UI_ASSETS
     return suffix in UI_TEMPLATES|{'.css','.js'} and (parts[0] in {'tpl','template','templates','views','themes'} or parts[0]=='application' and any(x in {'view','views','tpl','template','templates','themes'} for x in parts[1:-1]))
 def ui_stat(path,root):
     need(ui_valid(path),'UI_PATH_DENIED')
@@ -40,7 +40,6 @@ def ui_inventory(q,root):
         for parent,dirs,files in os.walk(base,followlinks=False,onerror=fail):
             rel=Path(parent).relative_to(root)
             dirs[:]=sorted(d for d in dirs if len(rel.parts)<15 and len((rel/d).as_posix())<=240 and not UI_PRIVATE.search((rel/d).as_posix()) and not DENY.search((rel/d).as_posix()) and not (Path(parent)/d).is_symlink())
-            if len(rel.parts)==1 and base.name.lower()=='public':dirs[:]=[d for d in dirs if d.lower() in {'css','js','images','img','icons','fonts','assets'}]
             for name in sorted(files):
                 visited+=1;need(visited<=20000,'UI_SCAN_LIMIT')
                 path=(rel/name).as_posix()

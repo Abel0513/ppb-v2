@@ -6,7 +6,7 @@ class UiInventory(unittest.TestCase):
  def test_tpl_and_scoped_public_assets_are_metadata_only(self):
   with tempfile.TemporaryDirectory() as tmp:
    root=Path(tmp)
-   allowed=['Application/Admin/View/AnalystRating/salary.tpl','Public/css/rating.css','Public/js/rating.js','Public/assets/icons/calendar.svg']
+   allowed=['Application/Admin/View/AnalystRating/salary.tpl','Public/css/rating.css','Public/js/rating.js','Public/assets/icons/calendar.svg','Public/Admin/js/modal.js']
    denied=['Public/other/private.js','Public/uploads/export.css','Public/css/.hidden.css','Application/Admin/Conf/password.tpl','Application/Admin/View/db.php','Public/css/api-token.js','Public/css/data.json']
    for name in allowed+denied:
     p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text('NEVER_EXPORT_CONTENT')
