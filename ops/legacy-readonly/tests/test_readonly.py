@@ -29,6 +29,15 @@ class ManagementProbe(unittest.TestCase):
   from types import SimpleNamespace
   self.assertEqual(m.failure(SimpleNamespace(stderr="ERROR 1045: private-user SECRET")),'MYSQL_ERROR_1045')
   self.assertEqual(m.failure(SimpleNamespace(stderr="unknown option secret=value")),'CLIENT_OPTION_UNSUPPORTED')
+ def test_mysql57_passwordless_probe_ignores_login_file_without_unsupported_option(self):
+  m=module('management-probe')
+  with patch.object(m.subprocess,'run') as run:
+   m.invoke(['mysql','--no-defaults','--skip-password'])
+   self.assertEqual(run.call_args.kwargs['env']['MYSQL_TEST_LOGIN_FILE'],'/dev/null')
+  with patch.object(m.subprocess,'run') as run:
+   m.invoke(['mysql','--no-defaults','--login-path=existing'])
+   self.assertNotIn('MYSQL_TEST_LOGIN_FILE',run.call_args.kwargs['env'])
+  self.assertNotIn("'--no-login-paths'",(ROOT/'management-probe.py').read_text())
  def test_probe_has_no_business_sql_or_mutation_and_no_application_paths(self):
   m=module('management-probe');text=(ROOT/'management-probe.py').read_text()
   self.assertNotIn('shell=True',text);self.assertNotIn('/www/wwwroot',text)
