@@ -1,7 +1,22 @@
 <?php
 // Data tokenizer only; no old application include/eval/require.
 $source=stream_get_contents(STDIN,500001);if(strlen($source)>500000)exit(2);
-$tokens=token_get_all($source);$out='';$prev='';$prevKind=null;$frames=[];$indexes=[];$lastKey='';
+$tokens=token_get_all($source);$out='';$prev='';$prevKind=null;$frames=[];$indexes=[];$lastKey='';$sqlActive=false;$sqlQuote='';$sqlBlocked=false;
+function interpolatedSqlFragment($text,&$quote,&$blocked){
+    if(preg_match('/password|passwd|pwd|secret|token|credential|authorization|api.?key|\/\*|--|#/i',$text))$blocked=true;
+    if($blocked)return "'[REDACTED_SQL]'";
+    $safe='';
+    for($i=0;$i<strlen($text);$i++){
+        $c=$text[$i];
+        if($quote!==''){
+            if($c==='\\'){$i++;continue;}
+            if($c===$quote)$quote='';
+        }elseif($c===chr(39)||$c==='"'){$quote=$c;$safe.='[SQL_LITERAL]';}
+        else $safe.=$c;
+    }
+    $safe=preg_replace('/[A-Za-z0-9_\-]{24,}|[0-9]{7,}|[^\x09\x0a\x0d\x20-\x7E]/','[REDACTED]',$safe);
+    return '/* SQL FRAGMENT */ '.json_encode($safe,JSON_UNESCAPED_UNICODE);
+}
 function sqlStructure($literal){
     if(str_contains($literal,'\\'))return "'[REDACTED_SQL]'";
     $sql=preg_replace('~/\*.*?\*/|--[^\r\n]*|#[^\r\n]*~s','',$literal);
@@ -16,6 +31,10 @@ function sqlStructure($literal){
 }
 foreach($tokens as $i=>$t){
     if(!is_array($t)){
+        if($t==='"'){
+            if($sqlActive){$sqlActive=false;$sqlQuote='';$sqlBlocked=false;}
+            else{$sqlActive=$prev==='=>'&&$lastKey==='_string'&&in_array('where',array_column($frames,'name'),true);$sqlQuote='';$sqlBlocked=false;}
+        }
         if($t==='[')$indexes[]=in_array($prevKind,[T_VARIABLE,T_STRING],true)||in_array($prev,[']',')'],true);
         if($t===']')array_pop($indexes);
         if($t==='(')$frames[]=['name'=>strtolower($prev),'arg'=>0,'arrays'=>count($indexes)];
@@ -24,7 +43,8 @@ foreach($tokens as $i=>$t){
         $out.=$t;$prev=$t;$prevKind=null;continue;
     }
     [$kind,$text]=$t;$replacement=$text;
-    if(in_array($kind,[T_COMMENT,T_DOC_COMMENT,T_INLINE_HTML,T_ENCAPSED_AND_WHITESPACE],true))$replacement='';
+    if($kind===T_ENCAPSED_AND_WHITESPACE&&$sqlActive)$replacement=interpolatedSqlFragment($text,$sqlQuote,$sqlBlocked);
+    elseif(in_array($kind,[T_COMMENT,T_DOC_COMMENT,T_INLINE_HTML,T_ENCAPSED_AND_WHITESPACE],true))$replacement='';
     elseif($kind===T_CONSTANT_ENCAPSED_STRING){
         $literal=substr($text,1,-1);$next='';
         for($j=$i+1;$j<count($tokens);$j++){if(is_array($tokens[$j])&&$tokens[$j][0]===T_WHITESPACE)continue;$next=is_array($tokens[$j])?$tokens[$j][1]:$tokens[$j];break;}

@@ -32,5 +32,7 @@ def run():
     import importlib.util
     spec=importlib.util.spec_from_file_location('management_probe',Path(__file__).with_name('management-probe.py'))
     probe=importlib.util.module_from_spec(spec);spec.loader.exec_module(probe)
-    return dict(result='READER_TOOLS_INSTALLED',user=USER,uid=account.pw_uid,legacy_file_changes=0,database_changes=0,db_ready=False,management_probe=probe.run(),dba_tool_before_sha256=before.get('dba-once.py'),dba_tool_after_sha256=hashes['dba-once.py'],private_config_absent={n:not (CONFIG/n).exists() and not (CONFIG/n).is_symlink() for n in ['credentials.json','catalog.json']})
+    absent={n:not (CONFIG/n).exists() and not (CONFIG/n).is_symlink() for n in ['credentials.json','catalog.json']}
+    management=probe.run() if all(absent.values()) else {'result':'SKIPPED_EXISTING_READER_CONFIG'}
+    return dict(result='READER_TOOLS_INSTALLED',user=USER,uid=account.pw_uid,legacy_file_changes=0,database_changes=0,db_ready=None,db_readiness='VERIFY_WITH_FIXED_READER',management_probe=management,dba_tool_before_sha256=before.get('dba-once.py'),dba_tool_after_sha256=hashes['dba-once.py'],private_config_absent=absent)
 if __name__=='__main__':print('LEGACY_READER_INSTALL='+json.dumps(run()))
