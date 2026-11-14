@@ -27,7 +27,7 @@ def document():
               'exec python3 /www/ppb-v2-deploy/scripts/isolation/release.py --operation "$SSM_Operation" --archive "$f" --sha256 "$SSM_Sha256" --commit "$SSM_Commit" --run-id "$SSM_RunId" --run-attempt "$SSM_RunAttempt" --confirmation "$SSM_Approval"']
     steps.append(dict(action='aws:runShellScript',name='controlledRelease',inputs=dict(timeoutSeconds='1800',runCommand=lines)))
     d['parameters']['Mode']=dict(type='String',default='release',allowedValues=['release','legacy_readonly'],interpolationType='ENV_VAR')
-    d['parameters']['LegacyRequest']=dict(type='String',default='e30=',allowedPattern='^[A-Za-z0-9+/=]{1,14000}$',interpolationType='ENV_VAR')
+    d['parameters']['LegacyRequest']=dict(type='String',default='e30=',allowedPattern='^[A-Za-z0-9+/=]+$',interpolationType='ENV_VAR')
     for step in steps:step['precondition']={'StringEquals':['{{ Mode }}','release']}
     legacy=ROOT.parents[1]/'legacy-readonly'
     guarded=['set -eu','umask 077']
