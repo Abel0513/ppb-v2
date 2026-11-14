@@ -138,6 +138,8 @@ def activate(call=c.aws,pause=time.sleep):
                 raise
             if inv['Status'] in {'Pending','InProgress','Delayed'}:pause(3);continue
             provisions=[line.split('=',1)[1] for line in inv.get('StandardOutputContent','').splitlines() if line.startswith('V2_PROVISION=')]
+            reader=[line.split('=',1)[1] for line in inv.get('StandardOutputContent','').splitlines() if line.startswith('LEGACY_READER_INSTALL=')]
+            if reader:result['legacy_reader_install']=json.loads(reader[-1])
             if provisions:result['service_provision']=json.loads(provisions[-1]);save()
             c.need(inv['Status']=='Success' and inv['ResponseCode']==0,'FIXED_TOOL_INSTALL_FAILED')
             output=inv.get('StandardOutputContent','');c.need('V2_FIXED_TOOLS_INSTALLED=YES' in output,'TOOL_INSTALL_RECEIPT_MISSING')
@@ -189,7 +191,9 @@ def activate(call=c.aws,pause=time.sleep):
     except Exception as exc:
         import re
         code=str(exc);result['reason']=code if re.fullmatch('[A-Za-z0-9_]{1,160}',code) else 'ACTIVATION_NOT_VERIFIED'
-        result['failed_action']=result.get('last_aws_action');save();return result
+        result['failed_action']=result.get('last_aws_action')
+        if code=='AWS_InvalidDocumentContent':result['document_validation_error']=getattr(c,'LAST_SAFE_DOCUMENT_VALIDATION','UNAVAILABLE')
+        save();return result
 
 def main():
     result=activate();print(json.dumps(result))
