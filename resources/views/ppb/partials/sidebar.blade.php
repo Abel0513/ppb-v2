@@ -35,6 +35,12 @@
     @if(auth('ppb')->user()?->hasPpbPermission('evaluations.view'))
     <a class="admin-menu-item" href="{{ route('ppb.evaluations.index') }}"><span class="admin-menu-icon" aria-hidden="true">▤</span><span>月評鑑與薪酬</span></a>
     @endif
+    {{-- PPB EVALPREVIEW | Owner-only GET preview, not the unpublished assessment writer. --}}
+    @if($ppbIsOwner && $ppbUser->hasPpbPermission('accounts.manage'))
+    <a class="admin-menu-item {{ request()->routeIs('ppb.evalpreview.*') ? 'active' : '' }}" href="{{ route('ppb.evalpreview.index') }}">
+      <span class="admin-menu-icon" aria-hidden="true">▤</span><span>月評鑑預覽（唯讀）</span>
+    </a>
+    @endif
     {{-- PPB_UI3_20261104 | Owner-only menu; AccountController/RoleController also enforce owner server-side. --}}
     @if($ppbIsOwner)
     <div class="admin-menu-group" data-admin-menu-group="system">

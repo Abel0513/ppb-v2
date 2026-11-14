@@ -1,1 +1,1 @@
-[{"path":"/v2/automation-check","status":200,"contains":"PPB_V2_AUTOMATION_PROOF_V1"}]
+[{"path":"/v2/automation-check","status":200,"contains":"PPB_V2_AUTOMATION_PROOF_V1"},{"path":"/admin/evaluations-preview","status":302},{"path":"/admin/evaluations-preview/legacy/2","status":302}]

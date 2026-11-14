@@ -3,7 +3,6 @@ declare(strict_types=1);
 namespace App\Services\Ppb\Evaluation;
 
 use App\Models\PpbAnalyst;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /** Legacy IDs, V2 analyst IDs and login-account IDs are never interchangeable. */
@@ -29,7 +28,7 @@ class EvaluationSubjects
 
     public function all(): array
     {
-        $source=Cache::remember('ppb-evaluation-source-profiles-v1',30,fn()=>$this->reader->profiles());
+        $source=$this->reader->profiles();
         $maps=$this->mappings();$native=PpbAnalyst::query()->orderBy('id')->get(['id','name','display_name','status','user_type'])->keyBy('id');$out=[];
         foreach($source as $profile){
             if(!in_array((int)$profile['user_type'],[0,1],true))continue;
