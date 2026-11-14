@@ -16,7 +16,13 @@ def need(ok,code):
 def aws(*args):
     p=subprocess.run(['aws',*args,'--region',REGION,'--output','json','--no-cli-pager'],capture_output=True,text=True,timeout=90,env=dict(os.environ,AWS_PAGER='',AWS_MAX_ATTEMPTS='1'))
     if p.returncode:
-        m=re.search(r'\(([A-Za-z0-9_.-]+)\)',p.stderr);raise RuntimeError('AWS_'+(m.group(1) if m else 'CLI_FAILED'))
+        m=re.search(r'\(([A-Za-z0-9_.-]+)\)',p.stderr)
+        if args[:2]==('ssm','update-document') and m and m.group(1)=='InvalidDocumentContent':
+            # Only fixed-document syntax errors, never auth/CLI/remote output.
+            detail=p.stderr.split('operation:',1)[-1].strip().splitlines()[0]
+            detail=re.sub(r'[A-Za-z0-9+/=_-]{48,}','[LONG_TOKEN]',detail)[:400]
+            globals()['LAST_SAFE_DOCUMENT_VALIDATION']=detail
+        raise RuntimeError('AWS_'+(m.group(1) if m else 'CLI_FAILED'))
     return json.loads(p.stdout or '{}')
 
 def execute(operation,commit,run,attempt,archive,call=aws,pause=time.sleep):
