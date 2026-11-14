@@ -1,3 +1,49 @@
+# Current evaluation status — 2026-11-15 (Asia/Taipei)
+
+Latest handoff: PR58 comment6882913861 and PR95 comment6882914814 were read in
+full. Main59bf94f preview/R1-R2/DBA health work is accepted; never reapply it.
+Owner reports authenticated health4/4 PASS, writes0. This is not independent list,
+detail, desktop/mobile or complete payroll acceptance.
+
+Main preview was merged into the Draft feature branch without force-push. The
+owner-only GET preview, health, navigation and direct roster read are retained;
+formal evaluation routes and permissions remain separate. Local integration suite
+48tests284assertions PASS before salary changes. No migration/application release.
+
+Candidate salary snapshot uses the existing append-only evaluation event JSON,
+server-calculated amounts, subject/month/source fingerprint and request/revision.
+No additional schema/table, payment, LINE delivery or legacy write. Readback shows
+the historical amount and warns when current revision/source differs; replay only
+reads the receipt. Real isolated MySQL5.7 tests cover key-order normalization while
+strictly checking numeric types, replay0writes and later changes preserving history.
+
+Actual readonly source follow-up Run43635426833: six PDF pages PASS, SSM
+47428ae9-d5f4-46cb-9f85-f7993cb3bc5e through9e67e6a0-5b08-4536-bf79-681302e3b3c4.
+The seventh request for the parent LineController STOPPED at the existing reader
+boundary (de624cb5-bd14-41de-8b37-404186d594a2); no override or grant change. Therefore
+the overall run is failure, not PASS. Safe sanitized source retained outside Git.
+
+PDF controller source shows distinct generate-one/generate-all/send-one/send-all
+flows; previous-month default, mPDF generation, private analyst identity lookup,
+LINE Flex delivery and source salary/grade notice. Generation and sending are
+side effects and old endpoints were NOT called. PDF short salary/long/video/
+chronological absence rules agree with existing kernels; literal URLs/messages
+remain redacted. Full original PDF rendering, private identity resolver and LINE
+sending are not implemented or accepted. The reader neither exposes line_id nor
+permits generic private-name SELECT. No analyst numeric-ID authentication substitute.
+
+Live browser acceptance is BLOCKED in this task environment: no signed-in browser
+session, browser tool failure, native input AT-SPI provider unavailable; configured
+network policy denies direct HTTPS to v2.csdatw.xyz (proxy403, HTTP000). Do not turn
+local Blade/fixture tests or owner health evidence into independent live UI PASS.
+No password, cookie, config or credential was requested or exported.
+
+PR58 stays Draft. migrate:true remains a candidate only; production migration,
+business writes, merge and deploy need the original owner/safety gates. PR95 remains
+Draft, no R1/R2, root bootstrap/policy overwrite or installed runtime change.
+
+---
+
 # Verified evaluation source map — in progress, not full acceptance
 
 Real OS/source evidence: run43536817490 and43537392013 through the pinned V2

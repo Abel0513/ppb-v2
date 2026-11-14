@@ -31,7 +31,15 @@
 @if($manage)<form method="post" action="{{ route('ppb.evaluations.save',[$report['subject']['type'],$report['subject']['id']]) }}">@include('ppb.evaluations.request')<input type="hidden" name="operation" value="rebuild"><button class="action">確認並保存下月評級</button></form>@endif</section>
 <section class="card eval-section"><h2>薪酬與缺勤</h2><div class="eval-grid">@foreach(['short'=>'短稿','long'=>'長稿','video'=>'影片','late'=>'遲到扣款','absent'=>'缺勤扣款','total'=>'合計'] as $field=>$label)<p>{{ $label }}：<strong>{{ $current['salary'][$field] }}</strong></p>@endforeach</div>
 <p>短稿 {{ $current['counts']['salary_short'] }} 篇；長稿 {{ $current['counts']['salary_long'] }} 篇；代班缺席 {{ $current['counts']['absences'] }} 次。薪酬計件與評分選取分開。</p>
-@foreach($current['deductions']['deductions'] as $amount)<span>缺勤／遲到 {{ $amount }}　</span>@endforeach</section>
+@foreach($current['deductions']['deductions'] as $amount)<span>缺勤／遲到 {{ $amount }}　</span>@endforeach
+<p>保存的是當時的薪酬計算快照，不會發款、傳送 LINE 或修改舊系統。後續來源或評分變動不會覆寫歷史快照。</p>
+@if($report['saved_salary']??null)
+@php($savedSalary=$report['saved_salary'])
+<p>已保存版本 {{ $savedSalary['revision'] }}・{{ $savedSalary['created_at'] }}・合計 {{ $savedSalary['snapshot']['salary']['total'] }}・請求 {{ $savedSalary['request_id'] }}。</p>
+@if($savedSalary['revision']!==$report['revision'] || $savedSalary['snapshot']['source_sha256']!==$report['source_sha256'])<p class="notice">目前資料已不同於已保存快照，請核對後另存新版本。</p>@endif
+@else<p>本月份尚未保存薪酬快照。</p>@endif
+@if($manage)<form method="post" action="{{ route('ppb.evaluations.save',[$report['subject']['type'],$report['subject']['id']]) }}">@include('ppb.evaluations.request')<input type="hidden" name="operation" value="salary_snapshot"><button class="action">保存本月薪酬快照</button></form>@endif
+</section>
 @if($manage && isset($report['inputs']))
 <section class="card eval-section"><h2>V2 出勤登錄與更正</h2><p>實際代班投稿按賽事與原分析師計一次缺勤。更正只保存於 V2；舊系統出勤不可在此刪除。</p>
 <form method="post" action="{{ route('ppb.evaluations.save',[$report['subject']['type'],$report['subject']['id']]) }}">@include('ppb.evaluations.request')<input type="hidden" name="operation" value="input"><input type="hidden" name="input_kind" value="attendance"><label>本月 V2 原生賽事<select class="field" name="game_id" required><option value="">請選擇</option>@foreach($report['inputs']['games'] as $game)<option value="{{ $game['id'] }}">#{{ $game['id'] }}・{{ $game['recommended_time'] }}</option>@endforeach</select></label>

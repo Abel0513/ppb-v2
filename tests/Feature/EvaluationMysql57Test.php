@@ -102,6 +102,27 @@ class EvaluationMysql57Test extends TestCase
             $emptySubjects=Mockery::mock(EvaluationSubjects::class);$emptySubjects->shouldReceive('mappings')->andReturn([]);
             $unmappedService=new EvaluationService($reader,$emptySubjects,new LegacyMonthSelector,$reporter,new LegacyRatingCalculator);
             self::assertSame(0,$unmappedService->load($substitute,'2026-05')['current']['salary']['short']);
+            // Freeze a month calculation in the existing append-only audit event.
+            $salaryId='683f084d-b85d-437b-9d9c-b280ce473e95';
+            $savedPay=$realWriter->save($substitute,'2026-05','salary_snapshot',[],$salaryId,$subReport['revision'],$subReport['source_sha256'],71);
+            self::assertSame(2,$savedPay['revision']);
+            $salaryReadback=$realService->load($substitute,'2026-05')['saved_salary'];
+            self::assertSame($salaryId,$salaryReadback['request_id']);
+            // MySQL JSON canonicalizes object key order; retain strict value types.
+            foreach($subReport['current']['salary'] as $field=>$amount)self::assertSame($amount,$salaryReadback['snapshot']['salary'][$field]);
+            self::assertFalse($salaryReadback['snapshot']['payment_executed']);
+            self::assertArrayNotHasKey('selected',$salaryReadback['snapshot']);
+            $writes=0;
+            self::assertTrue($realWriter->save($substitute,'2026-05','salary_snapshot',[],$salaryId,$subReport['revision'],$subReport['source_sha256'],71)['replayed']);
+            self::assertSame(0,$writes,'Replaying salary snapshot only reads its receipt.');
+            // A later calculation change cannot alter the previously frozen receipt.
+            $subRating['result_state']=2;
+            $changed=$realService->load($substitute,'2026-05');
+            $realWriter->save($substitute,'2026-05','rate',$subRating,'683f084d-b85d-437b-9d9c-b280ce473e96',$changed['revision'],$changed['source_sha256'],71);
+            $changed=$realService->load($substitute,'2026-05');
+            self::assertSame(50,$changed['current']['salary']['short']);
+            self::assertSame(100,$changed['saved_salary']['snapshot']['salary']['short']);
+            self::assertSame($salaryReadback,$changed['saved_salary']);
             // Only bijective archived pick lineage proves a cross-system identity.
 
             foreach([[101,4,9,1,'pick','pick'],[102,5,10,1,'pick','pick'],[103,5,11,1,'pick','pick'],[104,6,12,1,'pick','pick'],[105,7,12,1,'pick','pick'],[106,8,13,999,'pick','pick'],[107,9,14,1,'long','pick']] as [$source,$legacy,$native,$game,$kind,$sourceKind]){

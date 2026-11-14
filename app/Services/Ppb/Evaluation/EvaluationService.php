@@ -62,10 +62,19 @@ class EvaluationService
         usort($recent,fn($a,$b)=>[$b['recommended_time'],$b['_source_type'],(int)$b['id']]<=>[$a['recommended_time'],$a['_source_type'],(int)$a['id']]);
         $recent=array_slice($recent,0,20);
         $current['performance']=(new EvaluationPerformance)->summarize($current['selected'],$recent);
+        $salaryEvent=DB::table('ppb_evaluation_events as ev')->join('ppb_evaluations as e','e.id','=','ev.evaluation_id')
+            ->where('e.subject_type',$subject['type'])->where('e.subject_id',$subject['id'])->where('e.month',$month)
+            ->where('ev.operation','salary_snapshot')->orderByDesc('ev.id')->first(['ev.request_id','ev.after_json','ev.created_at']);
+        $savedSalary=null;
+        if($salaryEvent){
+            $saved=json_decode($salaryEvent->after_json,true,512,JSON_THROW_ON_ERROR);
+            $savedSalary=['request_id'=>$salaryEvent->request_id,'created_at'=>$salaryEvent->created_at,
+                'revision'=>(int)$saved['evaluation']['revision'],'snapshot'=>$saved['salary_snapshot']];
+        }
         return ['subject'=>$subject,'month'=>$month,'previous_month'=>$prior,'source_sha256'=>$sourceHash,'legacy_sha256'=>$snapshot['source_sha256'],
             'manual'=>$manuals[$month],'current'=>$current,'previous'=>$previous,'revision'=>$local->has($month)?$local[$month]->revision:0,
             'earlier_month'=>$earlier,'history'=>$reports,'saved_next_rating'=>$local->has($month)?$local[$month]->next_rating_level:null,'recent'=>$recent,'source_rows'=>count($rows),
-            'native_attendance_video_supported'=>true,'inputs'=>$inputs[$month]];
+            'native_attendance_video_supported'=>true,'inputs'=>$inputs[$month],'saved_salary'=>$savedSalary];
     }
 
     /** Each month is one fixed snapshot; shared-month drift aborts the read. */

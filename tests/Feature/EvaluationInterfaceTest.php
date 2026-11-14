@@ -74,4 +74,19 @@ class EvaluationInterfaceTest extends TestCase
         self::assertStringContainsString('no-store',$json->headers->get('Cache-Control'));
     }
 
+    public function test_salary_snapshot_ignores_client_amounts_and_uses_receipt_bound_writer(): void
+    {
+        $this->actor();
+        $subjects=Mockery::mock(EvaluationSubjects::class);$subjects->shouldReceive('get')->with('legacy',2)->andReturn(['type'=>'legacy','id'=>2]);
+        $this->app->instance(EvaluationSubjects::class,$subjects);
+        $writer=Mockery::mock(EvaluationWriter::class);
+        $writer->shouldReceive('save')->once()->withArgs(fn($subject,$month,$operation,$payload,$id,$revision,$hash,$actor)=>
+            $operation==='salary_snapshot'&&$payload===[]&&$month==='2026-05'&&$revision===3&&$actor===71)
+            ->andReturn(['replayed'=>false,'request_id'=>'99b1e56d-7db5-4524-b567-8f028610079a','revision'=>4]);
+        $this->app->instance(EvaluationWriter::class,$writer);
+        $this->post('https://v2.csdatw.xyz/admin/evaluations/legacy/2',[
+            'month'=>'2026-05','operation'=>'salary_snapshot','request_id'=>'99b1e56d-7db5-4524-b567-8f028610079a',
+            'revision'=>3,'source_sha256'=>str_repeat('a',64),'total'=>999999,'salary'=>['total'=>999999]])->assertRedirect();
+    }
+
 }

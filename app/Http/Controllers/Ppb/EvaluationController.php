@@ -40,7 +40,7 @@ class EvaluationController extends Controller
     public function save(Request $request,string $type,int $id)
     {
         $subject=$this->subjects->get($type,$id);$month=$this->month($request);
-        $base=$request->validate(['request_id'=>['required','uuid'],'revision'=>['required','integer','min:0'],'source_sha256'=>['required','regex:/^[a-f0-9]{64}$/D'],'operation'=>['required',Rule::in(['manual','rate','rebuild','input'])]]);
+        $base=$request->validate(['request_id'=>['required','uuid'],'revision'=>['required','integer','min:0'],'source_sha256'=>['required','regex:/^[a-f0-9]{64}$/D'],'operation'=>['required',Rule::in(['manual','rate','rebuild','input','salary_snapshot'])]]);
         $rules=[];
         if($base['operation']==='manual'){
             foreach(range(1,5) as $w)$rules['score_interaction_w'.$w]=['present','nullable','numeric','decimal:0,2','between:-999999.99,999999.99'];
