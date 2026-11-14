@@ -1,15 +1,20 @@
 [
   {
-    "operation": "permissions"
-  },
-  {
     "operation": "db_permissions"
   },
   {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
-    "offset": 680,
-    "limit": 80
+    "operation": "select",
+    "table": "pay.pay_analyst_pick",
+    "columns": [
+      "id",
+      "analyst_name",
+      "recommended_time",
+      "is_win",
+      "is_bonus",
+      "is_long",
+      "is_substitute"
+    ],
+    "limit": 5
   },
   {
     "operation": "select",
@@ -17,9 +22,50 @@
     "columns": [
       "id",
       "analyst_id",
+      "eval_month",
       "score_interaction_avg",
-      "score_initiative"
+      "score_initiative",
+      "score_winrate_bonus",
+      "score_extra_adjustment",
+      "score_interaction_feedback"
     ],
-    "limit": 3
+    "limit": 5
+  },
+  {
+    "operation": "select",
+    "table": "pay.pay_analyst_monthly_rating",
+    "columns": [
+      "id",
+      "analyst_id",
+      "rating_month",
+      "rating_level"
+    ],
+    "limit": 5
+  },
+  {
+    "operation": "select",
+    "table": "pay.pay_schedule",
+    "columns": [
+      "id",
+      "market_type",
+      "recommended_time"
+    ],
+    "limit": 5
+  },
+  {
+    "operation": "video_count",
+    "analyst_id": 2,
+    "start": "2026-05-01 00:00:00",
+    "end": "2026-05-31 23:59:59"
+  },
+  {
+    "operation": "schema",
+    "table": "pay.pay_analyst_profiles",
+    "limit": 50
+  },
+  {
+    "operation": "schema",
+    "table": "pay.pay_video_schedule",
+    "limit": 50
   }
 ]
