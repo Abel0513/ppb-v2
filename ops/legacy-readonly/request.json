@@ -1,34 +1,44 @@
 [
   {
-    "operation": "permissions"
-  },
-  {
-    "operation": "db_permissions"
-  },
-  {
     "operation": "schema",
-    "table": "pay.pay_analyst_profiles",
+    "table": "pay.pay_schedule",
     "limit": 50
   },
   {
     "operation": "schema",
-    "table": "pay.pay_analyst_pick",
+    "table": "pay.pay_video_schedule",
     "limit": 50
   },
   {
-    "operation": "schema",
+    "operation": "select",
     "table": "pay.pay_analyst_monthly_evaluation",
-    "limit": 50
+    "columns": [
+      "id",
+      "analyst_id",
+      "score_delivery_time",
+      "score_compliance",
+      "score_professionalism",
+      "score_interaction_w1",
+      "score_interaction_w2",
+      "score_interaction_w3",
+      "score_interaction_w4",
+      "score_interaction_w5",
+      "score_interaction_avg",
+      "score_initiative"
+    ],
+    "limit": 10
   },
   {
-    "operation": "schema",
+    "operation": "select",
     "table": "pay.pay_analyst_monthly_rating",
-    "limit": 50
-  },
-  {
-    "operation": "schema",
-    "table": "pay.pay_attendance_record",
-    "limit": 50
+    "columns": [
+      "id",
+      "analyst_id",
+      "rating_level",
+      "created_at",
+      "updated_at"
+    ],
+    "limit": 10
   },
   {
     "operation": "select",
@@ -36,8 +46,34 @@
     "columns": [
       "id",
       "rating_level",
+      "analyst_level",
       "user_type"
     ],
-    "limit": 5
+    "limit": 50
+  },
+  {
+    "operation": "select",
+    "table": "pay.pay_analyst_pick",
+    "columns": [
+      "id",
+      "gid",
+      "recommended_time",
+      "is_win",
+      "is_bonus",
+      "is_long",
+      "is_substitute",
+      "score_delivery_time"
+    ],
+    "limit": 10
+  },
+  {
+    "operation": "search",
+    "query": "score_interaction_w1",
+    "limit": 30
+  },
+  {
+    "operation": "search",
+    "query": "shortPickStatsDetail",
+    "limit": 20
   }
 ]
