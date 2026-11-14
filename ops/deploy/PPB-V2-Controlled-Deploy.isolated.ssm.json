@@ -160,12 +160,12 @@
         "runCommand": [
           "set -eu",
           "umask 077",
-          "printf '%s  %s\\n' d1d93876789a2c6bcfc81b8ebbac15a8de4298e811186003df43da6eb659581b /www/ppb-v2-deploy/scripts/legacy-readonly/prepare.py | sha256sum -c - >/dev/null",
-          "printf '%s  %s\\n' 5e3f47952eabcfb6466423cbdf89d20c1f18658a726d80f32d9af36b8bccd915 /www/ppb-v2-deploy/scripts/legacy-readonly/dispatch.py | sha256sum -c - >/dev/null",
-          "printf '%s  %s\\n' 9d63a1dfccb06a3f6266814e6a6331ff854e9cd892f6bfa8543e6c359067a0e1 /www/ppb-v2-deploy/scripts/legacy-readonly/worker.py | sha256sum -c - >/dev/null",
-          "printf '%s  %s\\n' 6e45fa7cde2d510d84c04e36330b704ebcdc482f4d3e2e0425c70b0143e594ea /www/ppb-v2-deploy/scripts/legacy-readonly/source-tokens.php | sha256sum -c - >/dev/null",
-          "printf '%s  %s\\n' 6258d1168bed3728682081b9ec08af5c179da87b74fb6ca0911ef491b64d09c5 /www/ppb-v2-deploy/scripts/legacy-readonly/db-worker.php | sha256sum -c - >/dev/null",
-          "printf '%s  %s\\n' 53b7fddbaf6bd4d6602b3efbd23b8b40c51d05dfaafcbd9e09dabd15694cfc19 /www/ppb-v2-deploy/scripts/legacy-readonly/dba-once.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' b9199418f9a171f7fdad22b89e288f391233d6abe71e49ed38ae929aeb895898 /www/ppb-v2-deploy/scripts/legacy-readonly/prepare.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' 9db55d4f2e9ed48e118a2a3779e24fd4b4c286a51ffc1744067c2de12ab5acae /www/ppb-v2-deploy/scripts/legacy-readonly/dispatch.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' a452cb0be13c63a8637658a1ca3c6116591dc5319f4466f921f241ffcecc0199 /www/ppb-v2-deploy/scripts/legacy-readonly/worker.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' 8ae9a22cfc022b7af3d5ae9441be72a2b577d51bb8881cefe529df609cfbc759 /www/ppb-v2-deploy/scripts/legacy-readonly/source-tokens.php | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' 47e4cb0c8ceb13d12b0532aee69c6a0baa591784696dfc5a62c548cd46a5f3f6 /www/ppb-v2-deploy/scripts/legacy-readonly/db-worker.php | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' 60df3cabe2f4f57f1b92f3ad7ea52b8361baeed7d4ee3d115ea80a89761903a3 /www/ppb-v2-deploy/scripts/legacy-readonly/dba-once.py | sha256sum -c - >/dev/null",
           "exec python3 -I /www/ppb-v2-deploy/scripts/legacy-readonly/dispatch.py"
         ]
       }

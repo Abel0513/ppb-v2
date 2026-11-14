@@ -21,7 +21,7 @@ def run():
         os.chown(path,0,account.pw_gid);path.chmod(mode)
     record=CONFIG/'runtime.json';previous=json.loads(record.read_text()) if record.exists() and not record.is_symlink() else {}
     hashes={};before={}
-    for name in ['worker.py','source-tokens.php','db-worker.php','dba-once.py']:
+    for name in ['worker.py','source-tokens.php','db-worker.php','dba-once.py','evaluation-domains.py']:
         source=Path(__file__).with_name(name);data=source.read_bytes();target=PUBLIC/name
         if target.exists() or target.is_symlink():
             st=target.lstat();need(stat.S_ISREG(st.st_mode) and st.st_uid==0 and st.st_nlink==1 and st.st_mode&0o022==0,'INSTALL_FILE_UNSAFE')

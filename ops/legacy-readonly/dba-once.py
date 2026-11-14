@@ -100,7 +100,14 @@ def bootstrap(login_path,mysql,run=subprocess.run,defaults_file=None):
  sql('UNLOCK_NEW_ACCOUNT',"ALTER USER 'ppb_legacy_ro'@'localhost' ACCOUNT UNLOCK;")
  return dict(result='READONLY_DBA_PROVISIONED_VERIFY_NEXT',schema=schema,tables=len(allowed),password_exported=False,old_business_write_statements=0,new_principal=ACCOUNT+'@localhost')
 if __name__=='__main__':
- p=argparse.ArgumentParser();group=p.add_mutually_exclusive_group(required=True);group.add_argument('--login-path');group.add_argument('--defaults-file');p.add_argument('--mysql',default='/www/server/mysql/bin/mysql');p.add_argument('--preflight-only',action='store_true');a=p.parse_args()
- try:print(json.dumps((preflight if a.preflight_only else bootstrap)(a.login_path,a.mysql,defaults_file=a.defaults_file)))
+ p=argparse.ArgumentParser();group=p.add_mutually_exclusive_group(required=True);group.add_argument('--login-path');group.add_argument('--defaults-file');p.add_argument('--mysql',default='/www/server/mysql/bin/mysql');action=p.add_mutually_exclusive_group();action.add_argument('--preflight-only',action='store_true');action.add_argument('--enable-evaluation-read',action='store_true');a=p.parse_args()
+ try:
+  if a.enable_evaluation_read:
+   import importlib.util,types
+   spec=importlib.util.spec_from_file_location('evaluation_domains',Path(__file__).with_name('evaluation-domains.py'));module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+   api=types.SimpleNamespace(CONFIG=CONFIG,need=need,ident=ident,sql_session=sql_session,management_options=management_options)
+   result=module.enable(api,a.login_path,a.mysql,subprocess.run,a.defaults_file)
+  else:result=(preflight if a.preflight_only else bootstrap)(a.login_path,a.mysql,defaults_file=a.defaults_file)
+  print(json.dumps(result))
  except Exception as exc:
   print(json.dumps(public_error(exc)));raise SystemExit(2)

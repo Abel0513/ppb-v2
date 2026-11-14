@@ -130,3 +130,45 @@ and absence of both private files. A remote install success or CI container PASS
 is NOT proof that authenticated EC2 root preflight succeeded; that still needs
 local interactive authentication unless a previously authorized DBA connection
 becomes available. Do not use V2 credentials or guess/root-reset passwords.
+
+## Existing-reader evaluation-domain delta (not automatically applied)
+
+Real readonly activation now PASSED (run43585913910) and10 real record-total cases
+passed20 comparisons with independent repeat reads (run43587125308). Do not rerun
+account creation. Live metadata proved four necessary business keys are CHAR or
+VARCHAR, so the numeric/date-only account cannot yet select/filter them.
+
+The one reviewed delta is exactly these SELECT columns on the EXISTING account:
+
+| Table | Column | Interface use |
+| --- | --- | --- |
+| pay_analyst_pick | analyst_name | Numeric ID string only, never display name |
+| pay_analyst_monthly_evaluation | eval_month | Strict YYYY-MM |
+| pay_analyst_monthly_rating | rating_month | Strict YYYY-MM |
+| pay_schedule | market_type | Empty/numeric short code; legacy intval semantics |
+| pay_analyst_profiles | analyst_name | PRIVATE server-side video join only |
+| pay_video_schedule | guest_1_name,guest_2_name,guest_3_name | PRIVATE server-side video join only |
+
+No LINE identifiers, host/editor names, recommendation/body, arbitrary text,
+EXECUTE/FILE/global/write privileges or new account are added. Private join names
+are denied by generic SELECT AND generic filters. Only the fixed video_count
+operation can use them; it returns one count, no names, uses three guest slots,
+counts a matching row once, trims the profile name, and excludes blank names.
+Analyst ID and explicit date period (at most32days) are validated; caller must
+preserve the observed legacy period, not silently change end-of-month semantics.
+The read transaction, column grants, one-second query budget and OS jail remain.
+
+After the fixed tools are installed and verified, an existing DBA uses the SAME
+local interactive wrapper with --enable-evaluation-read. Password remains LOCAL.
+The separate extension mode requires the reader/configs to ALREADY exist; it
+verifies DBA and reader grants, live column types and all four text-domain data
+checks BEFORE issuing any GRANT. It preserves the original catalog in a new
+root-owned backup and never rewrites credentials. A partial outcome stops; backup
+or unrecorded-grant collision forbids blind retry, force or automatic revoke.
+Only after grants succeed is the catalog replaced atomically with typed-domain
+and private-join policy. Repeated completed extension reports verify-next without
+rewriting. This is MySQL authentication authority, not additional AWS IAM.
+
+Installation merely provides this reviewed utility; it does NOT run the delta.
+Full per-analyst/month/video parity is NOT claimed before the DBA receipt and real
+fixed-reader GET/query verification. Continue ordinary numeric/date reads as-is.
