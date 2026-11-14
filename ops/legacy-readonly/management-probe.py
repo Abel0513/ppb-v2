@@ -36,7 +36,7 @@ def failure(p):
 def connection(options,socket,method):
     args=[MYSQL,*options,'--protocol=SOCKET','--socket='+socket,'--connect-timeout=2',
           '--batch','--raw','--skip-column-names','--local-infile=0',
-          '--init-command=','--skip-tee','--skip-pager',
+          '--init-command=SELECT 1','--skip-tee','--skip-pager',
           '--execute=SELECT VERSION(), CURRENT_USER(), @@socket; SHOW GRANTS FOR CURRENT_USER;']
     p=invoke(args)
     if p is None or p.returncode:return dict(method=method,result='UNAVAILABLE',reason=failure(p))

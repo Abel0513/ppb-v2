@@ -1,6 +1,6 @@
 import importlib.util,json,os,shutil,subprocess,tempfile,unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch,MagicMock
 ROOT=Path(__file__).resolve().parents[1]
 def module(name):
  s=importlib.util.spec_from_file_location('legacy_'+name,ROOT/(name+'.py'));m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m
@@ -162,6 +162,34 @@ class DocumentContract(unittest.TestCase):
   self.assertEqual(len(calls),2)
 
 class DBAConnection(unittest.TestCase):
+ def config(self):
+  config=MagicMock();config.is_dir.return_value=True;config.is_symlink.return_value=False;config.stat.return_value.st_uid=0
+  config.__truediv__.return_value.exists.return_value=False;config.__truediv__.return_value.is_symlink.return_value=False
+  return config
+ def test_init_1065_stops_at_version_without_exposing_stderr_or_sql(self):
+  m=module('dba-once')
+  from types import SimpleNamespace
+  runner=MagicMock(return_value=SimpleNamespace(returncode=1,stdout='',stderr='ERROR 1065 (42000): private-password SQL credential'))
+  with patch.object(m.os,'geteuid',return_value=0),patch.object(m,'CONFIG',self.config()):
+   with self.assertRaises(m.SQLFailure) as failure:m.bootstrap('existing','mysql',runner)
+  self.assertEqual(runner.call_count,1)
+  out=m.public_error(failure.exception)
+  self.assertEqual(out,{'result':'BLOCKED','reason':'DBA_SQL_FAILED_STOP_NO_FORCE','stage':'VERSION','mysql_error_code':1065,'sqlstate':'42000'})
+  self.assertNotIn('private',json.dumps(out));self.assertIn('--init-command=SELECT 1',runner.call_args.args[0]);self.assertNotIn('--force',runner.call_args.args[0])
+ def test_real_preflight_contract_checks_identity_privileges_and_account_absence(self):
+  m=module('dba-once')
+  from types import SimpleNamespace
+  results=['5.7.44-log\n','root@localhost\n',"GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' WITH GRANT OPTION\n",'0\n']
+  runner=MagicMock(side_effect=[SimpleNamespace(returncode=0,stdout=s,stderr='') for s in results])
+  with patch.object(m.os,'geteuid',return_value=0),patch.object(m,'CONFIG',self.config()):out=m.preflight('existing','mysql',runner)
+  self.assertEqual(out['result'],'READONLY_DBA_PREFLIGHT_PASS');self.assertEqual(out['sql_writes'],0)
+  self.assertTrue(out['readonly_account_absent']);self.assertTrue(out['private_files_absent'])
+  self.assertTrue(all(c.kwargs['input'].startswith(('SELECT','SHOW')) for c in runner.call_args_list))
+ def test_collision_stops_before_any_sql_or_creation(self):
+  m=module('dba-once');config=self.config();config.__truediv__.return_value.exists.return_value=True;runner=MagicMock()
+  with patch.object(m.os,'geteuid',return_value=0),patch.object(m,'CONFIG',config):
+   with self.assertRaisesRegex(RuntimeError,'COLLISION'):m.bootstrap('existing','mysql',runner)
+  runner.assert_not_called()
  def test_ephemeral_admin_requires_real_interactive_session_and_quotes_client_options(self):
   m=module('dba-authenticated-once')
   with patch.object(m.os,'geteuid',return_value=997):
