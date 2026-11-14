@@ -15,6 +15,9 @@
 @foreach(['score_delivery_time'=>'交稿','score_compliance'=>'字數／格式','score_professionalism'=>'專業度','score_interaction_avg'=>'週互動平均','score_initiative'=>'主動性','score_winrate_bonus'=>'勝率加分','score_extra_adjustment'=>'額外調整','total_score'=>'總分'] as $field=>$label)
 <tr><th>{{ $label }}</th><td>{{ $current['view'][$field] ?? '—' }}</td><td>{{ $current['rating'][$field] ?? '—' }}</td></tr>@endforeach
 </tbody></table></div><p>統計頁勝率包含代班稿；評級計算排除代班稿。兩者沿用原系統的不同口徑。</p></section>
+<section class="card eval-section"><h2>賽果表現</h2><div class="table-scroll"><table class="data-table"><thead><tr><th>統計範圍</th><th>勝</th><th>負</th><th>勝率</th></tr></thead><tbody>
+@foreach(['month'=>'當月一般短稿','bonus'=>'當月 BONUS','recent10'=>'最近十場（全期間）'] as $key=>$label)<tr><th>{{ $label }}</th><td>{{ $current['performance'][$key]['wins']??'—' }}</td><td>{{ $current['performance'][$key]['losses']??'—' }}</td><td>{{ isset($current['performance'][$key]['rate'])?$current['performance'][$key]['rate'].'%':'—' }}</td></tr>@endforeach
+</tbody></table></div><p>最近十場不足十場時不顯示勝率。連續{{ ($current['performance']['streak']['outcome']??null)===1?'勝':'負' }}：{{ $current['performance']['streak']['count']??0 }}（原規則最多檢視二十場）。</p></section>
 <section class="card eval-section"><h2>互動與人工評分</h2>
 @if($manage)<form method="post" action="{{ route('ppb.evaluations.save',[$report['subject']['type'],$report['subject']['id']]) }}">
 @include('ppb.evaluations.request')<input type="hidden" name="operation" value="manual"><div class="eval-grid">

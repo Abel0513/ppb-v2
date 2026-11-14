@@ -47,9 +47,15 @@ class EvaluationService
         $base=$current['level']??(int)($snapshot['profile']['rating_level']??2);
         if(!in_array($base,[0,1,2,3],true))throw new \RuntimeException('UNVERIFIED_PROFILE_RATING_LEVEL');
         $current['next_rating']=$this->rating->rating($base,$previous['level'],(int)$current['rating']['total_score'],(int)$previous['rating']['total_score']);
+        $recent=[];
+        foreach($snapshot['recent'] as $row)$recent[]=$row+['_source_type'=>'legacy'];
+        $recent=array_merge($recent,$this->nativeRecent($subject));
+        usort($recent,fn($a,$b)=>[$b['recommended_time'],$b['_source_type'],(int)$b['id']]<=>[$a['recommended_time'],$a['_source_type'],(int)$a['id']]);
+        $recent=array_slice($recent,0,20);
+        $current['performance']=(new EvaluationPerformance)->summarize($current['selected'],$recent);
         return ['subject'=>$subject,'month'=>$month,'previous_month'=>$prior,'source_sha256'=>$sourceHash,'legacy_sha256'=>$snapshot['source_sha256'],
             'manual'=>$manuals[$month],'current'=>$current,'previous'=>$previous,'revision'=>$local->has($month)?$local[$month]->revision:0,
-            'saved_next_rating'=>$local->has($month)?$local[$month]->next_rating_level:null,'recent'=>$snapshot['recent'],'source_rows'=>count($rows),
+            'saved_next_rating'=>$local->has($month)?$local[$month]->next_rating_level:null,'recent'=>$recent,'source_rows'=>count($rows),
             'native_attendance_video_supported'=>false];
     }
 
@@ -59,6 +65,17 @@ class EvaluationService
         if($local->has($previous)&&$local[$previous]->next_rating_level!==null)return (int)$local[$previous]->next_rating_level;
         foreach($snapshot['ratings'] as $r)if($r['rating_month']===$period)return (int)$r['rating_level'];
         return null; // Source salary falls back to2; do not invent stored history.
+    }
+
+    private function nativeRecent(array $subject): array
+    {
+        if(($subject['native_id']??null)===null)return [];
+        $rows=DB::table('ppb_submissions as p')->join('ppb_games as g','g.id','=','p.game_id')->join('ppb_assignments as a','a.id','=','p.assignment_id')
+            ->join('ppb_evaluation_ratings as r',fn($q)=>$q->on('r.source_id','=','p.id')->where('r.source_type','v2'))
+            ->where('p.submitted_analyst_id',(int)$subject['native_id'])->whereColumn('p.submitted_analyst_id','a.original_analyst_id')
+            ->whereNull('p.legacy_source_pick_id')->whereNotNull('p.submitted_at')->whereNotNull('g.recommended_at')->where('p.kind','pick')->whereIn('r.result_state',[1,2])
+            ->orderByDesc('g.recommended_at')->orderByDesc('p.id')->limit(20)->get(['p.id','g.recommended_at','r.result_state']);
+        return $rows->map(fn($r)=>['id'=>(int)$r->id,'recommended_time'=>CarbonImmutable::parse($r->recommended_at,'UTC')->tz('Asia/Taipei')->format('Y-m-d H:i:s'),'is_win'=>(int)$r->result_state,'_source_type'=>'v2'])->all();
     }
 
     private function nativeRows(CarbonImmutable $date,array $subject): array
