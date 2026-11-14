@@ -82,8 +82,10 @@ class SQLBoundary(unittest.TestCase):
   prefix="$c=['schema'=>'old','tables'=>['old.scores'=>['data_columns'=>['id','score']]]];"
   grants=['GRANT USAGE ON *.* TO u','GRANT REFERENCES, SHOW VIEW ON `old`.* TO u','GRANT SELECT (`id`, `score`) ON `old`.`scores` TO u']
   result=self.php_case(prefix+'echo json_encode(checkedGrants(json_decode('+json.dumps(json.dumps(grants))+',true),$c));')
+  profile=prefix.replace('old.scores','old.analyst_profiles');profile_grants=[g.replace('`scores`','`analyst_profiles`') for g in grants]
+  check=self.php_case(profile+'echo json_encode(checkedGrants(json_decode('+json.dumps(json.dumps(profile_grants))+',true),$c));');self.assertEqual(check.returncode,0,check.stdout+check.stderr)
   self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-  for bad in ['GRANT SELECT ON `old`.* TO u','GRANT INSERT ON `old`.`scores` TO u','GRANT SELECT (`password`) ON `old`.`scores` TO u','GRANT EXECUTE ON *.* TO u','GRANT FILE ON *.* TO u','GRANT SELECT (`id`) ON `other`.`scores` TO u','GRANT REFERENCES, SHOW VIEW ON `other`.* TO u']:
+  for bad in ['GRANT SELECT ON `old`.* TO u','GRANT INSERT ON `old`.`scores` TO u','GRANT SELECT (`password`) ON `old`.`scores` TO u','GRANT EXECUTE ON *.* TO u','GRANT FILE ON *.* TO u','GRANT SUPER ON *.* TO u','GRANT PROXY ON x TO u','GRANT SELECT (`id`) ON `old`.`scores` TO u WITH GRANT OPTION','GRANT SELECT (`id`) ON `other`.`scores` TO u','GRANT REFERENCES, SHOW VIEW ON `other`.* TO u']:
    result=self.php_case(prefix+'checkedGrants(json_decode('+json.dumps(json.dumps(grants+[bad]))+',true),$c);')
    self.assertEqual(result.returncode,2,bad)
  def test_request_filters_are_bound_and_cannot_be_sql(self):
@@ -119,5 +121,12 @@ class DocumentContract(unittest.TestCase):
   result=m.invoke({'operation':'inventory'},call)
   self.assertEqual(result['reason'],'REVIEWED_READER_NOT_INSTALLED');self.assertIsNone(result['ssm_command_id'])
   self.assertEqual(len(calls),2)
+
+class DBAConnection(unittest.TestCase):
+ def test_no_implicit_connection_or_old_application_config_fallback(self):
+  m=module('dba-once')
+  for args in [{},{'defaults_file':'/www/wwwroot/3.231.229.26/Application/Common/Conf/db.php'},{'login_path':'../escape'},{'login_path':'a','defaults_file':'/root/.my.cnf'}]:
+   with self.assertRaises(RuntimeError):m.management_options(**args)
+  self.assertEqual(m.management_options(login_path='existing-approved-dba'),['--no-defaults','--login-path=existing-approved-dba'])
 
 if __name__=='__main__':unittest.main()

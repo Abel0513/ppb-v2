@@ -11,7 +11,7 @@ function ident($s){must(is_string($s)&&preg_match('/^[a-zA-Z_][a-zA-Z0-9_]{0,63}
 function checkedGrants(array $grants,array $catalog):array {
  $seen=[];$metadata=false;
  foreach($grants as $grant){
-  must(!preg_match('/GRANT OPTION|PROXY|EXECUTE|FILE|SUPER|ALL PRIVILEGES/i',$grant),'DB_WRITE_OR_GLOBAL_AUTHORITY_DENIED');
+  must(!preg_match('/\bWITH GRANT OPTION\b/i',$grant),'DB_WRITE_OR_GLOBAL_AUTHORITY_DENIED');
   if(preg_match('/^GRANT USAGE ON \*\.\* TO /',$grant))continue;
   if(preg_match('/^GRANT ([A-Z ,]+) ON `([^`]+)`\.\* TO /',$grant,$m)){
     $privs=array_map('trim',explode(',',$m[1]));must(!array_diff($privs,['REFERENCES','SHOW VIEW'])&&$m[2]===$catalog['schema'],'METADATA_GRANT_SCOPE_DENIED');$metadata=true;continue;

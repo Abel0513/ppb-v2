@@ -16,13 +16,22 @@ def ident(value):
  need(bool(re.fullmatch('[A-Za-z_][A-Za-z0-9_]{0,63}',value)),'IDENTIFIER_DENIED');return '`'+value+'`'
 def safe_column(name,column,typ,kind):
  return kind=='BASE TABLE' and not TABLE_DENY.search(name) and not SENSITIVE.search(column) and typ in NUMERIC|DATES
-def bootstrap(login_path,mysql,run=subprocess.run):
+def management_options(login_path=None,defaults_file=None):
+ need(bool(login_path)!=bool(defaults_file),'ONE_EXPLICIT_EXISTING_DBA_CONNECTION_REQUIRED')
+ if login_path:
+  need(bool(re.fullmatch('[A-Za-z0-9_-]{1,80}',login_path)),'EXPLICIT_EXISTING_DBA_LOGIN_PATH_REQUIRED')
+  return ['--no-defaults','--login-path='+login_path]
+ path=Path(defaults_file);resolved=path.resolve()
+ need(path.is_absolute() and not path.is_symlink() and any(resolved==Path(base) or Path(base) in resolved.parents for base in ['/root','/etc/mysql']),'ADMIN_DEFAULTS_PATH_DENIED')
+ st=path.stat();need(stat.S_ISREG(st.st_mode) and st.st_uid==0 and st.st_nlink==1 and st.st_mode&0o077==0,'ADMIN_DEFAULTS_FILE_UNSAFE')
+ return ['--defaults-file='+str(resolved),'--no-login-paths']
+def bootstrap(login_path,mysql,run=subprocess.run,defaults_file=None):
  need(os.geteuid()==0,'AUTHORIZED_OS_ADMIN_REQUIRED')
- need(bool(re.fullmatch('[A-Za-z0-9_-]{1,80}',login_path)),'EXPLICIT_EXISTING_DBA_LOGIN_PATH_REQUIRED')
+ connection=management_options(login_path,defaults_file)
  need(CONFIG.is_dir() and not CONFIG.is_symlink() and CONFIG.stat().st_uid==0,'READER_INSTALL_REQUIRED')
  for name in ['credentials.json','catalog.json']:need(not (CONFIG/name).exists() and not (CONFIG/name).is_symlink(),'READONLY_SETUP_COLLISION_STOP')
  def sql(query):
-  p=run([mysql,'--no-defaults','--login-path='+login_path,'--protocol=SOCKET','--batch','--raw','--skip-column-names','--connect-timeout=5'],input=query,text=True,capture_output=True,timeout=30)
+  p=run([mysql,*connection,'--protocol=SOCKET','--batch','--raw','--skip-column-names','--connect-timeout=5'],input=query,text=True,capture_output=True,timeout=30)
   need(p.returncode==0,'DBA_SQL_FAILED_STOP_NO_FORCE');return p.stdout
  need(sql('SELECT VERSION();').startswith('5.7.'),'MYSQL57_REQUIRED')
  need(sql("SELECT COUNT(*) FROM mysql.user WHERE User='ppb_legacy_ro';").strip()=='0','READONLY_USER_EXISTS_STOP')
@@ -63,7 +72,7 @@ def bootstrap(login_path,mysql,run=subprocess.run):
  sql("ALTER USER 'ppb_legacy_ro'@'localhost' ACCOUNT UNLOCK;")
  return dict(result='READONLY_DBA_PROVISIONED_VERIFY_NEXT',schema=schema,tables=len(allowed),password_exported=False,old_business_write_statements=0,new_principal=ACCOUNT+'@localhost')
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('--login-path',required=True);p.add_argument('--mysql',default='/www/server/mysql/bin/mysql');a=p.parse_args()
- try:print(json.dumps(bootstrap(a.login_path,a.mysql)))
+ p=argparse.ArgumentParser();group=p.add_mutually_exclusive_group(required=True);group.add_argument('--login-path');group.add_argument('--defaults-file');p.add_argument('--mysql',default='/www/server/mysql/bin/mysql');a=p.parse_args()
+ try:print(json.dumps(bootstrap(a.login_path,a.mysql,defaults_file=a.defaults_file)))
  except Exception as exc:
   code=str(exc);print(json.dumps(dict(result='BLOCKED',reason=code if re.fullmatch('[A-Z0-9_]{1,100}',code) else 'DBA_SETUP_NOT_VERIFIED')));raise SystemExit(2)
