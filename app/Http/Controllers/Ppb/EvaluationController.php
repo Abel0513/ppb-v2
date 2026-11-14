@@ -28,21 +28,31 @@ class EvaluationController extends Controller
             return response()->streamDownload(function()use($values){$f=fopen('php://output','w');fwrite($f,"\xEF\xBB\xBF");fputcsv($f,['分析師','月份','短稿','長稿','影片','遲到','缺勤','合計'],',','"','');
                 fputcsv($f,array_map(fn($v)=>is_string($v)&&preg_match('/^[=+@\-\t\r]/u',$v)?"'".$v:$v,$values),',','"','');fclose($f);},'evaluation-'.$report['month'].'.csv',['Content-Type'=>'text/csv; charset=UTF-8','Cache-Control'=>'private,no-store']);
         }
-        return response()->view('ppb.evaluations.show',compact('report'))->header('Cache-Control','private,no-store');
+        return response()->view('ppb.evaluations.show',['report'=>$report,'subjects'=>$this->subjects->all()])->header('Cache-Control','private,no-store');
     }
     public function save(Request $request,string $type,int $id)
     {
         $subject=$this->subjects->get($type,$id);$month=$this->month($request);
-        $base=$request->validate(['request_id'=>['required','uuid'],'revision'=>['required','integer','min:0'],'source_sha256'=>['required','regex:/^[a-f0-9]{64}$/D'],'operation'=>['required',Rule::in(['manual','rate','rebuild'])]]);
+        $base=$request->validate(['request_id'=>['required','uuid'],'revision'=>['required','integer','min:0'],'source_sha256'=>['required','regex:/^[a-f0-9]{64}$/D'],'operation'=>['required',Rule::in(['manual','rate','rebuild','input'])]]);
         $rules=[];
         if($base['operation']==='manual'){
-            foreach(range(1,5) as $w)$rules['score_interaction_w'.$w]=['present','nullable','numeric','between:-9999,9999'];
-            foreach(['score_interaction_feedback','score_initiative','score_extra_adjustment'] as $f)$rules[$f]=['required','integer','between:-9999,9999'];
+            foreach(range(1,5) as $w)$rules['score_interaction_w'.$w]=['present','nullable','numeric','decimal:0,2','between:-999999.99,999999.99'];
+            $rules['score_interaction_feedback']=['required','integer','between:-32768,32767'];
+            foreach(['score_initiative','score_extra_adjustment'] as $f)$rules[$f]=['required','integer','between:-2147483648,2147483647'];
         }elseif($base['operation']==='rate'){
             $rules=['source_type'=>['required',Rule::in(['legacy','v2'])],'source_id'=>['required','integer','min:1']];
             foreach(LegacyScheduleCalculator::RATING_FIELDS as $f)$rules[$f]=['required','integer','between:-32768,32767'];
             if($request->input('source_type')==='v2')$rules['result_state']=['present','nullable','integer',Rule::in([0,1,2])];
             elseif($request->has('result_state'))abort(422);
+        }
+        if($base['operation']==='input'){
+            $kind=$request->validate(['input_kind'=>['required',Rule::in(['attendance','video'])]])['input_kind'];
+            $rules=['input_kind'=>['required',Rule::in([$kind])]];
+            if($kind==='attendance')$rules+=['game_id'=>['required','integer','min:1'],'attendance_status'=>['present','nullable','integer',Rule::in([1,2])]];
+            else{
+                $keys=array_map(fn($s)=>$s['type'].':'.$s['id'],$this->subjects->all());
+                $rules+=['video_id'=>['nullable','integer','min:1'],'scheduled_at'=>['required','date_format:Y-m-d\\TH:i'],'guest_1'=>['required',Rule::in($keys)],'guest_2'=>['nullable',Rule::in($keys)],'guest_3'=>['nullable',Rule::in($keys)],'cancelled'=>['required','boolean']];
+            }
         }
         $payload=$request->validate($rules);
         $receipt=$this->writer->save($subject,$month,$base['operation'],$payload,$base['request_id'],(int)$base['revision'],$base['source_sha256'],(int)Auth::guard('ppb')->id());

@@ -11,7 +11,7 @@ class EvaluationWriter
     public function __construct(private EvaluationService $service,private LegacyInteractionCalculator $interaction) {}
     public function save(array $subject,string $month,string $operation,array $payload,string $requestId,int $revision,string $sourceHash,int $actor): array
     {
-        abort_unless(in_array($operation,['manual','rate','rebuild'],true),422);
+        abort_unless(in_array($operation,['manual','rate','rebuild','input'],true),422);
         abort_unless(preg_match('/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iD',$requestId),422);
         $fingerprint=hash('sha256',json_encode([$subject['type'],$subject['id'],$month,$operation,$payload,$revision,$sourceHash,$actor],JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
         $existing=DB::table('ppb_evaluation_events')->where('request_id',$requestId)->first();
@@ -32,6 +32,7 @@ class EvaluationWriter
             if($operation==='manual'){
                 $weeks=array_intersect_key($payload,array_fill_keys(array_map(fn($w)=>'score_interaction_w'.$w,range(1,5)),true));
                 $changes=array_replace($changes,$this->interaction->manual($weeks,$payload['score_interaction_feedback']??0));
+                abort_unless($changes['score_interaction_avg']===null||abs($changes['score_interaction_avg'])<=999999.99,422,'互動平均超出可儲存範圍。');
                 $changes['score_initiative']=(int)$payload['score_initiative'];$changes['score_extra_adjustment']=(int)$payload['score_extra_adjustment'];
             }elseif($operation==='rate'){
                 $pick=null;
@@ -48,9 +49,12 @@ class EvaluationWriter
                 else DB::table('ppb_evaluation_ratings')->insert($values+['source_type'=>$payload['source_type'],'source_id'=>$payload['source_id'],'created_at'=>now()]);
                 $fresh=$this->service->load($subject,$month);
                 foreach(['score_delivery_time','score_compliance','score_professionalism'] as $f)$changes[$f]=$fresh['current']['cached'][$f];
+            }elseif($operation==='input'){
+                $inputChange=(new EvaluationInputs)->write($subject,$month,$payload,$report['inputs'],$actor);
             }else $changes['next_rating_level']=$report['current']['next_rating']['rating_level'];
             $evaluation->fill($changes+['source_sha256'=>$sourceHash,'actor_id'=>$actor,'revision'=>$revision+1]);$evaluation->save();
             $after=['evaluation'=>$evaluation->getAttributes(),'operation_payload'=>$payload];
+            if(isset($inputChange))$after['input_change']=$inputChange;
             DB::table('ppb_evaluation_events')->insert(['evaluation_id'=>$evaluation->id,'request_id'=>$requestId,'operation'=>$operation,'payload_sha256'=>$fingerprint,'actor_id'=>$actor,'before_json'=>json_encode($before,JSON_THROW_ON_ERROR),'after_json'=>json_encode($after,JSON_THROW_ON_ERROR),'created_at'=>now()]);
             return ['replayed'=>false,'request_id'=>$requestId,'revision'=>$evaluation->revision];
         },1);

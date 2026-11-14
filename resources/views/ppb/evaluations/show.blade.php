@@ -21,8 +21,8 @@
 <section class="card eval-section"><h2>互動與人工評分</h2>
 @if($manage)<form method="post" action="{{ route('ppb.evaluations.save',[$report['subject']['type'],$report['subject']['id']]) }}">
 @include('ppb.evaluations.request')<input type="hidden" name="operation" value="manual"><div class="eval-grid">
-@foreach(range(1,5) as $week)<label>第 {{ $week }} 週<input class="field" type="number" step="0.01" min="-9999" max="9999" name="score_interaction_w{{ $week }}" value="{{ old('score_interaction_w'.$week,$report['manual']['score_interaction_w'.$week]) }}"></label>@endforeach
-@foreach(['score_interaction_feedback'=>'互動回饋','score_initiative'=>'主動性','score_extra_adjustment'=>'額外調整'] as $field=>$label)<label>{{ $label }}<input class="field" type="number" min="-9999" max="9999" name="{{ $field }}" value="{{ old($field,$report['manual'][$field]) }}" required></label>@endforeach
+@foreach(range(1,5) as $week)<label>第 {{ $week }} 週<input class="field" type="number" step="0.01" min="-999999.99" max="999999.99" name="score_interaction_w{{ $week }}" value="{{ old('score_interaction_w'.$week,$report['manual']['score_interaction_w'.$week]) }}"></label>@endforeach
+@foreach(['score_interaction_feedback'=>'互動回饋','score_initiative'=>'主動性','score_extra_adjustment'=>'額外調整'] as $field=>$label)<label>{{ $label }}<input class="field" type="number" name="{{ $field }}" value="{{ old($field,$report['manual'][$field]) }}" required></label>@endforeach
 </div><p>留白不計入平均，0 分會計入；回饋加在各週平均之後。</p><button class="action">儲存人工評分</button></form>
 @else<p>您目前只有檢視權限。</p>@endif</section>
 <section class="card eval-section"><h2>評級與升降級</h2><p>本月等級：{{ $current['level']===null?'尚無歷史紀錄（薪酬採原規則等級 2）':$current['level'] }}；前月評級分數：{{ $report['previous']['rating']['total_score'] }}；下月試算：{{ $current['next_rating']['rating_level'] }}；已保存下月等級：{{ $report['saved_next_rating'] ?? '未保存' }}。</p>
@@ -31,6 +31,19 @@
 <section class="card eval-section"><h2>薪酬與缺勤</h2><div class="eval-grid">@foreach(['short'=>'短稿','long'=>'長稿','video'=>'影片','late'=>'遲到扣款','absent'=>'缺勤扣款','total'=>'合計'] as $field=>$label)<p>{{ $label }}：<strong>{{ $current['salary'][$field] }}</strong></p>@endforeach</div>
 <p>短稿 {{ $current['counts']['salary_short'] }} 篇；長稿 {{ $current['counts']['salary_long'] }} 篇；代班缺席 {{ $current['counts']['absences'] }} 次。薪酬計件與評分選取分開。</p>
 @foreach($current['deductions']['deductions'] as $amount)<span>缺勤／遲到 {{ $amount }}　</span>@endforeach</section>
+@if($manage && isset($report['inputs']))
+<section class="card eval-section"><h2>V2 出勤登錄與更正</h2><p>實際代班投稿按賽事與原分析師計一次缺勤。更正只保存於 V2；舊系統出勤不可在此刪除。</p>
+<form method="post" action="{{ route('ppb.evaluations.save',[$report['subject']['type'],$report['subject']['id']]) }}">@include('ppb.evaluations.request')<input type="hidden" name="operation" value="input"><input type="hidden" name="input_kind" value="attendance"><label>本月 V2 原生賽事<select class="field" name="game_id" required><option value="">請選擇</option>@foreach($report['inputs']['games'] as $game)<option value="{{ $game['id'] }}">#{{ $game['id'] }}・{{ $game['recommended_time'] }}</option>@endforeach</select></label>
+<label>狀態<select class="field" name="attendance_status"><option value="1">遲到（扣 50）</option><option value="2">缺勤（首次扣 100，其後扣 200）</option><option value="">撤銷此筆 V2 缺勤／扣款，保留更正紀錄</option></select></label><button class="action">保存出勤更正</button></form>
+@foreach($report['inputs']['attendance'] as $a)<p>#{{ $a['gid'] }}・{{ $a['recommended_time'] }}・{{ $a['attendance_status']===1?'遲到':'缺勤' }}</p>@endforeach</section>
+<section class="card eval-section"><h2>V2 影片參與</h2><p>每個排程每位來賓計 400，同一人佔多個來賓欄仍只計一次。此處不修改舊影片排程，也不傳送 LINE 訊息。</p>
+@foreach(array_merge([null],$report['inputs']['videos']) as $video)
+<details><summary>{{ $video?'影片 #'.$video['id'].'・'.Carbon\CarbonImmutable::parse($video['scheduled_at'],'UTC')->tz('Asia/Taipei')->format('m/d H:i'): '新增 V2 影片' }}</summary>
+<form method="post" action="{{ route('ppb.evaluations.save',[$report['subject']['type'],$report['subject']['id']]) }}">@include('ppb.evaluations.request')<input type="hidden" name="operation" value="input"><input type="hidden" name="input_kind" value="video">@if($video)<input type="hidden" name="video_id" value="{{ $video['id'] }}">@endif
+<div class="eval-grid"><label>日期時間（台北）<input class="field" type="datetime-local" name="scheduled_at" value="{{ $video?Carbon\CarbonImmutable::parse($video['scheduled_at'],'UTC')->tz('Asia/Taipei')->format('Y-m-d\TH:i'):$report['month'].'-01T12:00' }}" required></label>
+@foreach(range(1,3) as $slot)<label>來賓 {{ $slot }}<select class="field" name="guest_{{ $slot }}" @required($slot===1)><option value="">無</option>@foreach($subjects as $guest)@php($guestKey=$guest['type'].':'.$guest['id'])<option value="{{ $guestKey }}" @selected(($video['guest_'.$slot]??($slot===1?$report['subject']['type'].':'.$report['subject']['id']:null))===$guestKey)>{{ $guest['label'] }}</option>@endforeach</select></label>@endforeach</div>
+<input type="hidden" name="cancelled" value="0"><label><input type="checkbox" name="cancelled" value="1" @checked($video['cancelled']??false)>取消此影片計酬（保留歷程）</label><button class="action">保存影片參與</button></form></details>@endforeach</section>
+@endif
 <section class="card eval-section"><h2>當月稿件與評分</h2>
 @forelse($current['selected']['records'] as $pick)<details><summary>{{ $pick['recommended_time'] }}・{{ $pick['_source_type'] }} #{{ $pick['_source_id'] }}・{{ (int)$pick['is_long']===1?'長稿':((int)$pick['is_bonus']===1?'BONUS':'短稿') }}・{{ [0=>'未結算',1=>'勝',2=>'負'][(int)$pick['is_win']]??'未結算' }}</summary>
 @if($manage)<form class="rate-form" method="post" action="{{ route('ppb.evaluations.save',[$report['subject']['type'],$report['subject']['id']]) }}">@include('ppb.evaluations.request')<input type="hidden" name="operation" value="rate"><input type="hidden" name="source_type" value="{{ $pick['_source_type'] }}"><input type="hidden" name="source_id" value="{{ $pick['_source_id'] }}"><div class="eval-grid">

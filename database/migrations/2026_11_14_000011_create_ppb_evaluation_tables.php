@@ -27,6 +27,19 @@ return new class extends Migration {
             $t->foreignId('actor_id')->nullable()->constrained('ppb_accounts')->nullOnDelete();$t->timestamps();
             $t->unique(['source_type','source_id'],'ppb_eval_source_rating_unique');$t->index(['subject_type','subject_id','month'],'ppb_eval_rating_subject_month');
         });
+        Schema::create('ppb_evaluation_attendance', function (Blueprint $t) {
+            $t->id();$t->string('subject_type',12);$t->unsignedBigInteger('subject_id');
+            $t->foreignId('game_id')->constrained('ppb_games')->restrictOnDelete();
+            $t->tinyInteger('attendance_status')->nullable();$t->foreignId('waived_submission_id')->nullable()->constrained('ppb_submissions')->restrictOnDelete(); // null is an explicit V2 waiver, not deletion of history.
+            $t->unsignedBigInteger('revision')->default(1);$t->foreignId('actor_id')->nullable()->constrained('ppb_accounts')->nullOnDelete();$t->timestamps();
+            $t->unique(['subject_type','subject_id','game_id'],'ppb_eval_attendance_subject_game');
+        });
+        Schema::create('ppb_evaluation_videos', function (Blueprint $t) {
+            $t->id();$t->dateTime('scheduled_at');
+            foreach(range(1,3) as $slot)$t->string('guest_'.$slot,32)->nullable()->index();
+            $t->boolean('cancelled')->default(false);$t->unsignedBigInteger('revision')->default(1);
+            $t->foreignId('actor_id')->nullable()->constrained('ppb_accounts')->nullOnDelete();$t->timestamps();$t->index('scheduled_at');
+        });
         Schema::create('ppb_evaluation_events', function (Blueprint $t) {
             $t->id();$t->foreignId('evaluation_id')->constrained('ppb_evaluations')->restrictOnDelete();
             $t->uuid('request_id')->unique();$t->string('operation',32);$t->char('payload_sha256',64);

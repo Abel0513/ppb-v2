@@ -31,18 +31,22 @@ class EvaluationService
         }unset($row);
         $local=PpbEvaluation::where('subject_type',$subject['type'])->where('subject_id',$subject['id'])->whereIn('month',[$date->subMonths(2)->format('Y-m'),$prior,$month])->get()->keyBy('month');
         $sourceHash=hash('sha256',json_encode([$snapshot['source_sha256'],$native,$nativeSchedules],JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
-        $reports=[];$manuals=[];
+        $reports=[];$manuals=[];$inputs=[];
         foreach([$prior,$month] as $period){
             $manual=$this->report->defaults($period);
             foreach($snapshot['evaluations'] as $e)if($e['eval_month']===$period)$manual=array_replace($manual,array_intersect_key($e,$manual));
             if($local->has($period))$manual=array_replace($manual,array_intersect_key($local[$period]->getAttributes(),$manual));
             $manuals[$period]=$manual;
             $selected=$this->selector->select($rows,$key,$period,$schedules);
+            $inputs[$period]=(new EvaluationInputs)->read($subject,$period,$native);
             $attendance=array_values(array_filter($snapshot['attendance'],fn($a)=>substr($a['recommended_time'],0,7)===$period));
+            $attendance=array_merge($attendance,$inputs[$period]['attendance']);
+            usort($attendance,fn($a,$b)=>[$a['recommended_time'],(int)$a['gid']]<=>[$b['recommended_time'],(int)$b['gid']]);
             $level=$this->level($snapshot,$local,$period);
-            $reports[$period]=$this->report->calculate($selected,$manual,$schedules,$attendance,(int)($snapshot['video_counts'][$period]??0),$level);
+            $reports[$period]=$this->report->calculate($selected,$manual,$schedules,$attendance,(int)($snapshot['video_counts'][$period]??0)+$inputs[$period]['video_count'],$level);
             $reports[$period]['level']=$level;$reports[$period]['selected']=$selected;
         }
+        $sourceHash=hash('sha256',json_encode([$sourceHash,$inputs],JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
         $current=$reports[$month];$previous=$reports[$prior];
         $base=$current['level']??(int)($snapshot['profile']['rating_level']??2);
         if(!in_array($base,[0,1,2,3],true))throw new \RuntimeException('UNVERIFIED_PROFILE_RATING_LEVEL');
@@ -56,7 +60,7 @@ class EvaluationService
         return ['subject'=>$subject,'month'=>$month,'previous_month'=>$prior,'source_sha256'=>$sourceHash,'legacy_sha256'=>$snapshot['source_sha256'],
             'manual'=>$manuals[$month],'current'=>$current,'previous'=>$previous,'revision'=>$local->has($month)?$local[$month]->revision:0,
             'saved_next_rating'=>$local->has($month)?$local[$month]->next_rating_level:null,'recent'=>$recent,'source_rows'=>count($rows),
-            'native_attendance_video_supported'=>false];
+            'native_attendance_video_supported'=>true,'inputs'=>$inputs[$month]];
     }
 
     private function level(array $snapshot,$local,string $period): ?int
@@ -71,8 +75,17 @@ class EvaluationService
     {
         if(($subject['native_id']??null)===null)return [];
         $rows=DB::table('ppb_submissions as p')->join('ppb_games as g','g.id','=','p.game_id')->join('ppb_assignments as a','a.id','=','p.assignment_id')
+            ->leftJoin('ppb_evaluation_attendance as c',function($q){
+                $q->on('c.game_id','=','g.id')->on('c.waived_submission_id','=','p.id')->whereNull('c.attendance_status');
+                $maps=$this->subjects->mappings();
+                if(!$maps){$q->where('c.subject_type','v2')->on('c.subject_id','=','a.original_analyst_id');return;}
+                $type='CASE a.original_analyst_id';$id='CASE a.original_analyst_id';$typeBindings=[];$idBindings=[];
+                foreach($maps as $legacy=>$native){$type.=' WHEN ? THEN ?';$id.=' WHEN ? THEN ?';array_push($typeBindings,$native,'legacy');array_push($idBindings,$native,$legacy);}
+                $q->whereRaw("BINARY c.subject_type = BINARY (".$type." ELSE 'v2' END)",$typeBindings)->whereRaw('c.subject_id = '.$id.' ELSE a.original_analyst_id END',$idBindings);
+            })
             ->join('ppb_evaluation_ratings as r',fn($q)=>$q->on('r.source_id','=','p.id')->where('r.source_type','v2'))
-            ->where('p.submitted_analyst_id',(int)$subject['native_id'])->whereColumn('p.submitted_analyst_id','a.original_analyst_id')
+            ->whereColumn('a.game_id','p.game_id')->whereColumn('a.kind','p.kind')
+            ->where('p.submitted_analyst_id',(int)$subject['native_id'])->where(fn($q)=>$q->whereColumn('p.submitted_analyst_id','a.original_analyst_id')->orWhereNotNull('c.id'))
             ->whereNull('p.legacy_source_pick_id')->whereNotNull('p.submitted_at')->whereNotNull('g.recommended_at')->where('p.kind','pick')->whereIn('r.result_state',[1,2])
             ->orderByDesc('g.recommended_at')->orderByDesc('p.id')->limit(20)->get(['p.id','g.recommended_at','r.result_state']);
         return $rows->map(fn($r)=>['id'=>(int)$r->id,'recommended_time'=>CarbonImmutable::parse($r->recommended_at,'UTC')->tz('Asia/Taipei')->format('Y-m-d H:i:s'),'is_win'=>(int)$r->result_state,'_source_type'=>'v2'])->all();
@@ -84,6 +97,7 @@ class EvaluationService
         $nativeId=(int)$subject['native_id'];
         $records=DB::table('ppb_submissions as p')->join('ppb_games as g','g.id','=','p.game_id')->join('ppb_assignments as a','a.id','=','p.assignment_id')
             ->where(fn($q)=>$q->where('p.submitted_analyst_id',$nativeId)->orWhere('a.original_analyst_id',$nativeId))
+            ->whereColumn('a.game_id','p.game_id')->whereColumn('a.kind','p.kind')->whereIn('p.kind',['pick','bonus','long'])
             ->whereNull('p.legacy_source_pick_id')->whereNotNull('p.submitted_at')->whereNotNull('p.submitted_analyst_id')
             ->whereBetween('g.recommended_at',[$date->subMonth()->startOfMonth()->utc()->format('Y-m-d H:i:s'),$date->endOfMonth()->utc()->format('Y-m-d H:i:s')])
             ->orderBy('g.recommended_at')->orderBy('p.id')->limit(2001)
@@ -97,6 +111,11 @@ class EvaluationService
             $p+=['_source_type'=>'v2','_source_id'=>(int)$r->id,'_author_key'=>$author,'_absence_key'=>$sub?$original:null,'_is_substitution'=>$sub,'_schedule_key'=>'v2:'.$r->game_id,
                 'recommended_time'=>CarbonImmutable::parse($r->recommended_at,'UTC')->tz('Asia/Taipei')->format('Y-m-d H:i:s'),'is_win'=>0,'is_bonus'=>$r->kind==='bonus'?1:0,'is_long'=>$r->kind==='long'?1:0];
             $rows[]=$p;$schedules[$p['_schedule_key']]=['id'=>(int)$r->game_id,'market_type'=>(int)$r->market_type];
+        }
+        if($rows){
+            $waivers=DB::table('ppb_evaluation_attendance')->whereIn('game_id',array_map(fn($r)=>(int)substr($r['_schedule_key'],3),$rows))->whereNull('attendance_status')->get(['game_id','subject_type','subject_id','waived_submission_id']);
+            $waived=[];foreach($waivers as $w)$waived[(int)$w->waived_submission_id][$w->subject_type.':'.$w->subject_id]=true;
+            foreach($rows as &$row)if(isset($waived[$row['_source_id']][$row['_absence_key']??''])){$row['_absence_key']=null;$row['_is_substitution']=false;}unset($row);
         }
         return [$rows,$schedules];
     }
