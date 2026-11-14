@@ -32,7 +32,9 @@
     </div>
     @endif
     <a class="admin-menu-item" aria-disabled="true"><span class="admin-menu-icon" aria-hidden="true">✧</span><span>投稿與出勤（未建置）</span></a>
-    <a class="admin-menu-item" aria-disabled="true"><span class="admin-menu-icon" aria-hidden="true">▤</span><span>月評鑑與薪酬（未建置）</span></a>
+    @if(auth('ppb')->user()?->hasPpbPermission('evaluations.view'))
+    <a class="admin-menu-item" href="{{ route('ppb.evaluations.index') }}"><span class="admin-menu-icon" aria-hidden="true">▤</span><span>月評鑑與薪酬</span></a>
+    @endif
     {{-- PPB_UI3_20261104 | Owner-only menu; AccountController/RoleController also enforce owner server-side. --}}
     @if($ppbIsOwner)
     <div class="admin-menu-group" data-admin-menu-group="system">

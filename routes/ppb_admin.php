@@ -73,6 +73,11 @@ Route::prefix('admin')->middleware([
     Route::post('/manuscripts/submissions/{submission}/review', [ManuscriptController::class, 'review'])
         ->whereNumber('submission')->middleware('throttle:30,1')->name('ppb.manuscripts.review');
 
+    // Evaluations remain an administrative workflow, not analyst authentication.
+    Route::get('/evaluations', [\App\Http\Controllers\Ppb\EvaluationController::class,'index'])->middleware(PpbCan::class.':evaluations.view')->name('ppb.evaluations.index');
+    Route::get('/evaluations/{type}/{id}', [\App\Http\Controllers\Ppb\EvaluationController::class,'show'])->whereIn('type',['legacy','v2'])->whereNumber('id')->middleware(PpbCan::class.':evaluations.view')->name('ppb.evaluations.show');
+    Route::post('/evaluations/{type}/{id}', [\App\Http\Controllers\Ppb\EvaluationController::class,'save'])->whereIn('type',['legacy','v2'])->whereNumber('id')->middleware([PpbCan::class.':evaluations.manage','throttle:30,1'])->name('ppb.evaluations.save');
+
     Route::post('/logout', [AdminController::class, 'logout'])
         ->middleware('throttle:10,1')
         ->name('ppb.logout');
