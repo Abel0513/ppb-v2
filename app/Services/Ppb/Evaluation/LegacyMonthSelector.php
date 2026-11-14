@@ -45,7 +45,7 @@ final class LegacyMonthSelector
             $p['_author_key']='legacy:'.(int)$p['analyst_name'];
             $p['_is_substitution']=$p['is_substitute']===null?null:(int)$p['is_substitute']!==0;
             $p['_absence_key']=(int)$p['is_substitute']>1?'legacy:'.(int)$p['is_substitute']:null;
-            $p['_schedule_key']='legacy:'.(int)$p['gid'];$rows[]=$p;
+            $p['_schedule_key']=$p['gid']===null?'legacy:missing':'legacy:'.(int)$p['gid'];$rows[]=$p;
         }
         return $rows;
     }

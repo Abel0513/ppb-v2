@@ -30,18 +30,18 @@ class EvaluationSubjects
     public function all(): array
     {
         $source=Cache::remember('ppb-evaluation-source-profiles-v1',30,fn()=>$this->reader->profiles());
-        $maps=$this->mappings();$native=PpbAnalyst::query()->orderBy('id')->get()->keyBy('id');$out=[];
+        $maps=$this->mappings();$native=PpbAnalyst::query()->orderBy('id')->get(['id','name','display_name','status','user_type'])->keyBy('id');$out=[];
         foreach($source as $profile){
             if(!in_array((int)$profile['user_type'],[0,1],true))continue;
             $id=(int)$profile['id'];$local=isset($maps[$id])?$native->get($maps[$id]):null;
             $out[]=['type'=>'legacy','id'=>$id,'label'=>$local?($local->display_name?:$local->name):'舊分析師 #'.$id,
                 'native_id'=>$local?(int)$local->id:null,'mapped'=>(bool)$local,'sort'=>(int)$profile['sort_id'],
-                'rating_level'=>(int)$profile['rating_level'],'user_type'=>(int)$profile['user_type']];
+                'rating_level'=>(int)$profile['rating_level'],'user_type'=>(int)$profile['user_type'],'status'=>$local?->status];
         }
         foreach($native as $analyst){
-            if($analyst->status!=='active'||!in_array((int)$analyst->user_type,[0,1],true)||in_array((int)$analyst->id,$maps,true))continue;
+            if(!in_array((int)$analyst->user_type,[0,1],true)||in_array((int)$analyst->id,$maps,true))continue;
             $out[]=['type'=>'v2','id'=>(int)$analyst->id,'label'=>$analyst->display_name?:$analyst->name,
-                'native_id'=>(int)$analyst->id,'mapped'=>true,'sort'=>100000+(int)$analyst->id,'rating_level'=>2,'user_type'=>(int)$analyst->user_type];
+                'native_id'=>(int)$analyst->id,'mapped'=>true,'sort'=>100000+(int)$analyst->id,'rating_level'=>2,'user_type'=>(int)$analyst->user_type,'status'=>$analyst->status];
         }
         usort($out,fn($a,$b)=>[$a['sort'],$a['id']]<=>[$b['sort'],$b['id']]);return $out;
     }

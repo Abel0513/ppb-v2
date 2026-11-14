@@ -53,4 +53,12 @@ final class LegacyMonthSelectorTest extends TestCase
         self::assertCount(0,$s['regular']);self::assertCount(0,$s['salary_long']);self::assertCount(2,$s['rated']);self::assertCount(2,$s['salary_short']);
     }
 
+    public function test_missing_schedule_key_is_distinct_from_real_zero_schedule_id(): void
+    {
+        $p=array_fill_keys(LegacyScheduleCalculator::RATING_FIELDS,0)+['id'=>77,'gid'=>null,'analyst_name'=>'2','recommended_time'=>'2026-05-01 00:00:00','is_win'=>1,'is_bonus'=>0,'is_long'=>0,'is_substitute'=>0];
+        $c=new LegacyMonthSelector;$snapshot=['pick_columns'=>array_keys($p),'picks'=>[array_values($p)]];$rows=$c->legacyRows($snapshot);
+        self::assertSame('legacy:missing',$rows[0]['_schedule_key']);self::assertCount(0,$c->select($rows,'legacy:2','2026-05',['legacy:0'=>['market_type'=>2]])['salary_short']);
+        $p['gid']=0;$snapshot['picks']=[array_values($p)];self::assertCount(1,$c->select($c->legacyRows($snapshot),'legacy:2','2026-05',['legacy:0'=>['market_type'=>2]])['salary_short']);
+    }
+
 }

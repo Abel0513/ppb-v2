@@ -109,6 +109,11 @@ class EvaluationMysql57Test extends TestCase
                 DB::table('ppb_submissions')->insert(['id'=>$source,'game_id'=>$game,'assignment_id'=>1,'submitted_analyst_id'=>$native,'kind'=>$kind,'status'=>'legacy_imported','submitted_at'=>'2026-05-01 00:00:00','legacy_source_pick_id'=>$source]);
             }
             $actualSubjects=new EvaluationSubjects($reader);self::assertSame([4=>9],$actualSubjects->mappings());
+            DB::statement('CREATE TEMPORARY TABLE ppb_analysts (id BIGINT PRIMARY KEY,name VARCHAR(100),display_name VARCHAR(100) NULL,status VARCHAR(20),user_type INT,account_id BIGINT NULL) ENGINE=InnoDB');
+            foreach([[9,'active',0],[10,'inactive',0],[11,'active',2],[12,'active',3]] as [$native,$status,$type])DB::table('ppb_analysts')->insert(['id'=>$native,'name'=>'NativeFixture'.$native,'display_name'=>null,'status'=>$status,'user_type'=>$type,'account_id'=>null]);
+            $reader->shouldReceive('profiles')->andReturn([['id'=>4,'sort_id'=>1,'user_type'=>0,'rating_level'=>1]]);
+            $subjectsList=$actualSubjects->all();self::assertCount(2,$subjectsList);self::assertSame('legacy',$subjectsList[0]['type']);self::assertSame(9,$subjectsList[0]['native_id']);self::assertSame('v2',$subjectsList[1]['type']);self::assertSame(10,$subjectsList[1]['id']);self::assertSame('inactive',$subjectsList[1]['status']);
+
             self::assertSame(0,(int)DB::selectOne("SELECT COUNT(*) n FROM information_schema.TABLES WHERE TABLE_SCHEMA='mysql' AND TABLE_NAME LIKE 'ppb_%'")->n);
             DB::disconnect('mysql');
         }finally{
