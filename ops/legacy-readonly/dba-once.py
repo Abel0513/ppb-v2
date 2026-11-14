@@ -24,14 +24,16 @@ def management_options(login_path=None,defaults_file=None):
  path=Path(defaults_file);resolved=path.resolve()
  need(path.is_absolute() and not path.is_symlink() and any(resolved==Path(base) or Path(base) in resolved.parents for base in ['/root','/etc/mysql']),'ADMIN_DEFAULTS_PATH_DENIED')
  st=path.stat();need(stat.S_ISREG(st.st_mode) and st.st_uid==0 and st.st_nlink==1 and st.st_mode&0o077==0,'ADMIN_DEFAULTS_FILE_UNSAFE')
- return ['--defaults-file='+str(resolved),'--no-login-paths']
+ return ['--defaults-file='+str(resolved)]
 def bootstrap(login_path,mysql,run=subprocess.run,defaults_file=None):
  need(os.geteuid()==0,'AUTHORIZED_OS_ADMIN_REQUIRED')
  connection=management_options(login_path,defaults_file)
  need(CONFIG.is_dir() and not CONFIG.is_symlink() and CONFIG.stat().st_uid==0,'READER_INSTALL_REQUIRED')
  for name in ['credentials.json','catalog.json']:need(not (CONFIG/name).exists() and not (CONFIG/name).is_symlink(),'READONLY_SETUP_COLLISION_STOP')
  def sql(query):
-  p=run([mysql,*connection,'--protocol=SOCKET','--batch','--raw','--skip-column-names','--connect-timeout=5'],input=query,text=True,capture_output=True,timeout=30)
+  env={'HOME':'/root','USER':'root','LOGNAME':'root','PATH':'/usr/bin:/bin','LC_ALL':'C'}
+  if defaults_file:env['MYSQL_TEST_LOGIN_FILE']='/dev/null'
+  p=run([mysql,*connection,'--protocol=SOCKET','--batch','--raw','--skip-column-names','--connect-timeout=5','--init-command=','--skip-tee','--skip-pager','--local-infile=0'],input=query,text=True,capture_output=True,timeout=30,env=env)
   need(p.returncode==0,'DBA_SQL_FAILED_STOP_NO_FORCE');return p.stdout
  need(sql('SELECT VERSION();').startswith('5.7.'),'MYSQL57_REQUIRED')
  need(sql("SELECT COUNT(*) FROM mysql.user WHERE User='ppb_legacy_ro';").strip()=='0','READONLY_USER_EXISTS_STOP')

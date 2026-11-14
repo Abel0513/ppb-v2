@@ -67,3 +67,36 @@ No account creation, grants or business query occurs during this probe. Missing
 editor/socket, failed authentication and insufficient proof remain distinct from
 verified absence/availability. Standard files are not automatically loaded because
 arbitrary client init options cannot be assumed safe for a read-only probe.
+
+## Actual connection discovery and no-profile alternative (2026-11-14)
+
+Run43577219294, SSM3a91c40e-0c9b-4699-8110-a6ac150d1d0f:
+root mysql_config_editor returned successfully but neither stream contained any
+named profile. /root/.mylogin.cnf exists root0600; presence is not authentication.
+The five standard management config candidates contained no private root-owned
+usable management file. /tmp/mysql.sock exists; explicit passwordless root on it
+returns MYSQL_ERROR_1045. Authentication plugin and DBA grants are therefore NOT
+verified. No recursive search, credential export, old business query or SQL write.
+
+Do not invent/request a nonexistent login-path. An existing MySQL DBA can use their
+already-authorized INTERACTIVE OS/DB management session to run the installed fixed
+helper below. This does NOT require creating a persistent DBA login profile:
+
+    python3 /www/ppb-v2-deploy/scripts/legacy-readonly/dba-authenticated-once.py
+
+The DBA supplies their existing username/password directly to this LOCAL tool,
+never ChatGPT, GitHub, SSM command parameters or Actions. A root0600 temporary
+client file is used only for the fixed dba-once.py, with SQL history disabled by
+batch mode; the file is removed on normal/error completion. Only the NEW scoped
+readonly credentials remain in /etc/ppb-legacy-ro. No DBA password is returned.
+It refuses noninteractive execution and verifies installed helper bytes, never
+creates a new DBA authority, resets a password or searches old app credentials.
+The defaults-file path now uses the MySQL5.7-compatible fixed login-file override
+rather than unsupported --no-login-paths. The CloudShell helper's tool pin changes
+for this compatibility fix; do not bypass the earlier pin on an old copied script.
+
+Required person/authority: the existing MySQL DBA plus access to the already
+controlled host-management session (they may be the same administrator). AWS IAM
+alone does not supply MySQL authentication. If nobody has such an existing DBA
+session/credential, stop; authorized MySQL credential recovery is a separate
+administrative decision, not something Codex may infer or brute force.
