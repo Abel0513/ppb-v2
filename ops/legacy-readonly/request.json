@@ -1,42 +1,35 @@
 [
   {
-    "operation": "evaluation_summary",
-    "analyst_id": 29,
-    "month": "2026-05"
+    "operation": "select",
+    "table": "pay.pay_analyst_profiles",
+    "columns": [
+      "id",
+      "sort_id",
+      "user_type",
+      "rating_level",
+      "analyst_level"
+    ],
+    "limit": 50
+  },
+  {
+    "operation": "select",
+    "table": "pay.pay_schedule",
+    "columns": [
+      "id",
+      "recommended_time"
+    ],
+    "filters": [
+      {
+        "column": "id",
+        "op": "=",
+        "value": 0
+      }
+    ],
+    "limit": 1
   },
   {
     "operation": "evaluation_summary",
-    "analyst_id": 40,
-    "month": "2026-05"
-  },
-  {
-    "operation": "evaluation_summary",
-    "analyst_id": 49,
-    "month": "2026-05"
-  },
-  {
-    "operation": "evaluation_summary",
-    "analyst_id": 52,
-    "month": "2026-05"
-  },
-  {
-    "operation": "evaluation_summary",
-    "analyst_id": 53,
-    "month": "2026-05"
-  },
-  {
-    "operation": "evaluation_summary",
-    "analyst_id": 54,
-    "month": "2026-05"
-  },
-  {
-    "operation": "evaluation_summary",
-    "analyst_id": 55,
-    "month": "2026-05"
-  },
-  {
-    "operation": "evaluation_summary",
-    "analyst_id": 60,
+    "analyst_id": 2,
     "month": "2026-05"
   }
 ]
