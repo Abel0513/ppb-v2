@@ -32,7 +32,7 @@ def run(q):
     check=subprocess.run(command({'operation':'permissions'},denied),input='{"operation":"permissions"}',capture_output=True,text=True,timeout=70)
     proof=json.loads(check.stdout);need(check.returncode==0 and proof.get('result')=='PASS' and proof['data'].get('legacy_mount_readonly') is True,'OS_READONLY_NOT_VERIFIED')
     socket=None
-    if q.get('operation') in {'db_permissions','schema','select'}:
+    if q.get('operation') in {'db_permissions','schema','select','video_count'}:
         p=Path('/etc/ppb-legacy-ro/credentials.json');need(p.is_file() and not p.is_symlink() and p.stat().st_uid==0 and p.stat().st_mode&0o027==0,'READONLY_DBA_PROVISIONING_REQUIRED')
         config=json.loads(p.read_text());socket=config.get('socket','')
         need(config.get('user')=='ppb_legacy_ro' and isinstance(socket,str) and socket.startswith('/') and not any(c.isspace() for c in socket) and stat.S_ISSOCK(Path(socket).stat().st_mode),'DB_SOCKET_NOT_VERIFIED')

@@ -9,6 +9,7 @@ EXT={'.php','.html','.htm','.js','.css'}
 def need(ok,code):
     if not ok:raise RuntimeError(code)
 def valid(path):
+    if path=='ThinkPHP/Library/Think/Model.class.php':return True
     p=PurePosixPath(path)
     return isinstance(path,str) and len(path)<=240 and not p.is_absolute() and '..' not in p.parts and not DENY.search(path) and p.suffix.lower() in EXT and p.parts[0].lower() in {'application','tpl','template','templates','views','themes'} and (any(x.lower() in {'controller','model','view','views','tpl','template','templates','themes'} for x in p.parts) or path.startswith('Application/Common/Common/'))
 def read(path,root=ROOT):
@@ -41,11 +42,13 @@ def inventory(root=ROOT):
             p=(Path(base)/name).relative_to(root).as_posix();count+=1
             need(count<30000,'SOURCE_INVENTORY_LIMIT')
             if valid(p) and not (root/p).is_symlink():rows.append(p)
+    framework='ThinkPHP/Library/Think/Model.class.php'
+    if (root/framework).is_file() and not (root/framework).is_symlink():rows.append(framework)
     return sorted(rows)
 def operate(q,root=ROOT):
-    need(isinstance(q,dict) and set(q)<= {'operation','path','query','offset','limit','table','columns','filters'},'REQUEST_SCHEMA')
-    op=q.get('operation');need(op in {'inventory','source','search','permissions','db_permissions','schema','select'},'OPERATION_DENIED')
-    if op in {'db_permissions','schema','select'}:
+    need(isinstance(q,dict) and set(q)<= {'operation','path','query','offset','limit','table','columns','filters','analyst_id','start','end'},'REQUEST_SCHEMA')
+    op=q.get('operation');need(op in {'inventory','source','search','permissions','db_permissions','schema','select','video_count'},'OPERATION_DENIED')
+    if op in {'db_permissions','schema','select','video_count'}:
         need(Path('/etc/ppb-legacy-ro/credentials.json').exists(),'READONLY_DBA_PROVISIONING_REQUIRED')
         p=subprocess.run([PHP,'-d','auto_prepend_file=','-d','auto_append_file=','-d','display_errors=0','-d','log_errors=0',str(Path(__file__).with_name('db-worker.php'))],input=json.dumps(q),capture_output=True,text=True,timeout=20)
         data=json.loads(p.stdout);need(p.returncode==0 and data.get('result')=='PASS',data.get('reason','READONLY_DB_STOP'));return data['data']
