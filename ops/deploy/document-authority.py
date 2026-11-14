@@ -86,6 +86,11 @@ def run(call=c.aws,publish=False):
      local=Path(tmp)/'candidate.json';call('s3api','get-object','--bucket',c.BUCKET,'--key',key,str(local));c.need(hashlib.sha256(local.read_bytes()).hexdigest()==sha,'S3_CANDIDATE_READBACK_MISMATCH')
    except RuntimeError as exc:status='CANDIDATE_READBACK_'+reason(exc)
    result['candidates'].append(dict(kind=name,status=status,bucket=c.BUCKET,key=key,sha256=sha))
+  helper=ROOT/'preload-reviewed-documents.py';sha=hashlib.sha256(helper.read_bytes()).hexdigest();key=f'releases/ssm-reviewed/{commit}/preload-{sha}.py'
+  try:
+   call('s3api','put-object','--bucket',c.BUCKET,'--key',key,'--body',str(helper),'--if-none-match','*','--server-side-encryption','AES256')
+   result['management_helper']=dict(status='PUBLISHED_NOT_EXECUTED',bucket=c.BUCKET,key=key,sha256=sha)
+  except RuntimeError as exc:result['management_helper']=dict(status=reason(exc))
  return result
 if __name__=='__main__':
  os.umask(0o077);out=Path('v2-result');out.mkdir(exist_ok=True)
