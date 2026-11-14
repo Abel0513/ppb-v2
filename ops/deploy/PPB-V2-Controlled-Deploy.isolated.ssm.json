@@ -160,7 +160,7 @@
         "runCommand": [
           "set -eu",
           "umask 077",
-          "printf '%s  %s\\n' dfc0285ef5b15237d0ea2422898e6614b1089c00300134d01231cce513834c01 /www/ppb-v2-deploy/scripts/legacy-readonly/prepare.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' f21a5d9b6d77a77cf41fd64b434213afabd54320d40388e6986fd3c4f06e2a0a /www/ppb-v2-deploy/scripts/legacy-readonly/prepare.py | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' 5e3f47952eabcfb6466423cbdf89d20c1f18658a726d80f32d9af36b8bccd915 /www/ppb-v2-deploy/scripts/legacy-readonly/dispatch.py | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' 9d63a1dfccb06a3f6266814e6a6331ff854e9cd892f6bfa8543e6c359067a0e1 /www/ppb-v2-deploy/scripts/legacy-readonly/worker.py | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' 0edca6e664f72c03726717b27786a024add5e23f09133ed9532f1352bf37a7f4 /www/ppb-v2-deploy/scripts/legacy-readonly/source-tokens.php | sha256sum -c - >/dev/null",

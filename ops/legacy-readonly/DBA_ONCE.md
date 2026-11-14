@@ -47,3 +47,23 @@ principal, scoped metadata/column-read grants and NEW private reader files are
 created; the new principal is unlocked last. No old business DDL/DML. A collision
 or SQL error stops without overwriting/forcing. Subsequent runtime db_permissions,
 schema/select evidence is still required before claiming database readiness.
+
+## Fixed management connection probe (read only)
+
+The reviewed installation receipt includes `management_probe`. It runs as root
+only within the existing pinned fixed-tool installation, never the daily reader.
+It calls mysql_config_editor print --all but returns only validated section names;
+password/option text stays in memory and is not logged or saved. It stat's only
+five conventional root client configuration paths, without reading their content.
+Existing files are candidates, NOT verified DBA credentials. No recursive search,
+old application configuration access or credential export.
+
+For exactly one known local socket it tries credentialless root once, then up to
+four existing login paths. All connections force Unix socket, fixed SELECT/SHOW
+metadata only, no init command/tee/pager/local infile. Successful proof requires
+MySQL5.7 and global ALL WITH GRANT OPTION; lesser grants are conservatively
+reported unproven. Authentication plugin metadata is returned only when accessible.
+No account creation, grants or business query occurs during this probe. Missing
+editor/socket, failed authentication and insufficient proof remain distinct from
+verified absence/availability. Standard files are not automatically loaded because
+arbitrary client init options cannot be assumed safe for a read-only probe.
