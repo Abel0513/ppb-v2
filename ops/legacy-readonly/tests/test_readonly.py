@@ -61,7 +61,15 @@ $score=2.5; $row['analyst_id']=12; $model=M('analyst_pick');
  def test_application_code_is_never_executed(self):
   safe=self.safe("<?php throw new Exception('must-not-execute'); file_put_contents('/tmp/no-create','x');")
   self.assertIn('file_put_contents',safe)
-if __name__=='__main__':unittest.main()
+
+ def test_array_values_stay_private_but_program_keys_and_format_context_remain(self):
+  raw="<?php $keys=['private-array-value']; $x=$row['score_delivery_time']; $x=date('Y-m'); $n=I('post.score',0,'intval');"
+  safe=self.safe(raw)
+  self.assertNotIn('private-array-value',safe)
+  for code in ["$row['score_delivery_time']","date('Y-m')","I('post.score',0,'intval')"]:self.assertIn(code,safe)
+ def test_sql_month_formats_are_visible_but_literal_personal_data_is_not(self):
+  safe=self.safe("<?php $m->field(\"SUM(CASE WHEN is_win=1 THEN 1 ELSE 0 END) AS win\"); $m->where(['_string'=>\"DATE_FORMAT(recommended_time,'%Y-%m')='PrivateName'\"]);")
+  self.assertIn('SUM(CASE WHEN is_win=1',safe);self.assertIn('%Y-%m',safe);self.assertNotIn('PrivateName',safe)
 
 class SQLBoundary(unittest.TestCase):
  def setUp(self):
@@ -111,3 +119,5 @@ class DocumentContract(unittest.TestCase):
   result=m.invoke({'operation':'inventory'},call)
   self.assertEqual(result['reason'],'REVIEWED_READER_NOT_INSTALLED');self.assertIsNone(result['ssm_command_id'])
   self.assertEqual(len(calls),2)
+
+if __name__=='__main__':unittest.main()
