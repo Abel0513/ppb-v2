@@ -14,7 +14,7 @@
           "test \"$(id -u)\" = 0",
           "test -d /www/ppb-v2-deploy && test ! -L /www/ppb-v2-deploy",
           "test ! -L /www/ppb-v2-deploy/bootstrap",
-          "install -d -m 700 /www/ppb-v2-deploy/bootstrap/00cb5edc97c6ebb940368b24c09eab572ebf2e68c996f5ae1aefe0a8604994d7"
+          "install -d -m 700 /www/ppb-v2-deploy/bootstrap/b1aa810ee3f31993bb57bf2b4d1b2ebe5825dae23e3d17166b329bcf7d24862e"
         ]
       }
     },
@@ -23,8 +23,8 @@
       "name": "downloadReviewedTools",
       "inputs": {
         "sourceType": "S3",
-        "sourceInfo": "{\"path\": \"https://s3.us-east-1.amazonaws.com/ppb-v2-release-artifacts-429724121147-use1/releases/bootstrap/00cb5edc97c6ebb940368b24c09eab572ebf2e68c996f5ae1aefe0a8604994d7/fixed.tar.gz\"}",
-        "destinationPath": "/www/ppb-v2-deploy/bootstrap/00cb5edc97c6ebb940368b24c09eab572ebf2e68c996f5ae1aefe0a8604994d7"
+        "sourceInfo": "{\"path\": \"https://s3.us-east-1.amazonaws.com/ppb-v2-release-artifacts-429724121147-use1/releases/bootstrap/b1aa810ee3f31993bb57bf2b4d1b2ebe5825dae23e3d17166b329bcf7d24862e/fixed.tar.gz\"}",
+        "destinationPath": "/www/ppb-v2-deploy/bootstrap/b1aa810ee3f31993bb57bf2b4d1b2ebe5825dae23e3d17166b329bcf7d24862e"
       }
     },
     {
@@ -43,12 +43,12 @@
           "assert not (root/'pending-deployment.json').exists()",
           "lock=os.open(root/'.deployment.lock',os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)",
           "fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)",
-          "archive=root/'bootstrap/00cb5edc97c6ebb940368b24c09eab572ebf2e68c996f5ae1aefe0a8604994d7/fixed.tar.gz'",
+          "archive=root/'bootstrap/b1aa810ee3f31993bb57bf2b4d1b2ebe5825dae23e3d17166b329bcf7d24862e/fixed.tar.gz'",
           "assert archive.is_file() and not archive.is_symlink() and archive.stat().st_size<5000000",
-          "assert hashlib.sha256(archive.read_bytes()).hexdigest()=='00cb5edc97c6ebb940368b24c09eab572ebf2e68c996f5ae1aefe0a8604994d7'",
-          "expected={'scripts/legacy-readonly/prepare.py': 'dfc0285ef5b15237d0ea2422898e6614b1089c00300134d01231cce513834c01', 'scripts/legacy-readonly/dispatch.py': '5e3f47952eabcfb6466423cbdf89d20c1f18658a726d80f32d9af36b8bccd915', 'scripts/legacy-readonly/worker.py': 'ce63f5c0a33b479f5a85e6d7b471f59bee1c9ade317abd6611f09ec8f07a67aa', 'scripts/legacy-readonly/source-tokens.php': 'f1190ffa4f4200c1e2ed356eeedf23cb06d5cbbca31eec5328604f17466249e9', 'scripts/legacy-readonly/db-worker.php': '9f5250287de71879b04b47cf69b485334b57116e055e93ffffc7e7775911dcd8', 'scripts/legacy-readonly/dba-once.py': '753f2c241946197c91f43a95747ee2cff38c93a9910d0b2c1da6563dfd44b498', 'units/metadata-delegation.sql': '16a0fcd9b64bd666b7e2a3fd87f418b9fdffdb583dc2ab89457aeea10fec7fa9', 'units/ppb-v2-php.service': '120782ffe1180eb22a5f3f433e022a62a02efca8cdc3176481203af1c2cba8a1', 'units/php-fpm.conf': '68e97e3977c7beb695d5b5015be077acb817ab4a75761a6606d3bd47610bf357', 'units/ppb-v2-queue.service': '7f60ef49261af6c0b25aedba8376ffb8e3594dc0e9ec0037782656fe806de929', 'units/ppb-v2-scheduler.service': 'd245d2888d5909a7894e6127ff3f190621f37d048a1ade59ae829de2fa49d986', 'units/ppb-v2-scheduler.timer': 'd5a2941358cdcd4a8d09856f4049b9c01cb3378af1c48d9af06966b593bc23f1', 'scripts/isolation/boundary.py': 'ddc4f861f4734afe981e42a38e9b186d321973147e7a499da86cc6e1e41e9bfb', 'scripts/isolation/nginx_lex.py': '708824475e9abc74d52620f4257695511a3808f6db159cb0a50acfdd13e49e1d', 'scripts/isolation/socket-acl.py': '05ddcba530c08e450bf5e92bed114d9a50da9e50defd4f855feb9febe098b49b', 'scripts/isolation/provision.py': '755d265c8560d178c93a80675212a430437f423ea2ba31997ca0b7425eaa051a', 'scripts/isolation/global-metadata.php': '50644a282986f9386419221d68c6766af0f88eb9abb6ef5ee9ddd55260cf79a9', 'scripts/isolation/prepare-os.py': 'a87f6a495141b8d6bd8a25ecace4aa6843d2df4790f6e4a4284cbec7da46dd16', 'scripts/isolation/inventory-db.php': '53beecd4a57cd3bbc3248063f74705c05cddfd1229bd9ef350030025542ce2b5', 'scripts/isolation/db-probe.php': 'bbb5d30264b2ccf1c5dbe715d0727c14e87d617a97232e0cdccbc2c6955d93c4', 'scripts/isolation/lifecycle.py': '5b70c3fcea711ba8ea9027157c5b5fd70f7f97fb2a0f63bcfb70a69aec40b6af', 'scripts/isolation/release.py': '0ced82f8ad575c1521281153a4b4ab5d91e45b2b850502967034c98108638f19', 'scripts/controlled-deploy.py': 'c502f1bffdf259d7d831ff63f14153ab9eff9566ebf937cc37fa73c486fe1678', 'scripts/stage-release.py': 'bb342948784ff102d54a2dcc5faab2ffde1129c5e99ee6fd490d67aa5ea8d4e7', 'scripts/check-release.py': 'e213e522b49c8fc38401623b3f19da44bdf5799a5424cf36a3f244462732d9ee', 'automation/accept-v2.py': 'da1c2c9e5b9eed7fecfbafb01e18e967f2db3d48cc430d5de9117f2002e2ff5d'}",
+          "assert hashlib.sha256(archive.read_bytes()).hexdigest()=='b1aa810ee3f31993bb57bf2b4d1b2ebe5825dae23e3d17166b329bcf7d24862e'",
+          "expected={'scripts/legacy-readonly/prepare.py': 'dfc0285ef5b15237d0ea2422898e6614b1089c00300134d01231cce513834c01', 'scripts/legacy-readonly/dispatch.py': '5e3f47952eabcfb6466423cbdf89d20c1f18658a726d80f32d9af36b8bccd915', 'scripts/legacy-readonly/worker.py': '9d63a1dfccb06a3f6266814e6a6331ff854e9cd892f6bfa8543e6c359067a0e1', 'scripts/legacy-readonly/source-tokens.php': '0edca6e664f72c03726717b27786a024add5e23f09133ed9532f1352bf37a7f4', 'scripts/legacy-readonly/db-worker.php': '9f5250287de71879b04b47cf69b485334b57116e055e93ffffc7e7775911dcd8', 'scripts/legacy-readonly/dba-once.py': '753f2c241946197c91f43a95747ee2cff38c93a9910d0b2c1da6563dfd44b498', 'units/metadata-delegation.sql': '16a0fcd9b64bd666b7e2a3fd87f418b9fdffdb583dc2ab89457aeea10fec7fa9', 'units/ppb-v2-php.service': '120782ffe1180eb22a5f3f433e022a62a02efca8cdc3176481203af1c2cba8a1', 'units/php-fpm.conf': '68e97e3977c7beb695d5b5015be077acb817ab4a75761a6606d3bd47610bf357', 'units/ppb-v2-queue.service': '7f60ef49261af6c0b25aedba8376ffb8e3594dc0e9ec0037782656fe806de929', 'units/ppb-v2-scheduler.service': 'd245d2888d5909a7894e6127ff3f190621f37d048a1ade59ae829de2fa49d986', 'units/ppb-v2-scheduler.timer': 'd5a2941358cdcd4a8d09856f4049b9c01cb3378af1c48d9af06966b593bc23f1', 'scripts/isolation/boundary.py': 'ddc4f861f4734afe981e42a38e9b186d321973147e7a499da86cc6e1e41e9bfb', 'scripts/isolation/nginx_lex.py': '708824475e9abc74d52620f4257695511a3808f6db159cb0a50acfdd13e49e1d', 'scripts/isolation/socket-acl.py': '05ddcba530c08e450bf5e92bed114d9a50da9e50defd4f855feb9febe098b49b', 'scripts/isolation/provision.py': '755d265c8560d178c93a80675212a430437f423ea2ba31997ca0b7425eaa051a', 'scripts/isolation/global-metadata.php': '50644a282986f9386419221d68c6766af0f88eb9abb6ef5ee9ddd55260cf79a9', 'scripts/isolation/prepare-os.py': 'a87f6a495141b8d6bd8a25ecace4aa6843d2df4790f6e4a4284cbec7da46dd16', 'scripts/isolation/inventory-db.php': '53beecd4a57cd3bbc3248063f74705c05cddfd1229bd9ef350030025542ce2b5', 'scripts/isolation/db-probe.php': 'bbb5d30264b2ccf1c5dbe715d0727c14e87d617a97232e0cdccbc2c6955d93c4', 'scripts/isolation/lifecycle.py': '5b70c3fcea711ba8ea9027157c5b5fd70f7f97fb2a0f63bcfb70a69aec40b6af', 'scripts/isolation/release.py': '0ced82f8ad575c1521281153a4b4ab5d91e45b2b850502967034c98108638f19', 'scripts/controlled-deploy.py': 'c502f1bffdf259d7d831ff63f14153ab9eff9566ebf937cc37fa73c486fe1678', 'scripts/stage-release.py': 'bb342948784ff102d54a2dcc5faab2ffde1129c5e99ee6fd490d67aa5ea8d4e7', 'scripts/check-release.py': 'e213e522b49c8fc38401623b3f19da44bdf5799a5424cf36a3f244462732d9ee', 'automation/accept-v2.py': 'da1c2c9e5b9eed7fecfbafb01e18e967f2db3d48cc430d5de9117f2002e2ff5d'}",
           "assert (root/'backups').is_dir() and not (root/'backups').is_symlink() and (root/'backups').stat().st_uid==0 and (root/'backups').stat().st_mode&0o077==0",
-          "backup=root/'backups/fixed-tools-00cb5edc97c6ebb940368b24c09eab572ebf2e68c996f5ae1aefe0a8604994d7'",
+          "backup=root/'backups/fixed-tools-b1aa810ee3f31993bb57bf2b4d1b2ebe5825dae23e3d17166b329bcf7d24862e'",
           "assert not backup.is_symlink()",
           "backup.mkdir(parents=True,mode=0o700,exist_ok=True)",
           "with tarfile.open(archive,'r:gz') as tf:",
@@ -78,7 +78,7 @@
           "subprocess.run(['python3',str(root/'scripts/legacy-readonly/prepare.py')],check=True,timeout=30)",
           "print('V2_FIXED_TOOLS_INSTALLED=YES')",
           "print('V2_DB_AND_SERVICE_ISOLATION=NOT_YET_VERIFIED')",
-          "p=subprocess.run(['python3',str(root/'scripts/isolation/lifecycle.py'),'inventory','--commit','0000000000000000000000000000000000000000','--request-id','bootstrap-inventory-00cb5edc97c6ebb9'],capture_output=True,text=True,timeout=60)",
+          "p=subprocess.run(['python3',str(root/'scripts/isolation/lifecycle.py'),'inventory','--commit','0000000000000000000000000000000000000000','--request-id','bootstrap-inventory-b1aa810ee3f31993'],capture_output=True,text=True,timeout=60)",
           "# The fixed inventory returns only bounded configuration metadata, never secrets.",
           "try:",
           "    value=json.loads(p.stdout)",
