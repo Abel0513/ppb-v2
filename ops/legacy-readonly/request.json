@@ -1,110 +1,25 @@
 [
   {
+    "operation": "permissions"
+  },
+  {
+    "operation": "db_permissions"
+  },
+  {
     "operation": "source",
     "path": "Application/Admin/Controller/AnalystRatingController.class.php",
     "offset": 680,
     "limit": 80
   },
   {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 2800,
-    "limit": 180
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 2980,
-    "limit": 180
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 3160,
-    "limit": 180
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 3340,
-    "limit": 180
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 3520,
-    "limit": 155
-  },
-  {
     "operation": "select",
-    "table": "pay.pay_analyst_pick",
+    "table": "pay.pay_analyst_monthly_evaluation",
     "columns": [
       "id",
-      "recommended_time",
-      "is_win",
-      "score_delivery_time",
-      "score_word_count",
-      "score_format",
-      "score_typos",
-      "score_semantic_clarity",
-      "score_reference_accuracy",
-      "score_logic_consistency",
-      "score_language_appropriateness",
-      "score_professional_bonus"
+      "analyst_id",
+      "score_interaction_avg",
+      "score_initiative"
     ],
-    "filters": [
-      {
-        "column": "recommended_time",
-        "op": ">=",
-        "value": "2026-05-01 00:00:00"
-      },
-      {
-        "column": "recommended_time",
-        "op": "<",
-        "value": "2026-06-01 00:00:00"
-      },
-      {
-        "column": "score_delivery_time",
-        "op": ">",
-        "value": 0
-      }
-    ],
-    "limit": 10
-  },
-  {
-    "operation": "select",
-    "table": "pay.pay_analyst_pick",
-    "columns": [
-      "id",
-      "recommended_time",
-      "is_win",
-      "score_delivery_time",
-      "score_word_count",
-      "score_format",
-      "score_typos",
-      "score_semantic_clarity",
-      "score_reference_accuracy",
-      "score_logic_consistency",
-      "score_language_appropriateness",
-      "score_professional_bonus"
-    ],
-    "filters": [
-      {
-        "column": "recommended_time",
-        "op": ">=",
-        "value": "2026-05-01 00:00:00"
-      },
-      {
-        "column": "recommended_time",
-        "op": "<",
-        "value": "2026-06-01 00:00:00"
-      },
-      {
-        "column": "score_delivery_time",
-        "op": ">",
-        "value": 0
-      }
-    ],
-    "limit": 10
+    "limit": 3
   }
 ]
