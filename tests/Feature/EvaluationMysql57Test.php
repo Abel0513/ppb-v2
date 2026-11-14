@@ -70,13 +70,13 @@ class EvaluationMysql57Test extends TestCase
             foreach([1,2,3] as $gid)DB::table('ppb_assignments')->insert(['id'=>$gid,'game_id'=>$gid,'kind'=>'pick','original_analyst_id'=>9,'current_analyst_id'=>9]);
             foreach([[1,1,null,'2026-05-01 00:00:00'],[2,2,null,'2026-05-01 00:00:00'],[3,3,null,'2026-05-01 00:00:00'],[4,1,333,'2026-05-01 00:00:00'],[5,1,null,null]] as [$pid,$gid,$legacy,$submitted])DB::table('ppb_submissions')->insert(['id'=>$pid,'game_id'=>$gid,'assignment_id'=>$gid,'submitted_analyst_id'=>9,'kind'=>'pick','submitted_at'=>$submitted,'legacy_source_pick_id'=>$legacy]);
             DB::table('ppb_submissions')->insert([['id'=>7,'game_id'=>1,'assignment_id'=>1,'submitted_analyst_id'=>9,'kind'=>'pick','status'=>'legacy_imported','submitted_at'=>'2026-05-01 00:00:00','legacy_source_pick_id'=>null],['id'=>8,'game_id'=>1,'assignment_id'=>1,'submitted_analyst_id'=>9,'kind'=>'pick','status'=>'draft','submitted_at'=>'2026-05-01 00:00:00','legacy_source_pick_id'=>null]]);
-            $snapshot=['picks'=>[],'pick_columns'=>[],'schedules'=>[],'attendance'=>[],'evaluations'=>[],'ratings'=>[],'video_counts'=>[],'recent'=>[],'source_sha256'=>str_repeat('b',64),'profile'=>['rating_level'=>1]];
-            $reader=Mockery::mock(LegacyReader::class);$reader->shouldReceive('query')->andReturn(['snapshot'=>$snapshot]);
+            $snapshot=['picks'=>[],'pick_columns'=>[],'schedules'=>[],'attendance'=>[],'evaluations'=>[],'ratings'=>[],'video_counts'=>[],'recent'=>[],'source_sha256'=>str_repeat('b',64),'profile'=>['id'=>4,'rating_level'=>1]];
+            $reader=Mockery::mock(LegacyReader::class);$reader->shouldReceive('query')->andReturnUsing(fn($query)=>['transaction_isolation'=>'REPEATABLE-READ','snapshot'=>array_replace($snapshot,['format'=>'ppb-evaluation-source-v1','analyst_id'=>$query['analyst_id'],'month'=>$query['month'],'transactional_tables_verified'=>7])]);
             $subjects=Mockery::mock(EvaluationSubjects::class);$subjects->shouldReceive('mappings')->andReturn([4=>9]);
             $realService=new EvaluationService($reader,$subjects,new LegacyMonthSelector,$reporter,new LegacyRatingCalculator);
             $writes=0;$loaded=$realService->load(['type'=>'legacy','id'=>4,'native_id'=>9],'2026-05');
             self::assertSame(0,$writes,'Loading an evaluation must never create rows.');
-            self::assertSame(2,$loaded['current']['counts']['records']);
+            self::assertSame(2,$loaded['current']['counts']['records']);self::assertCount(3,$loaded['history']);
             self::assertSame(['2026-05-01 00:00:00','2026-05-31 23:59:59'],array_column($loaded['current']['selected']['records'],'recommended_time'));
             self::assertSame(['legacy:4','legacy:4'],array_column($loaded['current']['selected']['records'],'_author_key'));
             self::assertSame(1,$loaded['current']['next_rating']['rating_level'],'Missing monthly grade falls back to source profile, not salary default2.');

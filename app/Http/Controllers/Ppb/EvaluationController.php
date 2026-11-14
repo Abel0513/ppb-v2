@@ -17,12 +17,19 @@ class EvaluationController extends Controller
     }
     public function index(Request $request)
     {
-        $month=$this->month($request);$subjects=$this->subjects->all();
-        return view('ppb.evaluations.index',compact('month','subjects'));
+        $month=$this->month($request);$options=$request->validate(['page'=>['nullable','integer','min:1','max:1000']]);
+        $page=(int)($options['page']??1);$all=$this->subjects->all();$total=count($all);$subjects=array_slice($all,($page-1)*5,5);
+        return view('ppb.evaluations.index',compact('month','subjects','page','total'));
     }
     public function show(Request $request,string $type,int $id)
     {
         $report=$this->service->load($this->subjects->get($type,$id),$this->month($request));
+        if($request->query('format')==='summary'){
+            return response()->json(['score'=>$report['current']['rating']['total_score'],'previous_score'=>$report['previous']['rating']['total_score'],
+                'earlier_score'=>$report['history'][$report['earlier_month']]['rating']['total_score'],'level'=>$report['current']['level'],
+                'next_level'=>$report['current']['next_rating']['rating_level'],'salary'=>$report['current']['salary'],
+                'performance'=>$report['current']['performance']],200,['Cache-Control'=>'private,no-store']);
+        }
         if($request->query('format')==='csv'){
             $salary=$report['current']['salary'];$values=[$report['subject']['label'],$report['month'],...array_values($salary)];
             return response()->streamDownload(function()use($values){$f=fopen('php://output','w');fwrite($f,"\xEF\xBB\xBF");fputcsv($f,['分析師','月份','短稿','長稿','影片','遲到','缺勤','合計'],',','"','');

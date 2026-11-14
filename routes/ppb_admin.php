@@ -82,3 +82,10 @@ Route::prefix('admin')->middleware([
         ->middleware('throttle:10,1')
         ->name('ppb.logout');
 });
+
+// Compatibility applies only to this Laravel V2 host; old server routes are unchanged.
+Route::middleware([PpbRequireSecureHost::class,'auth:ppb',PpbEnsureActive::class,PpbCan::class.':evaluations.view'])->group(function(){
+    foreach(['/Admin/AnalystRating/index','/Admin/AnalystRating/salary','/Admin/AnalystRating/rating','/Admin/AnalystPerformance/index'] as $legacyEntry){
+        foreach([$legacyEntry,$legacyEntry.'.html'] as $entry)Route::get($entry,fn(\Illuminate\Http\Request $request)=>redirect()->route('ppb.evaluations.index',['month'=>$request->query('month')]));
+    }
+});

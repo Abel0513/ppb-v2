@@ -25,6 +25,7 @@
 @foreach(['score_interaction_feedback'=>'互動回饋','score_initiative'=>'主動性','score_extra_adjustment'=>'額外調整'] as $field=>$label)<label>{{ $label }}<input class="field" type="number" name="{{ $field }}" value="{{ old($field,$report['manual'][$field]) }}" required></label>@endforeach
 </div><p>留白不計入平均，0 分會計入；回饋加在各週平均之後。</p><button class="action">儲存人工評分</button></form>
 @else<p>您目前只有檢視權限。</p>@endif</section>
+@if(isset($report['history']))<section class="card eval-section"><h2>三個月評級分數</h2><div class="eval-grid">@foreach($report['history'] as $period=>$history)<p>{{ $period }}：<strong>{{ $history['rating']['total_score'] }}</strong></p>@endforeach</div></section>@endif
 <section class="card eval-section"><h2>評級與升降級</h2><p>本月等級：{{ $current['level']===null?'尚無歷史紀錄（薪酬採原規則等級 2）':$current['level'] }}；前月評級分數：{{ $report['previous']['rating']['total_score'] }}；下月試算：{{ $current['next_rating']['rating_level'] }}；已保存下月等級：{{ $report['saved_next_rating'] ?? '未保存' }}。</p>
 @if($current['next_rating']['is_terminate'])<p class="notice">已達原規則終止條件，請管理者審核處理；本頁不自動停用分析師。</p>@endif
 @if($manage)<form method="post" action="{{ route('ppb.evaluations.save',[$report['subject']['type'],$report['subject']['id']]) }}">@include('ppb.evaluations.request')<input type="hidden" name="operation" value="rebuild"><button class="action">確認並保存下月評級</button></form>@endif</section>

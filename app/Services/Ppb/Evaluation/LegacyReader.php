@@ -45,6 +45,17 @@ class LegacyReader
         }
     }
 
+    public function snapshot(int $id,string $month): array
+    {
+        $data=$this->query(['operation'=>'evaluation_snapshot','analyst_id'=>$id,'month'=>$month]);$s=$data['snapshot']??[];
+        if(($data['transaction_isolation']??null)!=='REPEATABLE-READ'||($s['format']??null)!=='ppb-evaluation-source-v1'
+            ||($s['analyst_id']??null)!==$id||($s['month']??null)!==$month||(int)($s['profile']['id']??0)!==$id
+            ||($s['transactional_tables_verified']??null)!==7||!preg_match('/^[a-f0-9]{64}$/D',$s['source_sha256']??'')){
+            throw new \RuntimeException('LEGACY_SNAPSHOT_SCOPE_NOT_PROVEN');
+        }
+        return $s;
+    }
+
     public function profiles(): array
     {
         $rows = [];

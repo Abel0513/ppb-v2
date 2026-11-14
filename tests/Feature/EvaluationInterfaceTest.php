@@ -20,8 +20,9 @@ class EvaluationInterfaceTest extends TestCase
     {
         $reporter=new EvaluationReport(new LegacyScheduleCalculator,new LegacyRatingCalculator);$manual=$reporter->defaults('2026-05');
         $selected=(new LegacyMonthSelector)->select([],'legacy:2','2026-05',[]);$result=$reporter->calculate($selected,$manual,[],[],0,2);
+        $result['performance']=(new \App\Services\Ppb\Evaluation\EvaluationPerformance)->summarize($selected,[]);
         $result+=['level'=>2,'selected'=>$selected,'next_rating'=>['rating_level'=>2,'is_terminate'=>false]];
-        return ['subject'=>['type'=>'legacy','id'=>2,'label'=>'<script>not executable</script>'],'month'=>'2026-05','manual'=>$manual,'current'=>$result,'previous'=>$result,'revision'=>0,'source_sha256'=>str_repeat('a',64),'saved_next_rating'=>null,'native_attendance_video_supported'=>true,'inputs'=>['games'=>[91=>['id'=>91,'recommended_time'=>'2026-05-12 12:00:00']],'attendance'=>[],'videos'=>[['id'=>8,'scheduled_at'=>'2026-05-12 04:00:00','guest_1'=>'legacy:2','guest_2'=>null,'guest_3'=>null,'cancelled'=>false]]]];
+        return ['subject'=>['type'=>'legacy','id'=>2,'label'=>'<script>not executable</script>'],'month'=>'2026-05','manual'=>$manual,'current'=>$result,'previous'=>$result,'revision'=>0,'source_sha256'=>str_repeat('a',64),'earlier_month'=>'2026-03','history'=>['2026-03'=>$result,'2026-04'=>$result,'2026-05'=>$result],'saved_next_rating'=>null,'native_attendance_video_supported'=>true,'inputs'=>['games'=>[91=>['id'=>91,'recommended_time'=>'2026-05-12 12:00:00']],'attendance'=>[],'videos'=>[['id'=>8,'scheduled_at'=>'2026-05-12 04:00:00','guest_1'=>'legacy:2','guest_2'=>null,'guest_3'=>null,'cancelled'=>false]]]];
     }
     public function test_guest_cannot_read_evaluation_and_http_or_foreign_host_is_denied(): void
     {
@@ -61,6 +62,16 @@ class EvaluationInterfaceTest extends TestCase
         $input=['month'=>'2026-05','request_id'=>'99b1e56d-7db5-4524-b567-8f028610079a','revision'=>0,'source_sha256'=>str_repeat('a',64),'operation'=>'input','input_kind'=>'video','scheduled_at'=>'2026-05-12T12:00','guest_1'=>'legacy:2','guest_2'=>'','guest_3'=>'','cancelled'=>'0'];
         $this->post('https://v2.csdatw.xyz/admin/evaluations/legacy/2',$input)->assertRedirect();
         $input['guest_1']='legacy:999';$this->postJson('https://v2.csdatw.xyz/admin/evaluations/legacy/2',$input)->assertUnprocessable()->assertJsonValidationErrors('guest_1');
+    }
+
+    public function test_summary_returns_only_aggregates_and_index_paginates_bounded_cohort(): void
+    {
+        $this->actor();$roster=[];foreach(range(1,11) as $id)$roster[]=['type'=>'legacy','id'=>$id,'label'=>'AnalystFixture'.$id,'mapped'=>false];
+        $subjects=Mockery::mock(EvaluationSubjects::class);$subjects->shouldReceive('all')->andReturn($roster);$subjects->shouldReceive('get')->andReturn(['type'=>'legacy','id'=>2]);$this->app->instance(EvaluationSubjects::class,$subjects);
+        $this->get('https://v2.csdatw.xyz/admin/evaluations?month=2026-05&page=2')->assertOk()->assertSee('AnalystFixture6')->assertSee('AnalystFixture10')->assertDontSee('AnalystFixture11')->assertSee('data-evaluation-summary',false);
+        $service=Mockery::mock(EvaluationService::class);$service->shouldReceive('load')->once()->andReturn($this->report());$this->app->instance(EvaluationService::class,$service);
+        $json=$this->getJson('https://v2.csdatw.xyz/admin/evaluations/legacy/2?month=2026-05&format=summary')->assertOk()->assertJsonPath('score',60)->assertJsonPath('earlier_score',60)->assertJsonMissingPath('subject')->assertJsonMissingPath('current.selected.records');
+        self::assertStringContainsString('no-store',$json->headers->get('Cache-Control'));
     }
 
 }

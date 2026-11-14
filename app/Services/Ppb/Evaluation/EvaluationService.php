@@ -15,9 +15,13 @@ class EvaluationService
     {
         $date=CarbonImmutable::createFromFormat('!Y-m',$month,'Asia/Taipei');
         if(!$date||$date->format('Y-m')!==$month)throw new \InvalidArgumentException('Invalid month.');
-        $prior=$date->subMonth()->format('Y-m');$key=$subject['type'].':'.$subject['id'];
-        $snapshot=$subject['type']==='legacy'?$this->reader->query(['operation'=>'evaluation_snapshot','analyst_id'=>$subject['id'],'month'=>$month])['snapshot']:
+        $prior=$date->subMonth()->format('Y-m');$earlier=$date->subMonths(2)->format('Y-m');$key=$subject['type'].':'.$subject['id'];
+        $snapshot=$subject['type']==='legacy'?$this->reader->snapshot($subject['id'],$month):
             ['picks'=>[],'pick_columns'=>[],'schedules'=>[],'attendance'=>[],'evaluations'=>[],'ratings'=>[],'video_counts'=>[],'recent'=>[],'source_sha256'=>hash('sha256',$key.':'.$month)];
+        if($subject['type']==='legacy'){
+            $older=$this->reader->snapshot($subject['id'],$prior);
+            $snapshot=$this->history($snapshot,$older,$prior);
+        }
         $rows=$this->selector->legacyRows($snapshot);$schedules=[];
         foreach($snapshot['schedules'] as $s)$schedules['legacy:'.$s['id']]=$s;
         [$native,$nativeSchedules]=$this->nativeRows($date,$subject);
@@ -29,10 +33,10 @@ class EvaluationService
             $override=$bySource[$row['_source_type'].':'.$row['_source_id']]??null;
             if($override){foreach(LegacyScheduleCalculator::RATING_FIELDS as $f)$row[$f]=$override[$f];if($row['_source_type']==='v2'&&$override['result_state']!==null)$row['is_win']=(int)$override['result_state'];}
         }unset($row);
-        $local=PpbEvaluation::where('subject_type',$subject['type'])->where('subject_id',$subject['id'])->whereIn('month',[$date->subMonths(2)->format('Y-m'),$prior,$month])->get()->keyBy('month');
+        $local=PpbEvaluation::where('subject_type',$subject['type'])->where('subject_id',$subject['id'])->whereIn('month',[$date->subMonths(3)->format('Y-m'),$earlier,$prior,$month])->get()->keyBy('month');
         $sourceHash=hash('sha256',json_encode([$snapshot['source_sha256'],$native,$nativeSchedules],JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
         $reports=[];$manuals=[];$inputs=[];
-        foreach([$prior,$month] as $period){
+        foreach([$earlier,$prior,$month] as $period){
             $manual=$this->report->defaults($period);
             foreach($snapshot['evaluations'] as $e)if($e['eval_month']===$period)$manual=array_replace($manual,array_intersect_key($e,$manual));
             if($local->has($period))$manual=array_replace($manual,array_intersect_key($local[$period]->getAttributes(),$manual));
@@ -41,7 +45,7 @@ class EvaluationService
             $inputs[$period]=(new EvaluationInputs)->read($subject,$period,$native);
             $attendance=array_values(array_filter($snapshot['attendance'],fn($a)=>substr($a['recommended_time'],0,7)===$period));
             $attendance=array_merge($attendance,$inputs[$period]['attendance']);
-            usort($attendance,fn($a,$b)=>[$a['recommended_time'],(int)$a['gid']]<=>[$b['recommended_time'],(int)$b['gid']]);
+            usort($attendance,fn($a,$b)=>[$a['recommended_time'],(int)($a['id']??$a['gid'])]<=>[$b['recommended_time'],(int)($b['id']??$b['gid'])]);
             $level=$this->level($snapshot,$local,$period);
             $reports[$period]=$this->report->calculate($selected,$manual,$schedules,$attendance,(int)($snapshot['video_counts'][$period]??0)+$inputs[$period]['video_count'],$level);
             $reports[$period]['level']=$level;$reports[$period]['selected']=$selected;
@@ -59,8 +63,32 @@ class EvaluationService
         $current['performance']=(new EvaluationPerformance)->summarize($current['selected'],$recent);
         return ['subject'=>$subject,'month'=>$month,'previous_month'=>$prior,'source_sha256'=>$sourceHash,'legacy_sha256'=>$snapshot['source_sha256'],
             'manual'=>$manuals[$month],'current'=>$current,'previous'=>$previous,'revision'=>$local->has($month)?$local[$month]->revision:0,
-            'saved_next_rating'=>$local->has($month)?$local[$month]->next_rating_level:null,'recent'=>$recent,'source_rows'=>count($rows),
+            'earlier_month'=>$earlier,'history'=>$reports,'saved_next_rating'=>$local->has($month)?$local[$month]->next_rating_level:null,'recent'=>$recent,'source_rows'=>count($rows),
             'native_attendance_video_supported'=>true,'inputs'=>$inputs[$month]];
+    }
+
+    /** Each month is one fixed snapshot; shared-month drift aborts the read. */
+    private function history(array $current,array $older,string $overlap): array
+    {
+        $periodRows=static function(array $snapshot,string $key,string $dateField)use($overlap):array{
+            if($key==='picks'){
+                $index=array_search('recommended_time',$snapshot['pick_columns'],true);
+                return array_values(array_filter($snapshot[$key],fn($r)=>substr($r[$index],0,7)===$overlap));
+            }
+            return array_values(array_filter($snapshot[$key],fn($r)=>substr($r[$dateField],0,7)===$overlap));
+        };
+        $same=static function($a,$b):void{if($a!==$b)throw new \RuntimeException('LEGACY_HISTORY_CHANGED_DURING_READ');};
+        $same($current['profile']??null,$older['profile']??null);$same($current['pick_columns'],$older['pick_columns']);
+        foreach(['picks'=>'recommended_time','attendance'=>'recommended_time','evaluations'=>'eval_month'] as $key=>$field)$same($periodRows($current,$key,$field),$periodRows($older,$key,$field));
+        $same($current['video_counts'][$overlap]??0,$older['video_counts'][$overlap]??0);
+        foreach(['schedules'=>'id','evaluations'=>'eval_month','ratings'=>'rating_month','attendance'=>'id','picks'=>null] as $key=>$idField){
+            $merged=[];
+            foreach(array_merge($older[$key],$current[$key]) as $row){$id=$idField===null?$row[array_search('id',$current['pick_columns'],true)]:$row[$idField];if(isset($merged[$id]))$same($merged[$id],$row);$merged[$id]=$row;}
+            $current[$key]=array_values($merged);
+        }
+        $current['video_counts']=$current['video_counts']+$older['video_counts'];
+        $current['source_sha256']=hash('sha256',$current['source_sha256'].':'.$older['source_sha256']);
+        return $current;
     }
 
     private function level(array $snapshot,$local,string $period): ?int
@@ -99,7 +127,7 @@ class EvaluationService
             ->where(fn($q)=>$q->where('p.submitted_analyst_id',$nativeId)->orWhere('a.original_analyst_id',$nativeId))
             ->whereColumn('a.game_id','p.game_id')->whereColumn('a.kind','p.kind')->whereIn('p.kind',['pick','bonus','long'])
             ->whereNull('p.legacy_source_pick_id')->whereIn('p.status',['submitted','approved','changes_requested'])->whereNotNull('p.submitted_at')->whereNotNull('p.submitted_analyst_id')
-            ->whereBetween('g.recommended_at',[$date->subMonth()->startOfMonth()->utc()->format('Y-m-d H:i:s'),$date->endOfMonth()->utc()->format('Y-m-d H:i:s')])
+            ->whereBetween('g.recommended_at',[$date->subMonths(2)->startOfMonth()->utc()->format('Y-m-d H:i:s'),$date->endOfMonth()->utc()->format('Y-m-d H:i:s')])
             ->orderBy('g.recommended_at')->orderBy('p.id')->limit(2001)
             ->get(['p.id','p.game_id','p.submitted_analyst_id','p.kind','a.original_analyst_id','g.recommended_at','g.market_type']);
         if($records->count()>2000)throw new \RuntimeException('V2_EVALUATION_COVERAGE_LIMIT');
