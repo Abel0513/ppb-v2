@@ -106,8 +106,9 @@ def apply(enable):
              'FIXED_BRIDGE_SOCKET_IDENTITY_NOT_VERIFIED')
         need('/run/ppb-v2-legacy-reader.sock' == str(SOCKET), 'SOCKET_SCOPE_DRIFT')
         old_text = old_conf.decode('utf-8')
-        if OLD not in old_text and NEW in old_text:
-            need(old_text.count(NEW) == 1, 'BASEDIR_REPEAT_UNVERIFIED')
+        if NEW in old_text:
+            need(old_text.count(NEW) == 1 and old_text.count('php_admin_value[open_basedir]') == 1,
+                 'BASEDIR_REPEAT_UNVERIFIED')
             return {'result': 'ALREADY_APPLIED', 'config_sha256': sha(old_conf),
                     'policy_matches': True, 'no_legacy_writes': True}
         target = planned(old_text).encode('utf-8')
