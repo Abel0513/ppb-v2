@@ -50,7 +50,7 @@ def enable(dba,login_path,mysql,run,defaults_file=None):
    if domain=='private_join':entry.setdefault('join_columns',[]).append(column)
    else:
     bad=sql('EXTENSION_DOMAIN_VALIDATION','SELECT /*+ MAX_EXECUTION_TIME(1000) */ COUNT(*) FROM '+dba.ident(schema)+'.'+dba.ident(table)+' WHERE '+dba.ident(column)+" IS NOT NULL AND "+dba.ident(column)+" NOT REGEXP '"+PATTERNS[domain]+"';").strip()
-    dba.need(bad=='0','EVALUATION_KEY_DOMAIN_NOT_PROVEN')
+    dba.need(bad=='0','DOMAIN_NOT_PROVEN_'+table.upper()+'_'+column.upper())
     entry['data_columns'].append(column);entry.setdefault('text_domains',{})[column]=domain
   statements.append('GRANT SELECT ('+','.join(dba.ident(c) for c in columns)+') ON '+dba.ident(schema)+'.'+dba.ident(table)+" TO 'ppb_legacy_ro'@'localhost';")
  # Preserve the ORIGINAL catalog. Fail closed on partial grants; no force/revoke.

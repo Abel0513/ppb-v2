@@ -54,7 +54,7 @@ class Extension(unittest.TestCase):
   with tempfile.TemporaryDirectory() as temp:
    root=Path(temp);catalog=self.fixture(root);before=(root/'catalog.json').read_bytes()
    result,calls,error=self.execute(root,catalog,bad_domain=True)
-   self.assertIn('DOMAIN_NOT_PROVEN',str(error));self.assertFalse(any(s=='EXTENSION_COLUMN_GRANT' for s,q in calls))
+   self.assertIn('DOMAIN_NOT_PROVEN_PAY_ANALYST_PICK_ANALYST_NAME',str(error));self.assertFalse(any(s=='EXTENSION_COLUMN_GRANT' for s,q in calls))
    self.assertEqual((root/'catalog.json').read_bytes(),before);self.assertFalse((root/'catalog.before-evaluation-read-v1.json').exists())
  def test_partial_grant_keeps_original_catalog_and_backup_and_stops(self):
   with tempfile.TemporaryDirectory() as temp:
