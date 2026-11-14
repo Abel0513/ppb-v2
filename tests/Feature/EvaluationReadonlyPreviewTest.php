@@ -4,6 +4,7 @@ namespace Tests\Feature;
 use App\Models\PpbAccount;
 use App\Services\Ppb\Evaluation\EvaluationSubjects;
 use App\Services\Ppb\Evaluation\EvaluationPreviewReport;
+use App\Services\Ppb\Evaluation\LegacyReader;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Mockery;
 use Tests\TestCase;
@@ -25,6 +26,7 @@ class EvaluationReadonlyPreviewTest extends TestCase
     {
         config(['app.url'=>'https://v2.csdatw.xyz']);
         $this->get('https://v2.csdatw.xyz/admin/evaluations-preview')->assertRedirect();
+        $this->get('https://v2.csdatw.xyz/admin/evaluations-preview/health')->assertRedirect();
         $this->actor();
         $this->get('http://v2.csdatw.xyz/admin/evaluations-preview')->assertForbidden();
         $this->get('https://foreign.example/admin/evaluations-preview')->assertForbidden();
@@ -84,4 +86,40 @@ class EvaluationReadonlyPreviewTest extends TestCase
             ->assertJsonMissingPath('source_sha256');
         $this->post('https://v2.csdatw.xyz/admin/evaluations-preview/legacy/2',[])->assertStatus(405);
     }
+
+    public function test_legacy_roster_error_is_visible_not_a_false_empty_or_raw_503():void
+    {
+        $this->actor();
+        $subjects=Mockery::mock(EvaluationSubjects::class);
+        $subjects->shouldReceive('all')->once()->andThrow(new \RuntimeException('LEGACY_READER_UNAVAILABLE'));
+        $this->app->instance(EvaluationSubjects::class,$subjects);
+        $this->get('https://v2.csdatw.xyz/admin/evaluations-preview?month=2026-05')
+            ->assertOk()
+            ->assertSee('唯讀資料暫時無法取得')
+            ->assertSee('PREVIEW_DATA_UNAVAILABLE')
+            ->assertSee('查看受保護的唯讀診斷結果')
+            ->assertDontSee('無符合資格的舊系統分析師');
+    }
+
+    public function test_health_returns_bounded_reason_without_sql_or_sensitive_values():void
+    {
+        $this->actor();
+        $reader=Mockery::mock(LegacyReader::class);
+        $reader->shouldReceive('query')->once()
+            ->with(['operation'=>'db_permissions'])
+            ->andThrow(new \RuntimeException('LEGACY_READER_UNAVAILABLE'));
+        $this->app->instance(LegacyReader::class,$reader);
+        $this->getJson('https://v2.csdatw.xyz/admin/evaluations-preview/health')
+            ->assertOk()
+            ->assertJsonPath('result','STOP')
+            ->assertJsonPath('stage','bridge')
+            ->assertJsonPath('reason','LEGACY_READER_UNAVAILABLE')
+            ->assertJsonPath('writes',0)
+            ->assertJsonPath('checks_passed',[])
+            ->assertJsonMissingPath('query');
+        $this->get('http://v2.csdatw.xyz/admin/evaluations-preview/health')
+            ->assertForbidden();
+    }
+
+
 }
