@@ -48,9 +48,19 @@ def run():
    print(json.dumps(dict(real_cli_error=error)))
    check(error.get('stage')=='REAL_ERROR' and error.get('mysql_error_code')==1054 and error.get('sqlstate')=='42S22','REAL_ERROR_DIAGNOSTIC_MISMATCH')
   else:raise RuntimeError('SQL_ERROR_DID_NOT_STOP')
+  # Execute the production private aggregate plan against derived literal rows;
+  # no application/test schema or persistent table is needed.
+  php='require $argv[1]; echo json_encode(videoPlan(["analyst_id"=>2,"start"=>"2026-05-01 00:00:00","end"=>"2026-05-31 23:59:59"],["schema"=>"pay"],["pay.pay_analyst_profiles"=>["id","analyst_name"],"pay.pay_video_schedule"=>["schedule_date","guest_1_name","guest_2_name","guest_3_name"]]));'
+  compiled=command(['php','-r',php,str(Path(__file__).with_name('db-worker.php'))])
+  check(compiled.returncode==0,'PRIVATE_AGGREGATE_COMPILER_FAILED')
+  query,params=json.loads(compiled.stdout)
+  video="(SELECT TIMESTAMP('2026-05-05 12:00:00') schedule_date,'FixtureGuest' guest_1_name,'FixtureGuest' guest_2_name,'' guest_3_name,'' host_name UNION ALL SELECT TIMESTAMP('2026-05-06 12:00:00'),'','','','FixtureGuest' UNION ALL SELECT TIMESTAMP('2026-05-07 12:00:00'),'','','FixtureGuest','')"
+  query=query.replace('`pay`.`pay_video_schedule`',video).replace('`pay`.`pay_analyst_profiles`',"(SELECT 2 id,' FixtureGuest ' analyst_name)")
+  for literal in ['2',"'2026-05-01 00:00:00'","'2026-05-31 23:59:59'"]:query=query.replace('?',literal,1)
+  check(session('REAL_PRIVATE_AGGREGATE',query+';').strip()=='2','PRIVATE_GUEST_ONLY_COUNT_OR_DEDUPLICATION_MISMATCH')
   inspect=command(['docker','image','inspect','--format','{{index .RepoDigests 0}}',image])
   check(inspect.returncode==0,'IMAGE_DIGEST_UNVERIFIED')
-  print(json.dumps(dict(result='MYSQL57_REAL_CLI_PASS',client_server_version='5.7.44',empty_init_error=1065,fixed_init=m.INIT_COMMAND,init_result_pollution=False,safe_error_code=1054,application_databases_created=0,business_writes=0,image=inspect.stdout.strip())))
+  print(json.dumps(dict(result='MYSQL57_REAL_CLI_PASS',client_server_version='5.7.44',empty_init_error=1065,fixed_init=m.INIT_COMMAND,init_result_pollution=False,safe_error_code=1054,private_aggregate_guest_only_and_deduplicated=True,application_databases_created=0,business_writes=0,image=inspect.stdout.strip())))
  finally:command(['docker','rm','-f',name],timeout=30)
 if __name__=='__main__':
  try:run()

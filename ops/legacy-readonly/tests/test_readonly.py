@@ -118,6 +118,11 @@ $score=2.5; $row['analyst_id']=12; $model=M('analyst_pick');
  def test_non_sql_interpolation_and_sql_comments_do_not_export_values(self):
   for raw in ['''<?php $v="PrivatePerson {$id}";''','''<?php $m->where(['_string'=>"id={$id} /* private comment */ AND guest='PrivatePerson'"]);''']:
    safe=self.safe(raw);self.assertNotIn('PrivatePerson',safe);self.assertNotIn('private comment',safe)
+ def test_only_reviewed_date_boundary_contexts_and_where_predicates_are_visible(self):
+  raw="<?php $start=$targetMonth . '-01';$end=date('Y-m-t 23:59:59',strtotime('-1 month'));$private='PrivateName';$m->where('user_type IN (0,1)');"
+  safe=self.safe(raw)
+  for text in ["'-01'",'Y-m-t 23:59:59','-1 month','user_type IN (0,1)']:self.assertIn(text,safe)
+  self.assertNotIn('PrivateName',safe)
 
 class SQLBoundary(unittest.TestCase):
  def setUp(self):
@@ -138,17 +143,42 @@ class SQLBoundary(unittest.TestCase):
    self.assertEqual(result.returncode,2,bad)
  def test_request_filters_are_bound_and_cannot_be_sql(self):
   q={'columns':['id','score'],'filters':[{'column':'id','op':'=','value':"1 OR 1=1; DROP TABLE scores"}],'limit':5,'offset':0}
-  body='$t=[\'schema\'=>\'old\',\'name\'=>\'scores\'];echo json_encode(selectPlan(json_decode('+json.dumps(json.dumps(q))+',true),$t,[\'id\',\'score\']));'
+  body='$t=[\'schema\'=>\'old\',\'name\'=>\'scores\',\'data_columns\'=>[\'id\',\'score\']];echo json_encode(selectPlan(json_decode('+json.dumps(json.dumps(q))+',true),$t,[\'id\',\'score\']));'
   result=self.php_case(body);self.assertEqual(result.returncode,0,result.stdout+result.stderr)
   sql,params=json.loads(result.stdout);self.assertNotIn('DROP',sql);self.assertEqual(params,[q['filters'][0]['value']])
   for changes in [{'columns':['password']},{'columns':['id; DROP TABLE scores']},{'limit':10000},{'offset':-1},{'filters':[{'column':'id','op':';DROP','value':1}]}]:
-   bad=dict(q,**changes);result=self.php_case('$t=[\'schema\'=>\'old\',\'name\'=>\'scores\'];selectPlan(json_decode('+json.dumps(json.dumps(bad))+',true),$t,[\'id\',\'score\']);');self.assertEqual(result.returncode,2)
+   bad=dict(q,**changes);result=self.php_case('$t=[\'schema\'=>\'old\',\'name\'=>\'scores\',\'data_columns\'=>[\'id\',\'score\']];selectPlan(json_decode('+json.dumps(json.dumps(bad))+',true),$t,[\'id\',\'score\']);');self.assertEqual(result.returncode,2)
  def test_dba_policy_never_grants_free_text_or_pii_or_view_data(self):
   m=module('dba-once')
   self.assertTrue(m.safe_column('pay_analyst_pick','analyst_name','int','BASE TABLE'))
   self.assertTrue(m.safe_column('assessment','score','decimal','BASE TABLE'))
   for table,col,typ,kind in [('assessment','phone','bigint','BASE TABLE'),('assessment','secret','int','BASE TABLE'),('assessment','notes','text','BASE TABLE'),('assessment','label','varchar','BASE TABLE'),('assessment','score','int','VIEW'),('users','id','int','BASE TABLE')]:
    self.assertFalse(m.safe_column(table,col,typ,kind))
+ def test_private_join_names_cannot_be_selected_or_used_as_generic_filters(self):
+  table={'schema':'pay','name':'pay_analyst_profiles','data_columns':['id'],'join_columns':['analyst_name']}
+  for q in [{'columns':['analyst_name']},{'columns':['id'],'filters':[{'column':'analyst_name','op':'=','value':'private'}]}]:
+   result=self.php_case('$t=json_decode('+json.dumps(json.dumps(table))+',true);selectPlan(json_decode('+json.dumps(json.dumps(q))+',true),$t,["id","analyst_name"]);')
+   self.assertEqual(result.returncode,2)
+ def test_typed_keys_do_not_become_arbitrary_text_output(self):
+  for domain,values in {'numeric_id': [('2',True),('2private',False),('private@example.com',False)],'year_month':[('2026-05',True),('2026-13',False),('private',False)],'market_code':[('',True),('2',True),('private',False)]}.items():
+   for value,wanted in values:
+    r=self.php_case('echo json_encode(domainValue('+json.dumps(value)+','+json.dumps(domain)+'));')
+    self.assertEqual(json.loads(r.stdout),wanted)
+ def test_video_query_only_returns_count_and_uses_guest_slots_not_host_or_editor(self):
+  q={'analyst_id':2,'start':'2026-05-01 00:00:00','end':'2026-05-31 23:59:59'}
+  seen={'pay.pay_analyst_profiles':['id','analyst_name'],'pay.pay_video_schedule':['schedule_date','guest_1_name','guest_2_name','guest_3_name']}
+  def plan(request):return self.php_case('echo json_encode(videoPlan(json_decode('+json.dumps(json.dumps(request))+',true),["schema"=>"pay"],json_decode('+json.dumps(json.dumps(seen))+',true)));')
+  r=plan(q);self.assertEqual(r.returncode,0,r.stdout+r.stderr);sql,params=json.loads(r.stdout)
+  self.assertTrue(sql.startswith('SELECT /*+ MAX_EXECUTION_TIME(1000) */ COUNT(*)'))
+  self.assertNotIn('host_name',sql);self.assertNotIn('editor_name',sql)
+  self.assertEqual(params,[2,q['start'],q['end']]);self.assertIn('OR v.guest_3_name',sql)
+  for update in [{'analyst_id':'2 OR 1=1'},{'analyst_id':0},{'start':'2026-02-30 00:00:00'},{'end':'2027-01-01 00:00:00'}]:self.assertEqual(plan(dict(q,**update)).returncode,2)
+ def test_extension_is_exactly_four_typed_keys_and_four_private_join_columns(self):
+  plan=module('evaluation-domains').PLAN
+  self.assertEqual(sum(v!='private_join' for cols in plan.values() for v in cols.values()),4)
+  self.assertEqual(sum(v=='private_join' for cols in plan.values() for v in cols.values()),4)
+  for cols in plan.values():
+   for forbidden in ['line_id','line_name','password','host_name','editor_name','recommend_pick']:self.assertNotIn(forbidden,cols)
 
 class DocumentContract(unittest.TestCase):
  def test_ssm_regex_is_compatible_with_bounded_repetition_engine(self):

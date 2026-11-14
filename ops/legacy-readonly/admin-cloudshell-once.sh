@@ -23,7 +23,7 @@ try:
         value=handle[5:];need(bool(re.fullmatch('/(?:root|etc/mysql)/[A-Za-z0-9_./-]+',value)),'INVALID_PRIVATE_DEFAULTS_PATH');flag='--defaults-file'
     else:raise RuntimeError('EXPLICIT_EXISTING_DBA_CONNECTION_REQUIRED')
     command='exec python3 /usr/local/lib/ppb-legacy-ro/dba-once.py '+flag+' '+shlex.quote(value)
-    commands=['set -eu','umask 077',"printf '%s  %s\\n' 53b7fddbaf6bd4d6602b3efbd23b8b40c51d05dfaafcbd9e09dabd15694cfc19 /usr/local/lib/ppb-legacy-ro/dba-once.py | sha256sum -c - >/dev/null",command]
+    commands=['set -eu','umask 077',"printf '%s  %s\\n' 60df3cabe2f4f57f1b92f3ad7ea52b8361baeed7d4ee3d115ea80a89761903a3 /usr/local/lib/ppb-legacy-ro/dba-once.py | sha256sum -c - >/dev/null",command]
     sent=aws('ssm','send-command','--document-name','AWS-RunShellScript','--instance-ids',INSTANCE,'--parameters',json.dumps({'commands':commands}),'--comment','One reviewed legacy readonly DBA provisioning; no business writes','--timeout-seconds','120')
     cid=sent['Command']['CommandId'];print('SSM_COMMAND_ID='+cid,flush=True)
     for _ in range(50):
