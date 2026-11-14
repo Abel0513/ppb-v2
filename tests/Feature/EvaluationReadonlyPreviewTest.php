@@ -26,6 +26,7 @@ class EvaluationReadonlyPreviewTest extends TestCase
     {
         config(['app.url'=>'https://v2.csdatw.xyz']);
         $this->get('https://v2.csdatw.xyz/admin/evaluations-preview')->assertRedirect();
+        $this->get('https://v2.csdatw.xyz/admin/evaluations-preview/health')->assertRedirect();
         $this->actor();
         $this->get('http://v2.csdatw.xyz/admin/evaluations-preview')->assertForbidden();
         $this->get('https://foreign.example/admin/evaluations-preview')->assertForbidden();
