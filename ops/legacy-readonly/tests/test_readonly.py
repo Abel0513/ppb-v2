@@ -176,6 +176,7 @@ class DBAConnection(unittest.TestCase):
   out=m.public_error(failure.exception)
   self.assertEqual(out,{'result':'BLOCKED','reason':'DBA_SQL_FAILED_STOP_NO_FORCE','stage':'VERSION','mysql_error_code':1065,'sqlstate':'42000'})
   self.assertNotIn('private',json.dumps(out));self.assertIn('--init-command=SELECT 1',runner.call_args.args[0]);self.assertNotIn('--force',runner.call_args.args[0])
+  self.assertIn('--skip-force',runner.call_args.args[0]);self.assertIn('--skip-reconnect',runner.call_args.args[0])
  def test_real_preflight_contract_checks_identity_privileges_and_account_absence(self):
   m=module('dba-once')
   from types import SimpleNamespace

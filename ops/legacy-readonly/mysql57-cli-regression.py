@@ -29,6 +29,8 @@ def run():
   rows=good.stdout.strip().splitlines()
   check(rows[0]=='CLI_PROBE_OK\t5.7.44\troot@localhost' and rows[1]=='0','CLI_RESULT_POLLUTED_OR_ACCOUNT_CHANGED')
   check(set(rows[2:])=={'information_schema','mysql','performance_schema','sys'},'UNEXPECTED_NON_SYSTEM_DATABASE')
+  stopped=command(args,input="SELECT definitely_missing_metadata_symbol; SELECT 'MUST_NOT_CONTINUE';\n",timeout=5)
+  check(stopped.returncode!=0 and 'MUST_NOT_CONTINUE' not in stopped.stdout,'CLI_DID_NOT_STOP_AFTER_ERROR')
   version=command(['docker','exec',name,'mysql','--version'],timeout=5)
   check(version.returncode==0 and '5.7.44' in version.stdout,'CLIENT_VERSION_MISMATCH')
   # Exercise production subprocess error classification against the REAL client.

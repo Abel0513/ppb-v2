@@ -17,7 +17,7 @@ def public_error(exc):
  if isinstance(exc,SQLFailure):result.update(stage=exc.stage,mysql_error_code=exc.code,sqlstate=exc.state)
  return result
 def cli_args(mysql,connection,init_command=INIT_COMMAND):
- return [mysql,*connection,'--protocol=SOCKET','--batch','--raw','--skip-column-names','--connect-timeout=5','--init-command='+init_command,'--skip-tee','--skip-pager','--local-infile=0']
+ return [mysql,*connection,'--protocol=SOCKET','--batch','--raw','--skip-column-names','--connect-timeout=5','--init-command='+init_command,'--skip-force','--skip-reconnect','--skip-tee','--skip-pager','--local-infile=0']
 def sql_session(mysql,connection,defaults_file,run):
  def sql(stage,query):
   env={'HOME':'/root','USER':'root','LOGNAME':'root','PATH':'/usr/bin:/bin','LC_ALL':'C'}
