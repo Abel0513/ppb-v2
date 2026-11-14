@@ -8,7 +8,7 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('ppb_evaluations', function (Blueprint $t) {
-            $t->id();$t->string('subject_type',12);$t->unsignedBigInteger('subject_id');$t->char('month',7);
+            $t->engine='InnoDB';$t->id();$t->string('subject_type',12);$t->unsignedBigInteger('subject_id');$t->char('month',7);
             foreach (range(1,5) as $week) $t->decimal('score_interaction_w'.$week,8,2)->nullable();
             $t->decimal('score_interaction_avg',8,2)->nullable();
             $t->smallInteger('score_interaction_feedback')->default(0);
@@ -20,7 +20,7 @@ return new class extends Migration {
             $t->timestamps();$t->unique(['subject_type','subject_id','month'],'ppb_eval_subject_month_unique');
         });
         Schema::create('ppb_evaluation_ratings', function (Blueprint $t) {
-            $t->id();$t->string('source_type',12);$t->unsignedBigInteger('source_id');
+            $t->engine='InnoDB';$t->id();$t->string('source_type',12);$t->unsignedBigInteger('source_id');
             $t->string('subject_type',12);$t->unsignedBigInteger('subject_id');$t->char('month',7);
             foreach (['score_delivery_time','score_word_count','score_format','score_typos','score_semantic_clarity','score_reference_accuracy','score_logic_consistency','score_language_appropriateness','score_professional_bonus'] as $field) $t->smallInteger($field)->default(0);
             $t->tinyInteger('result_state')->nullable();$t->unsignedBigInteger('revision')->default(1);$t->char('source_sha256',64);
@@ -28,20 +28,20 @@ return new class extends Migration {
             $t->unique(['source_type','source_id'],'ppb_eval_source_rating_unique');$t->index(['subject_type','subject_id','month'],'ppb_eval_rating_subject_month');
         });
         Schema::create('ppb_evaluation_attendance', function (Blueprint $t) {
-            $t->id();$t->string('subject_type',12);$t->unsignedBigInteger('subject_id');
+            $t->engine='InnoDB';$t->id();$t->string('subject_type',12);$t->unsignedBigInteger('subject_id');
             $t->foreignId('game_id')->constrained('ppb_games')->restrictOnDelete();
             $t->tinyInteger('attendance_status')->nullable();$t->foreignId('waived_submission_id')->nullable()->constrained('ppb_submissions')->restrictOnDelete(); // null is an explicit V2 waiver, not deletion of history.
             $t->unsignedBigInteger('revision')->default(1);$t->foreignId('actor_id')->nullable()->constrained('ppb_accounts')->nullOnDelete();$t->timestamps();
             $t->unique(['subject_type','subject_id','game_id'],'ppb_eval_attendance_subject_game');
         });
         Schema::create('ppb_evaluation_videos', function (Blueprint $t) {
-            $t->id();$t->dateTime('scheduled_at');
+            $t->engine='InnoDB';$t->id();$t->dateTime('scheduled_at');
             foreach(range(1,3) as $slot)$t->string('guest_'.$slot,32)->nullable()->index();
             $t->boolean('cancelled')->default(false);$t->unsignedBigInteger('revision')->default(1);
             $t->foreignId('actor_id')->nullable()->constrained('ppb_accounts')->nullOnDelete();$t->timestamps();$t->index('scheduled_at');
         });
         Schema::create('ppb_evaluation_events', function (Blueprint $t) {
-            $t->id();$t->foreignId('evaluation_id')->constrained('ppb_evaluations')->restrictOnDelete();
+            $t->engine='InnoDB';$t->id();$t->foreignId('evaluation_id')->constrained('ppb_evaluations')->restrictOnDelete();
             $t->uuid('request_id')->unique();$t->string('operation',32);$t->char('payload_sha256',64);
             $t->foreignId('actor_id')->nullable()->constrained('ppb_accounts')->nullOnDelete();
             $t->json('before_json')->nullable();$t->json('after_json');$t->timestamp('created_at')->useCurrent();

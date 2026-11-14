@@ -23,9 +23,10 @@ class EvaluationService
             $snapshot=$this->history($snapshot,$older,$prior);
         }
         $rows=$this->selector->legacyRows($snapshot);$schedules=[];
-        foreach($snapshot['schedules'] as $s)$schedules['legacy:'.$s['id']]=$s;
+        foreach($snapshot['schedules'] as $s){$s['_display_code']=((int)$s['game_type']===1?'G':'E').($s['game_id']??'?');$schedules['legacy:'.$s['id']]=$s;}
         [$native,$nativeSchedules]=$this->nativeRows($date,$subject);
         $rows=array_merge($rows,$native);$schedules+=$nativeSchedules;
+        foreach($rows as &$p)$p['_game_code']=$schedules[$p['_schedule_key']]['_display_code']??'來源排程缺失';unset($p);
         $overrides=DB::table('ppb_evaluation_ratings')->where('subject_type',$subject['type'])->where('subject_id',$subject['id'])->whereIn('month',[$prior,$month])->get();
         $bySource=[];foreach($overrides as $r)$bySource[$r->source_type.':'.$r->source_id]=(array)$r;
         foreach($rows as &$row){
@@ -129,7 +130,7 @@ class EvaluationService
             ->whereNull('p.legacy_source_pick_id')->whereIn('p.status',['submitted','approved','changes_requested'])->whereNotNull('p.submitted_at')->whereNotNull('p.submitted_analyst_id')
             ->whereBetween('g.recommended_at',[$date->subMonths(2)->startOfMonth()->utc()->format('Y-m-d H:i:s'),$date->endOfMonth()->utc()->format('Y-m-d H:i:s')])
             ->orderBy('g.recommended_at')->orderBy('p.id')->limit(2001)
-            ->get(['p.id','p.game_id','p.submitted_analyst_id','p.kind','a.original_analyst_id','g.recommended_at','g.market_type']);
+            ->get(['p.id','p.game_id','p.submitted_analyst_id','p.kind','a.original_analyst_id','g.recommended_at','g.market_type','g.game_type','g.game_number']);
         if($records->count()>2000)throw new \RuntimeException('V2_EVALUATION_COVERAGE_LIMIT');
         $maps=$this->subjects->mappings();$reverse=array_flip($maps);$identity=fn($id)=>isset($reverse[$id])?'legacy:'.$reverse[$id]:'v2:'.$id;
         $rows=[];$schedules=[];
@@ -138,7 +139,7 @@ class EvaluationService
             $p=array_fill_keys(LegacyScheduleCalculator::RATING_FIELDS,0);
             $p+=['_source_type'=>'v2','_source_id'=>(int)$r->id,'_author_key'=>$author,'_absence_key'=>$sub?$original:null,'_is_substitution'=>$sub,'_schedule_key'=>'v2:'.$r->game_id,
                 'recommended_time'=>CarbonImmutable::parse($r->recommended_at,'UTC')->tz('Asia/Taipei')->format('Y-m-d H:i:s'),'is_win'=>0,'is_bonus'=>$r->kind==='bonus'?1:0,'is_long'=>$r->kind==='long'?1:0];
-            $rows[]=$p;$schedules[$p['_schedule_key']]=['id'=>(int)$r->game_id,'market_type'=>(int)$r->market_type];
+            $rows[]=$p;$schedules[$p['_schedule_key']]=['id'=>(int)$r->game_id,'market_type'=>(int)$r->market_type,'_display_code'=>((int)$r->game_type===1?'G':'E').($r->game_number??'?')];
         }
         if($rows){
             $waivers=DB::table('ppb_evaluation_attendance')->whereIn('game_id',array_map(fn($r)=>(int)substr($r['_schedule_key'],3),$rows))->whereNull('attendance_status')->get(['game_id','subject_type','subject_id','waived_submission_id']);

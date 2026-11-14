@@ -63,10 +63,10 @@ class EvaluationMysql57Test extends TestCase
             DB::statement('CREATE TEMPORARY TABLE ppb_legacy_pick_contents (source_pick_id BIGINT PRIMARY KEY,game_id BIGINT,legacy_analyst_id BIGINT,kind VARCHAR(16)) ENGINE=InnoDB');
             // Exercise the real service's UTC month selection and imported/draft
             // exclusions through the same live MySQL session, never a mock SQL DB.
-            DB::statement('CREATE TEMPORARY TABLE ppb_games (id BIGINT PRIMARY KEY,recommended_at DATETIME,market_type INT) ENGINE=InnoDB');
+            DB::statement('CREATE TEMPORARY TABLE ppb_games (id BIGINT PRIMARY KEY,recommended_at DATETIME,market_type INT,game_type INT DEFAULT 1,game_number INT DEFAULT 9) ENGINE=InnoDB');
             DB::statement('CREATE TEMPORARY TABLE ppb_assignments (id BIGINT PRIMARY KEY,game_id BIGINT,kind VARCHAR(16),original_analyst_id BIGINT,current_analyst_id BIGINT) ENGINE=InnoDB');
             DB::statement('CREATE TEMPORARY TABLE ppb_submissions (id BIGINT PRIMARY KEY,game_id BIGINT,assignment_id BIGINT,submitted_analyst_id BIGINT,kind VARCHAR(16),status VARCHAR(32) DEFAULT \'submitted\',submitted_at DATETIME NULL,legacy_source_pick_id BIGINT NULL) ENGINE=InnoDB');
-            DB::table('ppb_games')->insert([['id'=>1,'recommended_at'=>'2026-04-30 16:00:00','market_type'=>1],['id'=>2,'recommended_at'=>'2026-05-31 15:59:59','market_type'=>2],['id'=>3,'recommended_at'=>'2026-05-31 16:00:00','market_type'=>1]]);
+            DB::table('ppb_games')->insert([['id'=>1,'recommended_at'=>'2026-04-30 16:00:00','market_type'=>1,'game_number'=>9],['id'=>2,'recommended_at'=>'2026-05-31 15:59:59','market_type'=>2,'game_number'=>10],['id'=>3,'recommended_at'=>'2026-05-31 16:00:00','market_type'=>1,'game_number'=>11]]);
             foreach([1,2,3] as $gid)DB::table('ppb_assignments')->insert(['id'=>$gid,'game_id'=>$gid,'kind'=>'pick','original_analyst_id'=>9,'current_analyst_id'=>9]);
             foreach([[1,1,null,'2026-05-01 00:00:00'],[2,2,null,'2026-05-01 00:00:00'],[3,3,null,'2026-05-01 00:00:00'],[4,1,333,'2026-05-01 00:00:00'],[5,1,null,null]] as [$pid,$gid,$legacy,$submitted])DB::table('ppb_submissions')->insert(['id'=>$pid,'game_id'=>$gid,'assignment_id'=>$gid,'submitted_analyst_id'=>9,'kind'=>'pick','submitted_at'=>$submitted,'legacy_source_pick_id'=>$legacy]);
             DB::table('ppb_submissions')->insert([['id'=>7,'game_id'=>1,'assignment_id'=>1,'submitted_analyst_id'=>9,'kind'=>'pick','status'=>'legacy_imported','submitted_at'=>'2026-05-01 00:00:00','legacy_source_pick_id'=>null],['id'=>8,'game_id'=>1,'assignment_id'=>1,'submitted_analyst_id'=>9,'kind'=>'pick','status'=>'draft','submitted_at'=>'2026-05-01 00:00:00','legacy_source_pick_id'=>null]]);
@@ -76,7 +76,7 @@ class EvaluationMysql57Test extends TestCase
             $realService=new EvaluationService($reader,$subjects,new LegacyMonthSelector,$reporter,new LegacyRatingCalculator);
             $writes=0;$loaded=$realService->load(['type'=>'legacy','id'=>4,'native_id'=>9],'2026-05');
             self::assertSame(0,$writes,'Loading an evaluation must never create rows.');
-            self::assertSame(2,$loaded['current']['counts']['records']);self::assertCount(3,$loaded['history']);
+            self::assertSame(2,$loaded['current']['counts']['records']);self::assertCount(3,$loaded['history']);self::assertSame(['G9','G10'],array_column($loaded['current']['selected']['records'],'_game_code'));
             self::assertSame(['2026-05-01 00:00:00','2026-05-31 23:59:59'],array_column($loaded['current']['selected']['records'],'recommended_time'));
             self::assertSame(['legacy:4','legacy:4'],array_column($loaded['current']['selected']['records'],'_author_key'));
             self::assertSame(1,$loaded['current']['next_rating']['rating_level'],'Missing monthly grade falls back to source profile, not salary default2.');
