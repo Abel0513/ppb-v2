@@ -83,3 +83,10 @@ If no existing authorized management connection exists, report this actual gap.
 After its receipt, resume existing db_permissions/schema/bounded SELECT operations;
 then verify exact SQL selection, analyst identity, templates and actual parity before
 formal V2 assessment persistence/UI deployment. Source-only arithmetic is not parity.
+
+
+Final readonly bookend Run43615768505 PASS: numeric roster unchanged, schedule
+primary key0 absent, repeated May source fingerprint unchanged. SSM commands:
+7641065d-55cb-4261-b92f-f3e8f0cd4d92 (roster),
+1a36fd57-c0f8-42ed-999b-3e08afc678c9 (zero-key),
+769799f0-91eb-4996-9384-305e941b9020 (repeat). All legacy writes0.

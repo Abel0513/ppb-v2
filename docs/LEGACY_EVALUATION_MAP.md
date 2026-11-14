@@ -241,3 +241,10 @@ are individually readonly/RR with7 InnoDB tables, not globally atomic across run
 Reader installation Run43614951108, SSM20c34a0f-62f8-436e-b289-db54d0a14499,
 retains original catalog and grants. Legacy writes0. This source parity does not
 prove deployed UI, private self-service identity or production persistence.
+
+
+Final readonly bookend Run43615768505 PASS: numeric roster unchanged, schedule
+primary key0 absent, repeated May source fingerprint unchanged. SSM commands:
+7641065d-55cb-4261-b92f-f3e8f0cd4d92 (roster),
+1a36fd57-c0f8-42ed-999b-3e08afc678c9 (zero-key),
+769799f0-91eb-4996-9384-305e941b9020 (repeat). All legacy writes0.
