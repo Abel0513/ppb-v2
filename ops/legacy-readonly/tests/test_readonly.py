@@ -109,6 +109,15 @@ $score=2.5; $row['analyst_id']=12; $model=M('analyst_pick');
  def test_sql_month_formats_are_visible_but_literal_personal_data_is_not(self):
   safe=self.safe("<?php $m->field(\"SUM(CASE WHEN is_win=1 THEN 1 ELSE 0 END) AS win\"); $m->where(['_string'=>\"DATE_FORMAT(recommended_time,'%Y-%m')='PrivateName'\"]);")
   self.assertIn('SUM(CASE WHEN is_win=1',safe);self.assertIn('%Y-%m',safe);self.assertNotIn('PrivateName',safe)
+ def test_interpolated_where_structure_keeps_join_keys_but_no_literal_names(self):
+  raw='''<?php $m->where(['_string'=>"schedule_date >= '{$start}' AND (host_name='{$person}' OR guest_1_name='PrivatePerson' OR guest_2_name='王小明')"]);'''
+  safe=self.safe(raw)
+  for name in ['schedule_date','host_name','guest_1_name','guest_2_name']:self.assertIn(name,safe)
+  self.assertNotIn('PrivatePerson',safe);self.assertNotIn('王小明',safe)
+  self.assertEqual(raw.count('\n'),safe.count('\n'))
+ def test_non_sql_interpolation_and_sql_comments_do_not_export_values(self):
+  for raw in ['''<?php $v="PrivatePerson {$id}";''','''<?php $m->where(['_string'=>"id={$id} /* private comment */ AND guest='PrivatePerson'"]);''']:
+   safe=self.safe(raw);self.assertNotIn('PrivatePerson',safe);self.assertNotIn('private comment',safe)
 
 class SQLBoundary(unittest.TestCase):
  def setUp(self):
