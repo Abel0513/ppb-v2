@@ -10,7 +10,7 @@ def need(ok,code):
     if not ok:raise RuntimeError(code)
 def valid(path):
     p=PurePosixPath(path)
-    return isinstance(path,str) and len(path)<=240 and not p.is_absolute() and '..' not in p.parts and not DENY.search(path) and p.suffix.lower() in EXT and p.parts[0]=='Application' and any(x in {'Controller','Model','View'} for x in p.parts)
+    return isinstance(path,str) and len(path)<=240 and not p.is_absolute() and '..' not in p.parts and not DENY.search(path) and p.suffix.lower() in EXT and p.parts[0].lower() in {'application','tpl','template','templates','views','themes'} and (any(x.lower() in {'controller','model','view','views','tpl','template','templates','themes'} for x in p.parts) or path.startswith('Application/Common/Common/'))
 def read(path,root=ROOT):
     need(valid(path),'SOURCE_PATH_DENIED')
     fd=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
@@ -33,7 +33,8 @@ def inventory(root=ROOT):
     need(os.access(root/'Application',os.R_OK|os.X_OK),'SOURCE_ROOT_NOT_ACCESSIBLE')
     rows=[];count=0
     def fail(exc):raise RuntimeError('SOURCE_INVENTORY_INCOMPLETE')
-    for base,dirs,files in os.walk(root/'Application',followlinks=False,onerror=fail):
+    roots=[p for p in root.iterdir() if p.is_dir() and not p.is_symlink() and p.name.lower() in {'application','tpl','template','templates','views','themes'}]
+    for base,dirs,files in (item for start in roots for item in os.walk(start,followlinks=False,onerror=fail)):
         rel=Path(base).relative_to(root).as_posix()
         dirs[:]=sorted(x for x in dirs if not DENY.search(rel+'/'+x) and not (Path(base)/x).is_symlink())
         for name in sorted(files):

@@ -1,10 +1,49 @@
 import importlib.util,json,os,shutil,subprocess,tempfile,unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch,MagicMock
 ROOT=Path(__file__).resolve().parents[1]
 def module(name):
  s=importlib.util.spec_from_file_location('legacy_'+name,ROOT/(name+'.py'));m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m
 w=module('worker');d=module('dispatch')
+class ManagementProbe(unittest.TestCase):
+ def test_profile_names_are_only_headers_not_passwords_or_options(self):
+  m=module('management-probe')
+  self.assertEqual(m.profile_names('[local_dba]\nuser=root\npassword=NEVER_EXPORT\n[bad/name]\n[client]\n'),['client','local_dba'])
+ def test_privilege_proof_requires_global_all_with_grant_option(self):
+  m=module('management-probe')
+  self.assertTrue(m.admin_capability(["GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY PASSWORD '*PRIVATE' WITH GRANT OPTION"]))
+  for grant in ["GRANT ALL PRIVILEGES ON old.* TO 'u'@'localhost' WITH GRANT OPTION","GRANT ALL PRIVILEGES ON *.* TO 'u'@'localhost'","GRANT SELECT ON *.* TO 'u'@'localhost' WITH GRANT OPTION"]:
+   self.assertFalse(m.admin_capability([grant]))
+ def test_authentication_errors_and_hashes_cannot_be_exported(self):
+  m=module('management-probe')
+  from types import SimpleNamespace
+  p=SimpleNamespace(returncode=1,stdout='PRIVATE',stderr='PASSWORD_PRIVATE')
+  with patch.object(m,'invoke',return_value=p):
+   self.assertEqual(m.connection([], '/tmp/mysql.sock','credentialless-root'),{'method':'credentialless-root','result':'UNAVAILABLE','reason':'CLIENT_FAILED_NO_SAFE_ERROR_CODE'})
+  p=SimpleNamespace(returncode=0,stdout="5.7.44-log\troot@localhost\t/tmp/mysql.sock\nGRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY PASSWORD '*PRIVATE' WITH GRANT OPTION\n",stderr='')
+  with patch.object(m,'invoke',return_value=p):
+   result=m.connection([], '/tmp/mysql.sock','credentialless-root')
+   self.assertTrue(result['required_privileges_proven']);self.assertNotIn('PRIVATE',json.dumps(result))
+ def test_mysql_failure_exports_only_fixed_reason_or_numeric_code(self):
+  m=module('management-probe')
+  from types import SimpleNamespace
+  self.assertEqual(m.failure(SimpleNamespace(stderr="ERROR 1045: private-user SECRET")),'MYSQL_ERROR_1045')
+  self.assertEqual(m.failure(SimpleNamespace(stderr="unknown option secret=value")),'CLIENT_OPTION_UNSUPPORTED')
+ def test_mysql57_passwordless_probe_ignores_login_file_without_unsupported_option(self):
+  m=module('management-probe')
+  with patch.object(m.subprocess,'run') as run:
+   m.invoke(['mysql','--no-defaults','--skip-password'])
+   self.assertEqual(run.call_args.kwargs['env']['MYSQL_TEST_LOGIN_FILE'],'/dev/null')
+  with patch.object(m.subprocess,'run') as run:
+   m.invoke(['mysql','--no-defaults','--login-path=existing'])
+   self.assertNotIn('MYSQL_TEST_LOGIN_FILE',run.call_args.kwargs['env'])
+  self.assertNotIn("'--no-login-paths'",(ROOT/'management-probe.py').read_text())
+ def test_probe_has_no_business_sql_or_mutation_and_no_application_paths(self):
+  m=module('management-probe');text=(ROOT/'management-probe.py').read_text()
+  self.assertNotIn('shell=True',text);self.assertNotIn('/www/wwwroot',text)
+  for sql in ['CREATE USER \'','GRANT SELECT','ALTER USER','INSERT INTO','UPDATE mysql','DELETE FROM']:
+   self.assertNotIn(sql,text)
+  with patch.object(m.os,'geteuid',return_value=997):self.assertEqual(m.run(),{'result':'AUTHORIZED_ROOT_REQUIRED'})
 class Files(unittest.TestCase):
  def test_traversal_credentials_and_non_source_denied(self):
   for path in ['../db.php','/etc/passwd','Application/Common/Conf/db.php','Application/Admin/Controller/auth.php','Application/Admin/View/.env','Application/Admin/View/x.sql','Application/Runtime/index.php']:
@@ -61,7 +100,15 @@ $score=2.5; $row['analyst_id']=12; $model=M('analyst_pick');
  def test_application_code_is_never_executed(self):
   safe=self.safe("<?php throw new Exception('must-not-execute'); file_put_contents('/tmp/no-create','x');")
   self.assertIn('file_put_contents',safe)
-if __name__=='__main__':unittest.main()
+
+ def test_array_values_stay_private_but_program_keys_and_format_context_remain(self):
+  raw="<?php $keys=['private-array-value']; $x=$row['score_delivery_time']; $x=date('Y-m'); $n=I('post.score',0,'intval');"
+  safe=self.safe(raw)
+  self.assertNotIn('private-array-value',safe)
+  for code in ["$row['score_delivery_time']","date('Y-m')","I('post.score',0,'intval')"]:self.assertIn(code,safe)
+ def test_sql_month_formats_are_visible_but_literal_personal_data_is_not(self):
+  safe=self.safe("<?php $m->field(\"SUM(CASE WHEN is_win=1 THEN 1 ELSE 0 END) AS win\"); $m->where(['_string'=>\"DATE_FORMAT(recommended_time,'%Y-%m')='PrivateName'\"]);")
+  self.assertIn('SUM(CASE WHEN is_win=1',safe);self.assertIn('%Y-%m',safe);self.assertNotIn('PrivateName',safe)
 
 class SQLBoundary(unittest.TestCase):
  def setUp(self):
@@ -74,8 +121,10 @@ class SQLBoundary(unittest.TestCase):
   prefix="$c=['schema'=>'old','tables'=>['old.scores'=>['data_columns'=>['id','score']]]];"
   grants=['GRANT USAGE ON *.* TO u','GRANT REFERENCES, SHOW VIEW ON `old`.* TO u','GRANT SELECT (`id`, `score`) ON `old`.`scores` TO u']
   result=self.php_case(prefix+'echo json_encode(checkedGrants(json_decode('+json.dumps(json.dumps(grants))+',true),$c));')
+  profile=prefix.replace('old.scores','old.analyst_profiles');profile_grants=[g.replace('`scores`','`analyst_profiles`') for g in grants]
+  check=self.php_case(profile+'echo json_encode(checkedGrants(json_decode('+json.dumps(json.dumps(profile_grants))+',true),$c));');self.assertEqual(check.returncode,0,check.stdout+check.stderr)
   self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-  for bad in ['GRANT SELECT ON `old`.* TO u','GRANT INSERT ON `old`.`scores` TO u','GRANT SELECT (`password`) ON `old`.`scores` TO u','GRANT EXECUTE ON *.* TO u','GRANT FILE ON *.* TO u','GRANT SELECT (`id`) ON `other`.`scores` TO u','GRANT REFERENCES, SHOW VIEW ON `other`.* TO u']:
+  for bad in ['GRANT SELECT ON `old`.* TO u','GRANT INSERT ON `old`.`scores` TO u','GRANT SELECT (`password`) ON `old`.`scores` TO u','GRANT EXECUTE ON *.* TO u','GRANT FILE ON *.* TO u','GRANT SUPER ON *.* TO u','GRANT PROXY ON x TO u','GRANT SELECT (`id`) ON `old`.`scores` TO u WITH GRANT OPTION','GRANT SELECT (`id`) ON `other`.`scores` TO u','GRANT REFERENCES, SHOW VIEW ON `other`.* TO u']:
    result=self.php_case(prefix+'checkedGrants(json_decode('+json.dumps(json.dumps(grants+[bad]))+',true),$c);')
    self.assertEqual(result.returncode,2,bad)
  def test_request_filters_are_bound_and_cannot_be_sql(self):
@@ -111,3 +160,49 @@ class DocumentContract(unittest.TestCase):
   result=m.invoke({'operation':'inventory'},call)
   self.assertEqual(result['reason'],'REVIEWED_READER_NOT_INSTALLED');self.assertIsNone(result['ssm_command_id'])
   self.assertEqual(len(calls),2)
+
+class DBAConnection(unittest.TestCase):
+ def config(self):
+  config=MagicMock();config.is_dir.return_value=True;config.is_symlink.return_value=False;config.stat.return_value.st_uid=0
+  config.__truediv__.return_value.exists.return_value=False;config.__truediv__.return_value.is_symlink.return_value=False
+  return config
+ def test_init_1065_stops_at_version_without_exposing_stderr_or_sql(self):
+  m=module('dba-once')
+  from types import SimpleNamespace
+  runner=MagicMock(return_value=SimpleNamespace(returncode=1,stdout='',stderr='ERROR 1065 (42000): private-password SQL credential'))
+  with patch.object(m.os,'geteuid',return_value=0),patch.object(m,'CONFIG',self.config()):
+   with self.assertRaises(m.SQLFailure) as failure:m.bootstrap('existing','mysql',runner)
+  self.assertEqual(runner.call_count,1)
+  out=m.public_error(failure.exception)
+  self.assertEqual(out,{'result':'BLOCKED','reason':'DBA_SQL_FAILED_STOP_NO_FORCE','stage':'VERSION','mysql_error_code':1065,'sqlstate':'42000'})
+  self.assertNotIn('private',json.dumps(out));self.assertIn('--init-command=SELECT 1',runner.call_args.args[0]);self.assertNotIn('--force',runner.call_args.args[0])
+  self.assertIn('--skip-force',runner.call_args.args[0]);self.assertIn('--skip-reconnect',runner.call_args.args[0])
+ def test_real_preflight_contract_checks_identity_privileges_and_account_absence(self):
+  m=module('dba-once')
+  from types import SimpleNamespace
+  results=['5.7.44-log\n','root@localhost\n',"GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' WITH GRANT OPTION\n",'0\n']
+  runner=MagicMock(side_effect=[SimpleNamespace(returncode=0,stdout=s,stderr='') for s in results])
+  with patch.object(m.os,'geteuid',return_value=0),patch.object(m,'CONFIG',self.config()):out=m.preflight('existing','mysql',runner)
+  self.assertEqual(out['result'],'READONLY_DBA_PREFLIGHT_PASS');self.assertEqual(out['sql_writes'],0)
+  self.assertTrue(out['readonly_account_absent']);self.assertTrue(out['private_files_absent'])
+  self.assertTrue(all(c.kwargs['input'].startswith(('SELECT','SHOW')) for c in runner.call_args_list))
+ def test_collision_stops_before_any_sql_or_creation(self):
+  m=module('dba-once');config=self.config();config.__truediv__.return_value.exists.return_value=True;runner=MagicMock()
+  with patch.object(m.os,'geteuid',return_value=0),patch.object(m,'CONFIG',config):
+   with self.assertRaisesRegex(RuntimeError,'COLLISION'):m.bootstrap('existing','mysql',runner)
+  runner.assert_not_called()
+ def test_ephemeral_admin_requires_real_interactive_session_and_quotes_client_options(self):
+  m=module('dba-authenticated-once')
+  with patch.object(m.os,'geteuid',return_value=997):
+   with self.assertRaisesRegex(RuntimeError,'EXISTING_INTERACTIVE'):m.run()
+  with patch.object(m.os,'geteuid',return_value=0),patch.object(m.sys.stdin,'isatty',return_value=False):
+   with self.assertRaisesRegex(RuntimeError,'EXISTING_INTERACTIVE'):m.run()
+  self.assertEqual(m.quote('a"b\\c\nuser=other'), '"a\\"b\\\\c\\nuser=other"')
+  self.assertNotIn("'--no-login-paths'",(ROOT/'dba-once.py').read_text())
+ def test_no_implicit_connection_or_old_application_config_fallback(self):
+  m=module('dba-once')
+  for args in [{},{'defaults_file':'/www/wwwroot/3.231.229.26/Application/Common/Conf/db.php'},{'login_path':'../escape'},{'login_path':'a','defaults_file':'/root/.my.cnf'}]:
+   with self.assertRaises(RuntimeError):m.management_options(**args)
+  self.assertEqual(m.management_options(login_path='existing-approved-dba'),['--no-defaults','--login-path=existing-approved-dba'])
+
+if __name__=='__main__':unittest.main()

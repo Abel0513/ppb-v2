@@ -1,50 +1,43 @@
 [
   {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
-    "offset": 0,
-    "limit": 160
+    "operation": "permissions"
   },
   {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
-    "offset": 160,
-    "limit": 160
+    "operation": "db_permissions"
   },
   {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AnalystPerformanceController.class.php",
-    "offset": 0,
-    "limit": 160
+    "operation": "schema",
+    "table": "pay.pay_analyst_profiles",
+    "limit": 50
   },
   {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AnalystPerformanceController.class.php",
-    "offset": 160,
-    "limit": 160
+    "operation": "schema",
+    "table": "pay.pay_analyst_pick",
+    "limit": 50
   },
   {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 2160,
-    "limit": 160
+    "operation": "schema",
+    "table": "pay.pay_analyst_monthly_evaluation",
+    "limit": 50
   },
   {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 2320,
-    "limit": 160
+    "operation": "schema",
+    "table": "pay.pay_analyst_monthly_rating",
+    "limit": 50
   },
   {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 2480,
-    "limit": 160
+    "operation": "schema",
+    "table": "pay.pay_attendance_record",
+    "limit": 50
   },
   {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 2640,
-    "limit": 160
+    "operation": "select",
+    "table": "pay.pay_analyst_profiles",
+    "columns": [
+      "id",
+      "rating_level",
+      "user_type"
+    ],
+    "limit": 5
   }
 ]

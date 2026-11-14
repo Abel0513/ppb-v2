@@ -20,6 +20,8 @@ jobs:
       - run: python3 -m unittest discover -s ops/deploy/tests -v
       - run: python3 -m unittest discover -s ops/automation/tests -v
       - run: python3 -m unittest discover -s ops/legacy-readonly/tests -v
+      - name: Real MySQL5.7.44 CLI regression (socket-only, tmpfs, no application or test DB)
+        run: python3 ops/legacy-readonly/mysql57-cli-regression.py
       - run: php -l ops/legacy-readonly/db-worker.php
       - run: php -l ops/legacy-readonly/source-tokens.php
       - run: php -l ops/deploy/isolation/db-probe.php

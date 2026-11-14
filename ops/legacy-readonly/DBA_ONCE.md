@@ -25,3 +25,108 @@ Validation after provisioning is automatic via existing fixed db_permissions,
 schema and bounded select operations: verify actual actor, all grants, transaction
 readonly, output policy, row/time limit, and zero old write statements. A successful
 provisioning receipt alone is NOT query/parity acceptance.
+
+## Existing administrator: single CloudShell operation
+
+`admin-cloudshell-once.sh` is the single reviewed administrative operation. Use an
+existing AWS administrator identity (the ordinary V2/WP roles are rejected). It
+pins the installed DBA tool SHA, runs only that fixed program on this EC2 via
+AWS-RunShellScript, waits, and returns a filtered receipt. It does not change IAM,
+create a new high-privilege management connection or ask for/export a password.
+
+One nonsecret connection handle is supplied locally by the administrator:
+`login:EXISTING_AUTHORIZED_PROFILE` or `file:/root/EXISTING_PRIVATE_MYSQL_DEFAULTS`.
+The defaults file alternative must already exist, root-owned0600, nonsymlink and
+under/root or/etc/mysql; old application config paths are rejected. Do not invent
+an available profile/file. If neither existing authorized mechanism is available,
+this is still a real DBA management boundary, not permission for Codex to search
+old passwords. The helper stops, never falls back to an implicit root login.
+
+The DBA connection is forced to the local MySQL Unix socket. Only a new locked
+principal, scoped metadata/column-read grants and NEW private reader files are
+created; the new principal is unlocked last. No old business DDL/DML. A collision
+or SQL error stops without overwriting/forcing. Subsequent runtime db_permissions,
+schema/select evidence is still required before claiming database readiness.
+
+## Fixed management connection probe (read only)
+
+The reviewed installation receipt includes `management_probe`. It runs as root
+only within the existing pinned fixed-tool installation, never the daily reader.
+It calls mysql_config_editor print --all but returns only validated section names;
+password/option text stays in memory and is not logged or saved. It stat's only
+five conventional root client configuration paths, without reading their content.
+Existing files are candidates, NOT verified DBA credentials. No recursive search,
+old application configuration access or credential export.
+
+For exactly one known local socket it tries credentialless root once, then up to
+four existing login paths. All connections force Unix socket, fixed SELECT/SHOW
+metadata only, no init command/tee/pager/local infile. Successful proof requires
+MySQL5.7 and global ALL WITH GRANT OPTION; lesser grants are conservatively
+reported unproven. Authentication plugin metadata is returned only when accessible.
+No account creation, grants or business query occurs during this probe. Missing
+editor/socket, failed authentication and insufficient proof remain distinct from
+verified absence/availability. Standard files are not automatically loaded because
+arbitrary client init options cannot be assumed safe for a read-only probe.
+
+## Actual connection discovery and no-profile alternative (2026-11-14)
+
+Run43577219294, SSM3a91c40e-0c9b-4699-8110-a6ac150d1d0f:
+root mysql_config_editor returned successfully but neither stream contained any
+named profile. /root/.mylogin.cnf exists root0600; presence is not authentication.
+The five standard management config candidates contained no private root-owned
+usable management file. /tmp/mysql.sock exists; explicit passwordless root on it
+returns MYSQL_ERROR_1045. Authentication plugin and DBA grants are therefore NOT
+verified. No recursive search, credential export, old business query or SQL write.
+
+Do not invent/request a nonexistent login-path. An existing MySQL DBA can use their
+already-authorized INTERACTIVE OS/DB management session to run the installed fixed
+helper below. This does NOT require creating a persistent DBA login profile:
+
+    python3 /www/ppb-v2-deploy/scripts/legacy-readonly/dba-authenticated-once.py
+
+The DBA supplies their existing username/password directly to this LOCAL tool,
+never ChatGPT, GitHub, SSM command parameters or Actions. A root0600 temporary
+client file is used only for the fixed dba-once.py, with SQL history disabled by
+batch mode; the file is removed on normal/error completion. Only the NEW scoped
+readonly credentials remain in /etc/ppb-legacy-ro. No DBA password is returned.
+It refuses noninteractive execution and verifies installed helper bytes, never
+creates a new DBA authority, resets a password or searches old app credentials.
+The defaults-file path now uses the MySQL5.7-compatible fixed login-file override
+rather than unsupported --no-login-paths. The CloudShell helper's tool pin changes
+for this compatibility fix; do not bypass the earlier pin on an old copied script.
+
+Required person/authority: the existing MySQL DBA plus access to the already
+controlled host-management session (they may be the same administrator). AWS IAM
+alone does not supply MySQL authentication. If nobody has such an existing DBA
+session/credential, stop; authorized MySQL credential recovery is a separate
+administrative decision, not something Codex may infer or brute force.
+
+## MySQL5.7 empty-init regression and safe preflight
+
+The real5.7.44 CLI reproduces ERROR1065/42000 with --init-command= and succeeds
+with the fixed readonly --init-command=SELECT 1. Its result is consumed by the
+client initialization and does not pollute SELECT output. The mandatory CI step
+runs the actual client/server from a pinned official image with networking off,
+tmpfs data, and only MySQL system schemas; no application/test database or business
+row is created. A real1054 error also verifies stop-on-error/stage/code reporting.
+Never use --force or accept an empty initializer as equivalent to disabling it.
+
+The LOCAL interactive wrapper now defaults to PREFLIGHT ONLY:
+
+    python3 /www/ppb-v2-deploy/scripts/legacy-readonly/dba-authenticated-once.py
+
+It checks installed helper bytes, real version/identity, global ALL WITH GRANT
+OPTION, absence of ppb_legacy_ro and both private files. It outputs only a filtered
+receipt; no account/config is created. After that real receipt is verified, the
+same command with --apply performs the one-time setup. Apply repeats preflight
+before any write, uses the same local password entry, and stops on any failure or
+collision. Partial outcomes must not be retried blindly. Passwords remain local;
+raw CLI stderr, grants/authentication hashes and client configuration never leave
+the process. CLI failures include fixed stage plus numeric MySQL code/SQLSTATE;
+validation/local setup failures are separately labelled.
+
+The installer receipt records the actual previous/updated public dba-once.py SHA
+and absence of both private files. A remote install success or CI container PASS
+is NOT proof that authenticated EC2 root preflight succeeded; that still needs
+local interactive authentication unless a previously authorized DBA connection
+becomes available. Do not use V2 credentials or guess/root-reset passwords.
