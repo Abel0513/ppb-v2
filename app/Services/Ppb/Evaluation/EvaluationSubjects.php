@@ -14,10 +14,10 @@ class EvaluationSubjects
     public function mappings(): array
     {
         $pairs=DB::table('ppb_submissions as s')->join('ppb_legacy_pick_contents as p','p.source_pick_id','=','s.legacy_source_pick_id')
-            ->whereNotNull('s.submitted_analyst_id')->whereColumn('s.game_id','p.game_id')
+            ->whereNotNull('s.submitted_analyst_id')->whereColumn('s.game_id','p.game_id')->whereColumn('s.kind','p.kind')
             ->select('p.legacy_analyst_id','s.submitted_analyst_id')->distinct()->get();
         $forward=[];$reverse=[];
-        foreach($pairs as $pair){$a=(int)$pair->legacy_analyst_id;$b=(int)$pair->submitted_analyst_id;$forward[$a][$b]=true;$reverse[$b][$a]=true;}
+        foreach($pairs as $pair){$a=(int)$pair->legacy_analyst_id;$b=(int)$pair->submitted_analyst_id;if($a<=0||$b<=0)continue;$forward[$a][$b]=true;$reverse[$b][$a]=true;}
         $verified=[];
         foreach($forward as $legacy=>$candidates){
             if(count($candidates)!==1)continue;

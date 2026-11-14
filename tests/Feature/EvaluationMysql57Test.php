@@ -76,6 +76,13 @@ class EvaluationMysql57Test extends TestCase
             self::assertSame(['2026-05-01 00:00:00','2026-05-31 23:59:59'],array_column($loaded['current']['selected']['records'],'recommended_time'));
             self::assertSame(['legacy:4','legacy:4'],array_column($loaded['current']['selected']['records'],'_author_key'));
             self::assertSame(1,$loaded['current']['next_rating']['rating_level'],'Missing monthly grade falls back to source profile, not salary default2.');
+            // Only bijective archived pick lineage proves a cross-system identity.
+            DB::statement('CREATE TEMPORARY TABLE ppb_legacy_pick_contents (source_pick_id BIGINT PRIMARY KEY,game_id BIGINT,legacy_analyst_id BIGINT,kind VARCHAR(16)) ENGINE=InnoDB');
+            foreach([[101,4,9,1,'pick','pick'],[102,5,10,1,'pick','pick'],[103,5,11,1,'pick','pick'],[104,6,12,1,'pick','pick'],[105,7,12,1,'pick','pick'],[106,8,13,999,'pick','pick'],[107,9,14,1,'long','pick']] as [$source,$legacy,$native,$game,$kind,$sourceKind]){
+                DB::table('ppb_legacy_pick_contents')->insert(['source_pick_id'=>$source,'game_id'=>1,'legacy_analyst_id'=>$legacy,'kind'=>$sourceKind]);
+                DB::table('ppb_submissions')->insert(['id'=>$source,'game_id'=>$game,'assignment_id'=>1,'submitted_analyst_id'=>$native,'kind'=>$kind,'submitted_at'=>'2026-05-01 00:00:00','legacy_source_pick_id'=>$source]);
+            }
+            $actualSubjects=new EvaluationSubjects($reader);self::assertSame([4=>9],$actualSubjects->mappings());
             self::assertSame(0,(int)DB::selectOne("SELECT COUNT(*) n FROM information_schema.TABLES WHERE TABLE_SCHEMA='mysql' AND TABLE_NAME LIKE 'ppb_%'")->n);
             DB::disconnect('mysql');
         }finally{
