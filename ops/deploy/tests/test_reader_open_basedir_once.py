@@ -2,7 +2,7 @@ import importlib.util
 from pathlib import Path
 import unittest
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[1] / 'isolation'
 SPEC=importlib.util.spec_from_file_location('fpm_bridge_once',ROOT/'enable-reader-open-basedir-once.py')
 FPM=importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(FPM)
