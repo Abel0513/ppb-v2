@@ -1,41 +1,53 @@
 [
   {
     "operation": "select",
-    "table": "pay.pay_analyst_profiles",
+    "table": "pay.pay_schedule",
     "columns": [
       "id",
-      "sort_id",
-      "user_type",
-      "rating_level",
-      "analyst_level"
-    ],
-    "limit": 50
-  },
-  {
-    "operation": "select",
-    "table": "pay.pay_video_schedule",
-    "columns": [
-      "id",
-      "schedule_date"
-    ],
-    "limit": 1
-  },
-  {
-    "operation": "select",
-    "table": "pay.pay_attendance_record",
-    "columns": [
-      "id",
-      "gid",
-      "uid",
-      "attendance_status"
+      "recommended_time"
     ],
     "filters": [
       {
-        "column": "attendance_status",
+        "column": "id",
         "op": "=",
-        "value": 1
+        "value": 184
       }
     ],
     "limit": 1
+  },
+  {
+    "operation": "evaluation_summary",
+    "analyst_id": 3,
+    "month": "2026-05"
+  },
+  {
+    "operation": "evaluation_summary",
+    "analyst_id": 4,
+    "month": "2026-05"
+  },
+  {
+    "operation": "evaluation_summary",
+    "analyst_id": 5,
+    "month": "2026-05"
+  },
+  {
+    "operation": "evaluation_summary",
+    "analyst_id": 6,
+    "month": "2026-05"
+  },
+  {
+    "operation": "evaluation_summary",
+    "analyst_id": 7,
+    "month": "2026-05"
+  },
+  {
+    "operation": "evaluation_summary",
+    "analyst_id": 8,
+    "month": "2026-05"
+  },
+  {
+    "operation": "evaluation_summary",
+    "analyst_id": 9,
+    "month": "2026-05"
   }
 ]
