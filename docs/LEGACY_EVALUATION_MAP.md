@@ -92,3 +92,37 @@ boundaries and branch precedence; they do not claim live business-data parity.
   actual per-analyst/month parity. This is a precise schema/policy boundary,
   not failed DBA setup or permission to open arbitrary text/PII. Full UI, selectors,
   identity mapping and persistence are still pending. Source arithmetic is retained.
+
+## Real record parity and newly verified manual workflow
+
+Run43587125308, SSMd7378781-e4de-42ee-8574-f45fd5ad5f12 and
+20749af0-698b-4934-ac8b-1353127dd11f:10 historical numeric score rows, independently
+read twice, identical input fingerprint
+f190f422431eeea859b40477dcd32b189a44fa5d2179d2eb9d3059179f4dd901.
+V2 LegacyScheduleCalculator vs independent observed legacy record formulas:
+20/20 comparisons PASS. This is REAL_RECORD_TOTALS_ONLY, not complete monthly
+selection/identity/parity. No raw business rows are committed. Reproducible local
+receipt-only verifier: tests/Support/verify_legacy_record_parity.py (stdin actual
+fixed-reader receipts; report contains only counts/fingerprint/evidence IDs).
+
+New source evidence from the same run:
+
+- AdminScheduleController2927–2963: five nullable weekly scores; zeros count;
+  interaction avg=round(mean(non-null weeks)+intval(feedback),1). Blank/null weeks
+  are normalized at the form boundary, feedback added after the mean. Implemented
+  separately in LegacyInteractionCalculator with five regression tests. No V2
+  persistence/route/UI activation or old saveEvaluation call yet.
+- updateMonthlyAverages3008–3128 selects ALL source picks with delivery>0 for the
+  analyst/month, unlike analyststats' additional outcome/long/substitute predicates.
+  It returns without a write if totalCount=0; updates only three automatic score
+  columns, preserves existing manual scores. Never silently unify these selectors
+  or overwrite existing manual fields with defaults.
+- Video salary689–749 matches ONLY guest_1_name/guest_2_name/guest_3_name against
+  the analyst profile name. Host/editor do not count.400 per matching schedule,
+  even if the same analyst occupies multiple guest slots, because each row counts
+  once. Names must remain server-side; no generic name export is permitted.
+
+Live schema also shows schedule.market_type VARCHAR; the source uses intval with
+2 as the three-market branch. It is outside current numeric/date SELECT grants.
+A narrow typed-business-key extension and private aggregate-only name join are
+required before full monthly/salary parity; no broad free-text grant is justified.
