@@ -19,11 +19,16 @@ class ManagementProbe(unittest.TestCase):
   from types import SimpleNamespace
   p=SimpleNamespace(returncode=1,stdout='PRIVATE',stderr='PASSWORD_PRIVATE')
   with patch.object(m,'invoke',return_value=p):
-   self.assertEqual(m.connection([], '/tmp/mysql.sock','credentialless-root'),{'method':'credentialless-root','result':'UNAVAILABLE'})
+   self.assertEqual(m.connection([], '/tmp/mysql.sock','credentialless-root'),{'method':'credentialless-root','result':'UNAVAILABLE','reason':'CLIENT_FAILED_NO_SAFE_ERROR_CODE'})
   p=SimpleNamespace(returncode=0,stdout="5.7.44-log\troot@localhost\t/tmp/mysql.sock\nGRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY PASSWORD '*PRIVATE' WITH GRANT OPTION\n",stderr='')
   with patch.object(m,'invoke',return_value=p):
    result=m.connection([], '/tmp/mysql.sock','credentialless-root')
    self.assertTrue(result['required_privileges_proven']);self.assertNotIn('PRIVATE',json.dumps(result))
+ def test_mysql_failure_exports_only_fixed_reason_or_numeric_code(self):
+  m=module('management-probe')
+  from types import SimpleNamespace
+  self.assertEqual(m.failure(SimpleNamespace(stderr="ERROR 1045: private-user SECRET")),'MYSQL_ERROR_1045')
+  self.assertEqual(m.failure(SimpleNamespace(stderr="unknown option secret=value")),'CLIENT_OPTION_UNSUPPORTED')
  def test_probe_has_no_business_sql_or_mutation_and_no_application_paths(self):
   m=module('management-probe');text=(ROOT/'management-probe.py').read_text()
   self.assertNotIn('shell=True',text);self.assertNotIn('/www/wwwroot',text)
