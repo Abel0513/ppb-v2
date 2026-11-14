@@ -6,6 +6,54 @@ ROOT=Path('/www/wwwroot/3.231.229.26')
 DENY=re.compile(r'(^|/)(?:\.[^/]*|conf|config|runtime|vendor|node_modules|uploads?|backups?|logs?|cache|storage|certs?|keys?|\.git)(/|$)|(?:db|line|database|password|secret|credential|token|auth|backup|dump|certificate|private)[^/]*\.(?:php|json|ini|cnf|sql|pem|key|zip|gz)$',re.I)
 PHP='/www/server/php/84/bin/php'
 EXT={'.php','.html','.htm','.js','.css'}
+# Separate path-only UI operation. Does not widen source() or its tokenizer.
+UI_TEMPLATES={'.tpl','.html','.htm','.php'}
+UI_ASSETS={'.css','.js','.svg','.png','.jpg','.jpeg','.gif','.webp','.ico','.woff','.woff2','.ttf'}
+UI_PRIVATE=re.compile(r'(^|/)(?:\.[^/]*|conf|config|runtime|vendor|node_modules|uploads?|backups?|logs?|cache|storage|certs?|keys?|secrets?)(/|$)|(?:password|passwd|secret|credential|token|database|private|certificate|(?:^|/)(?:db|line|auth)(?:[._-]|$))',re.I)
+def ui_valid(path):
+    if not isinstance(path,str) or not 1<=len(path)<=240:return False
+    p=PurePosixPath(path)
+    if p.is_absolute() or '..' in p.parts or len(p.parts)>16 or UI_PRIVATE.search(path) or DENY.search(path):return False
+    parts=[x.lower() for x in p.parts];suffix=p.suffix.lower()
+    if parts[0]=='public':
+        return len(parts)>=3 and parts[1] in {'css','js','images','img','icons','fonts','assets'} and suffix in UI_ASSETS
+    return suffix in UI_TEMPLATES|{'.css','.js'} and (parts[0] in {'tpl','template','templates','views','themes'} or parts[0]=='application' and any(x in {'view','views','tpl','template','templates','themes'} for x in parts[1:-1]))
+def ui_stat(path,root):
+    need(ui_valid(path),'UI_PATH_DENIED')
+    fd=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:
+        for i,part in enumerate(PurePosixPath(path).parts):
+            child=os.open(part,os.O_RDONLY|os.O_NOFOLLOW|(os.O_DIRECTORY if i<len(PurePosixPath(path).parts)-1 else 0),dir_fd=fd)
+            os.close(fd);fd=child
+        s=os.fstat(fd)
+        need(stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<=500000,'UI_FILE_UNSAFE')
+        return s
+    finally:os.close(fd)
+def ui_inventory(q,root):
+    need(set(q)<={'operation','offset','limit'},'UI_INVENTORY_SCHEMA')
+    offset=q.get('offset',0);limit=q.get('limit',50)
+    need(type(offset)is int and 0<=offset<=5000 and type(limit)is int and 1<=limit<=50,'UI_PAGE_LIMIT')
+    rows=[];visited=0
+    def fail(exc):raise RuntimeError('UI_INVENTORY_OS_ACCESS_DENIED')
+    for base in sorted(root.iterdir()):
+        if base.name.lower() not in {'application','tpl','template','templates','views','themes','public'} or base.is_symlink() or not base.is_dir():continue
+        for parent,dirs,files in os.walk(base,followlinks=False,onerror=fail):
+            rel=Path(parent).relative_to(root)
+            dirs[:]=sorted(d for d in dirs if len(rel.parts)<15 and len((rel/d).as_posix())<=240 and not UI_PRIVATE.search((rel/d).as_posix()) and not DENY.search((rel/d).as_posix()) and not (Path(parent)/d).is_symlink())
+            if len(rel.parts)==1 and base.name.lower()=='public':dirs[:]=[d for d in dirs if d.lower() in {'css','js','images','img','icons','fonts','assets'}]
+            for name in sorted(files):
+                visited+=1;need(visited<=20000,'UI_SCAN_LIMIT')
+                path=(rel/name).as_posix()
+                if not ui_valid(path):continue
+                try:s=ui_stat(path,root)
+                except OSError as exc:
+                    if isinstance(exc,PermissionError):raise RuntimeError('UI_INVENTORY_OS_ACCESS_DENIED')
+                    continue
+                except RuntimeError:continue
+                rows.append(dict(path=path,suffix=PurePosixPath(path).suffix.lower(),size=s.st_size))
+                need(len(rows)<=5000,'UI_MATCH_LIMIT')
+    rows.sort(key=lambda x:x['path'])
+    return dict(format='UI_PATH_ONLY_V1',files=rows[offset:offset+limit],total=len(rows),next_offset=offset+limit if offset+limit<len(rows) else None,content_returned=False,source_writes=0,database_writes=0)
 def need(ok,code):
     if not ok:raise RuntimeError(code)
 def valid(path):
@@ -47,7 +95,8 @@ def inventory(root=ROOT):
     return sorted(rows)
 def operate(q,root=ROOT):
     need(isinstance(q,dict) and set(q)<= {'operation','path','query','offset','limit','table','columns','filters','analyst_id','start','end','month'},'REQUEST_SCHEMA')
-    op=q.get('operation');need(op in {'inventory','source','search','permissions','db_permissions','schema','select','video_count','evaluation_summary'},'OPERATION_DENIED')
+    op=q.get('operation');need(op in {'inventory','source','search','permissions','db_permissions','schema','select','video_count','evaluation_summary','ui_inventory'},'OPERATION_DENIED')
+    if op=='ui_inventory':return ui_inventory(q,root)
     if op in {'db_permissions','schema','select','video_count','evaluation_summary'}:
         need(Path('/etc/ppb-legacy-ro/credentials.json').exists(),'READONLY_DBA_PROVISIONING_REQUIRED')
         if op=='evaluation_summary':q=dict(q,operation='evaluation_snapshot',summary_only=True)

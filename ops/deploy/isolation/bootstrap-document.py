@@ -27,6 +27,16 @@ archive=root/'bootstrap/APPROVED_SHA/fixed.tar.gz'
 assert archive.is_file() and not archive.is_symlink() and archive.stat().st_size<5000000
 assert hashlib.sha256(archive.read_bytes()).hexdigest()=='APPROVED_SHA'
 expected=EXPECTED_HASHES
+# Existing isolated hosts (including the reviewed R2 repair) must never be
+# reprovisioned by a reader-tool refresh. Compare private bytes; do not export.
+policy=root/'policy/isolation.json'
+protected=[policy,Path('/etc/ppb-v2/php-fpm.conf'),Path('/etc/systemd/system/ppb-v2-php.service')]
+protected_before={}
+if policy.exists():
+    for path in protected:
+        st=path.lstat()
+        assert stat.S_ISREG(st.st_mode) and st.st_uid==0 and st.st_nlink==1 and st.st_mode&0o022==0 and not path.is_symlink()
+        protected_before[str(path)]=path.read_bytes()
 assert (root/'backups').is_dir() and not (root/'backups').is_symlink() and (root/'backups').stat().st_uid==0 and (root/'backups').stat().st_mode&0o077==0
 backup=root/'backups/fixed-tools-APPROVED_SHA'
 assert not backup.is_symlink()
@@ -53,17 +63,23 @@ with tarfile.open(archive,'r:gz') as tf:
         with os.fdopen(fd,'wb') as out:out.write(data);out.flush();os.fsync(out.fileno())
         os.replace(temp,target)
 for name,digest in expected.items():assert hashlib.sha256((root/name).read_bytes()).hexdigest()==digest
-subprocess.run(['python3',str(root/'scripts/isolation/prepare-os.py')],check=True,timeout=30)
-subprocess.run(['python3',str(root/'scripts/isolation/provision.py')],check=True,timeout=360)
+if not protected_before:
+    subprocess.run(['python3',str(root/'scripts/isolation/prepare-os.py')],check=True,timeout=30)
+    subprocess.run(['python3',str(root/'scripts/isolation/provision.py')],check=True,timeout=360)
 subprocess.run(['python3',str(root/'scripts/legacy-readonly/prepare.py')],check=True,timeout=120)
 print('V2_FIXED_TOOLS_INSTALLED=YES')
 print('V2_DB_AND_SERVICE_ISOLATION=NOT_YET_VERIFIED')
 p=subprocess.run(['python3',str(root/'scripts/isolation/lifecycle.py'),'inventory','--commit','COMMIT_VALUE','--request-id','bootstrap-inventory-APPROVED_SHORT'],capture_output=True,text=True,timeout=60)
 # The fixed inventory returns only bounded configuration metadata, never secrets.
+value={}
 try:
     value=json.loads(p.stdout)
     print('V2_INVENTORY='+json.dumps(value))
 except Exception:print('V2_INVENTORY=UNVERIFIED')
+if protected_before:
+    assert all(Path(name).read_bytes()==data for name,data in protected_before.items())
+    assert p.returncode==0 and value.get('result')=='PASS'
+    print('V2_EXISTING_FPM_POLICY_PRESERVED=YES')
 '''.replace('APPROVED_SHA',digest).replace('APPROVED_SHORT',digest[:16]).replace('EXPECTED_HASHES',repr(hashes)).replace('COMMIT_VALUE','0'*40)
     return digest,dict(schemaVersion='2.2',description='Reviewed one-time V2 fixed-tool install; no shell input/SQL grants/live app or old-system changes',parameters={},mainSteps=[
         dict(action='aws:runShellScript',name='prepareFixedTools',inputs=dict(timeoutSeconds='30',runCommand=['set -eu','umask 077','test "$(id -u)" = 0','test -d /www/ppb-v2-deploy && test ! -L /www/ppb-v2-deploy',f'test ! -L /www/ppb-v2-deploy/bootstrap',f'install -d -m 700 /www/ppb-v2-deploy/bootstrap/{digest}'])),
