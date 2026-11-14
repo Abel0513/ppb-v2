@@ -58,19 +58,21 @@ function videoPlan(array $q,array $catalog,array $seen):array {
   $query='SELECT /*+ MAX_EXECUTION_TIME(1000) */ COUNT(*) FROM '.ident($schema).'.`pay_video_schedule` v JOIN '.ident($schema).'.`pay_analyst_profiles` a ON a.id=? WHERE v.schedule_date BETWEEN ? AND ? AND TRIM(a.analyst_name)<>\'\' AND (v.guest_1_name=TRIM(a.analyst_name) OR v.guest_2_name=TRIM(a.analyst_name) OR v.guest_3_name=TRIM(a.analyst_name))';
   return [$query,[$id,$start,$end]];
 }
+require_once __DIR__.'/evaluation-snapshot.php';
 if(realpath($_SERVER['SCRIPT_FILENAME'])===__FILE__){try{
  must(posix_geteuid()>0,'NONROOT_DB_REQUIRED');$q=json_decode(stream_get_contents(STDIN,12000),true,512,JSON_THROW_ON_ERROR);
- must(is_array($q)&&!array_diff(array_keys($q),['operation','table','columns','filters','limit','offset','analyst_id','start','end']),'DB_REQUEST_SCHEMA');
+ must(is_array($q)&&!array_diff(array_keys($q),['operation','table','columns','filters','limit','offset','analyst_id','start','end','month','summary_only']),'DB_REQUEST_SCHEMA');
  $config=privateData('credentials.json');$catalog=privateData('catalog.json');
  must(array_keys($config)===['user','password','socket']&&$config['user']==='ppb_legacy_ro'&&is_string($config['password']),'DEDICATED_READONLY_ACCOUNT_REQUIRED');
  $pdo=new PDO('mysql:unix_socket=/run/ppb-legacy-ro/mysql.sock;charset=utf8mb4',$config['user'],$config['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false,PDO::ATTR_TIMEOUT=>5,PDO::MYSQL_ATTR_MULTI_STATEMENTS=>false,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
  $actor=$pdo->query('SELECT CURRENT_USER()')->fetchColumn();must($actor==='ppb_legacy_ro@localhost','WRONG_READONLY_DB_ACTOR');
  must(str_starts_with((string)$pdo->query('SELECT VERSION()')->fetchColumn(),'5.7.'),'MYSQL_VERSION_NOT_REVIEWED');
  $seen=checkedGrants($pdo->query('SHOW GRANTS')->fetchAll(PDO::FETCH_COLUMN),$catalog);
- $pdo->exec('SET SESSION MAX_EXECUTION_TIME=1000');$pdo->exec('SET SESSION TRANSACTION READ ONLY');$pdo->beginTransaction();
+ $pdo->exec('SET SESSION MAX_EXECUTION_TIME=1000');$pdo->exec('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');$pdo->exec('SET SESSION TRANSACTION READ ONLY');$pdo->beginTransaction();
  must((int)$pdo->query('SELECT @@session.tx_read_only')->fetchColumn()===1,'READONLY_TRANSACTION_NOT_ENFORCED');
- $op=$q['operation']??'';must(in_array($op,['db_permissions','schema','select','video_count'],true),'DB_OPERATION_DENIED');
- $out=['db_actor'=>$actor,'old_db_write_grants'=>false,'global_privileges'=>false,'transaction_readonly'=>true,'database_writes'=>0];
+ must($pdo->query('SELECT @@session.tx_isolation')->fetchColumn()==='REPEATABLE-READ','CONSISTENT_READ_NOT_ENFORCED');
+ $op=$q['operation']??'';must(in_array($op,['db_permissions','schema','select','video_count','evaluation_snapshot'],true),'DB_OPERATION_DENIED');
+ $out=['db_actor'=>$actor,'old_db_write_grants'=>false,'global_privileges'=>false,'transaction_readonly'=>true,'transaction_isolation'=>'REPEATABLE-READ','database_writes'=>0];
  if($op==='db_permissions'){
   $out['authorized_tables']=array_keys($seen);$out['schema_snapshot_sha256']=hash_file('sha256','/etc/ppb-legacy-ro/catalog.json');$out['grant_option']=false;$out['evaluation_domains_enabled']=!empty($catalog['evaluation_read_v1']);
   $out['typed_key_grants']=[];$out['private_join_grants']=[];
@@ -78,6 +80,7 @@ if(realpath($_SERVER['SCRIPT_FILENAME'])===__FILE__){try{
   foreach(PRIVATE_JOINS as $table=>$columns)foreach($columns as $column)$out['private_join_grants'][$table.'.'.$column]=in_array($column,$seen[$catalog['schema'].'.'.$table]??[],true);
   if($out['evaluation_domains_enabled']){$runtime=privateData('runtime.json');must(preg_match('/^[a-f0-9]{64}$/D',$runtime['original_catalog_sha256']??''),'ORIGINAL_CATALOG_ATTESTATION_REQUIRED');$out['original_catalog_sha256']=$runtime['original_catalog_sha256'];}
  }
+ elseif($op==='evaluation_snapshot'){$out['snapshot']=evaluationSnapshot($pdo,$q,$catalog,$seen);}
  elseif($op==='video_count'){
   must(!empty($catalog['evaluation_read_v1']),'EVALUATION_DOMAIN_EXTENSION_REQUIRED');
   [$query,$params]=videoPlan($q,$catalog,$seen);
