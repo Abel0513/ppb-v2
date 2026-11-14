@@ -1,46 +1,49 @@
 [
   {
     "operation": "source",
-    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
-    "offset": 640,
-    "limit": 190
+    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
+    "offset": 440,
+    "limit": 200
+  },
+  {
+    "operation": "source",
+    "path": "Application/Line/Controller/LiffController.class.php",
+    "offset": 0,
+    "limit": 200
+  },
+  {
+    "operation": "source",
+    "path": "Application/Line/Controller/PipibaoController.class.php",
+    "offset": 350,
+    "limit": 150
+  },
+  {
+    "operation": "source",
+    "path": "Application/Line/Controller/CsdaController.class.php",
+    "offset": 200,
+    "limit": 120
+  },
+  {
+    "operation": "source",
+    "path": "Application/WordPress/Controller/LaborRewardPdfController.class.php",
+    "offset": 0,
+    "limit": 180
+  },
+  {
+    "operation": "source",
+    "path": "Application/WordPress/Controller/LaborRewardPdfController.class.php",
+    "offset": 900,
+    "limit": 150
   },
   {
     "operation": "source",
     "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 2615,
+    "offset": 3120,
     "limit": 200
   },
   {
     "operation": "search",
-    "query": "line_id",
+    "query": "LaborRewardPdf",
     "limit": 30
-  },
-  {
-    "operation": "search",
-    "query": "line_name",
-    "limit": 30
-  },
-  {
-    "operation": "search",
-    "query": "liffId",
-    "limit": 30
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 0,
-    "limit": 160
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminController.class.php",
-    "offset": 0,
-    "limit": 160
-  },
-  {
-    "operation": "search",
-    "query": "function join",
-    "limit": 10
   }
 ]
