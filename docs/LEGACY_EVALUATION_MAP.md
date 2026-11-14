@@ -33,10 +33,14 @@ DB/test tables, fixture writes, route/UI activation, WP/LINE/Cron operation.
 Production data parity, complete input selection and full feature rollout remain
 pending an independently authorized readonly DB connection and source inventory.
 
-Actual DB boundary: run43536817490 command6f505209-079f-474e-8840-996632db4201
-STOP READONLY_DBA_PROVISIONING_REQUIRED. New readonly credentials are absent;
-no old app/admin password is searched or reused. One-time existing DBA procedure:
-ops/legacy-readonly/DBA_ONCE.md. Account creation/provisioning is NOT completed.
+Readonly DB provisioning is now completed by the existing DBA locally; no password
+was exported. Actual run43585913910 verified ppb_legacy_ro@localhost with no global
+or write grants, transaction readonly=true, and numeric SELECT succeeded. Permission
+SSM814837cb-0967-475d-b23b-5122187f7446; source OS proof SSM
+e40cc75e-b452-4f37-b9d9-fe37c64db1b9 (UID997/readonly mount/no privileged groups).
+All eight operations PASS, zero legacy file/database writes. Live metadata matches
+the DBA-created snapshot for analyst profiles, picks, monthly evaluation/rating,
+and attendance. No account setup should be repeated.
 
 ## Additional verified rules — readonly run43540046639
 
@@ -71,3 +75,20 @@ no speculative DB selectors, account mapping, routes or migrations have been add
 Actual legacy-row parity and complete UI/deployment acceptance remain BLOCKED on
 independent readonly DB provisioning. The added tests check source-observed
 boundaries and branch precedence; they do not claim live business-data parity.
+
+## Actual schema contract discovered after readonly activation
+
+- pay_analyst_pick.analyst_name is VARCHAR, indexed, although original PHP uses
+  numeric analyst IDs. Never equate this to the display name or a V2 account ID.
+- pay_analyst_monthly_evaluation has numeric analyst_id and VARCHAR eval_month;
+  unique(analyst_id,eval_month). Monthly score columns are nullable DECIMAL,
+  initiative/winrate/extra are INT, feedback TINYINT. No persisted total_score.
+- pay_analyst_monthly_rating has numeric analyst_id, CHAR rating_month, TINYINT
+  rating_level and unique(analyst_id,rating_month).
+- pay_attendance_record has id,gid,uid,attendance_status; no date column. Actual
+  attendance month comes from the original schedule join, not a guessed timestamp.
+- The installed DB principal intentionally has numeric/date column SELECT only.
+  Thus VARCHAR identity/month keys are not yet granted and cannot be used for
+  actual per-analyst/month parity. This is a precise schema/policy boundary,
+  not failed DBA setup or permission to open arbitrary text/PII. Full UI, selectors,
+  identity mapping and persistence are still pending. Source arithmetic is retained.
