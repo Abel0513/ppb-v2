@@ -1,1 +1,38 @@
-{"operation":"inventory","offset":0,"limit":50}
+[
+  {
+    "operation": "permissions"
+  },
+  {
+    "operation": "inventory",
+    "offset": 0,
+    "limit": 50
+  },
+  {
+    "operation": "inventory",
+    "offset": 50,
+    "limit": 50
+  },
+  {
+    "operation": "search",
+    "query": "評鑑",
+    "limit": 20
+  },
+  {
+    "operation": "search",
+    "query": "评鉴",
+    "limit": 20
+  },
+  {
+    "operation": "search",
+    "query": "evaluation",
+    "limit": 20
+  },
+  {
+    "operation": "search",
+    "query": "score",
+    "limit": 20
+  },
+  {
+    "operation": "db_permissions"
+  }
+]
