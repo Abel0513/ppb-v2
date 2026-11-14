@@ -16,6 +16,11 @@
     "limit": 1
   },
   {
+    "operation": "schema",
+    "table": "pay.pay_analyst_pick",
+    "limit": 50
+  },
+  {
     "operation": "evaluation_summary",
     "analyst_id": 3,
     "month": "2026-05"
@@ -43,11 +48,6 @@
   {
     "operation": "evaluation_summary",
     "analyst_id": 8,
-    "month": "2026-05"
-  },
-  {
-    "operation": "evaluation_summary",
-    "analyst_id": 9,
     "month": "2026-05"
   }
 ]
