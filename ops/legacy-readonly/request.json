@@ -2,49 +2,49 @@
   {
     "operation": "source",
     "path": "Application/Admin/Controller/AnalystRatingController.class.php",
-    "offset": 0,
+    "offset": 320,
     "limit": 160
   },
   {
     "operation": "source",
     "path": "Application/Admin/Controller/AnalystRatingController.class.php",
-    "offset": 160,
+    "offset": 480,
     "limit": 160
   },
   {
     "operation": "source",
-    "path": "Application/Admin/Controller/AnalystPerformanceController.class.php",
-    "offset": 0,
+    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
+    "offset": 640,
     "limit": 160
   },
   {
     "operation": "source",
-    "path": "Application/Admin/Controller/AnalystPerformanceController.class.php",
-    "offset": 160,
+    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
+    "offset": 800,
     "limit": 160
   },
   {
     "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 2160,
+    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
+    "offset": 960,
     "limit": 160
   },
   {
     "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 2320,
+    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
+    "offset": 1120,
     "limit": 160
   },
   {
     "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 2480,
+    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
+    "offset": 1280,
     "limit": 160
   },
   {
     "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 2640,
+    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
+    "offset": 1440,
     "limit": 160
   }
 ]
