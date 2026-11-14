@@ -162,6 +162,14 @@ class DocumentContract(unittest.TestCase):
   self.assertEqual(len(calls),2)
 
 class DBAConnection(unittest.TestCase):
+ def test_ephemeral_admin_requires_real_interactive_session_and_quotes_client_options(self):
+  m=module('dba-authenticated-once')
+  with patch.object(m.os,'geteuid',return_value=997):
+   with self.assertRaisesRegex(RuntimeError,'EXISTING_INTERACTIVE'):m.run()
+  with patch.object(m.os,'geteuid',return_value=0),patch.object(m.sys.stdin,'isatty',return_value=False):
+   with self.assertRaisesRegex(RuntimeError,'EXISTING_INTERACTIVE'):m.run()
+  self.assertEqual(m.quote('a"b\\c\nuser=other'), '"a\\"b\\\\c\\nuser=other"')
+  self.assertNotIn("'--no-login-paths'",(ROOT/'dba-once.py').read_text())
  def test_no_implicit_connection_or_old_application_config_fallback(self):
   m=module('dba-once')
   for args in [{},{'defaults_file':'/www/wwwroot/3.231.229.26/Application/Common/Conf/db.php'},{'login_path':'../escape'},{'login_path':'a','defaults_file':'/root/.my.cnf'}]:
