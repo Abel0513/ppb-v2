@@ -42,7 +42,10 @@ function selectPlan(array $q,array $table,array $granted):array {
     must(is_scalar($f['value'])&&strlen((string)$f['value'])<=64,'FILTER_VALUE_DENIED');$where[]=ident($f['column']).' '.$f['op'].' ?';$params[]=$f['value'];
     if(isset($table['text_domains'][$f['column']]))must((TEXT_DOMAINS[$table['name']][$f['column']]??null)===$table['text_domains'][$f['column']]&&domainValue($f['value'],$table['text_domains'][$f['column']]),'BUSINESS_KEY_FILTER_DENIED');
    }
-   $sql='SELECT /*+ MAX_EXECUTION_TIME(1000) */ '.implode(',',array_map('ident',$cols)).' FROM '.ident($table['schema']).'.'.ident($table['name']).($where?' WHERE '.implode(' AND ',$where):'').' LIMIT '.$limit.' OFFSET '.$offset;
+   $primary=array_values(array_filter($table['indexes']??[],fn($i)=>$i['name']==='PRIMARY'));usort($primary,fn($a,$b)=>$a['sequence']<=>$b['sequence']);$order=array_column($primary,'column');
+   must($offset===0||($order&&!array_diff($order,$granted)),'PAGINATION_REQUIRES_APPROVED_PRIMARY_KEY');
+   $ordering=$order&&!array_diff($order,$granted)?' ORDER BY '.implode(',',array_map('ident',$order)):'';
+   $sql='SELECT /*+ MAX_EXECUTION_TIME(1000) */ '.implode(',',array_map('ident',$cols)).' FROM '.ident($table['schema']).'.'.ident($table['name']).($where?' WHERE '.implode(' AND ',$where):'').$ordering.' LIMIT '.$limit.' OFFSET '.$offset;
  return [$sql,$params];
 }
 function videoPlan(array $q,array $catalog,array $seen):array {
@@ -68,7 +71,13 @@ if(realpath($_SERVER['SCRIPT_FILENAME'])===__FILE__){try{
  must((int)$pdo->query('SELECT @@session.tx_read_only')->fetchColumn()===1,'READONLY_TRANSACTION_NOT_ENFORCED');
  $op=$q['operation']??'';must(in_array($op,['db_permissions','schema','select','video_count'],true),'DB_OPERATION_DENIED');
  $out=['db_actor'=>$actor,'old_db_write_grants'=>false,'global_privileges'=>false,'transaction_readonly'=>true,'database_writes'=>0];
- if($op==='db_permissions'){$out['authorized_tables']=array_keys($seen);$out['schema_snapshot_sha256']=hash_file('sha256','/etc/ppb-legacy-ro/catalog.json');}
+ if($op==='db_permissions'){
+  $out['authorized_tables']=array_keys($seen);$out['schema_snapshot_sha256']=hash_file('sha256','/etc/ppb-legacy-ro/catalog.json');$out['grant_option']=false;$out['evaluation_domains_enabled']=!empty($catalog['evaluation_read_v1']);
+  $out['typed_key_grants']=[];$out['private_join_grants']=[];
+  foreach(TEXT_DOMAINS as $table=>$columns)foreach($columns as $column=>$domain)$out['typed_key_grants'][$table.'.'.$column]=in_array($column,$seen[$catalog['schema'].'.'.$table]??[],true);
+  foreach(PRIVATE_JOINS as $table=>$columns)foreach($columns as $column)$out['private_join_grants'][$table.'.'.$column]=in_array($column,$seen[$catalog['schema'].'.'.$table]??[],true);
+  if($out['evaluation_domains_enabled']){$runtime=privateData('runtime.json');must(preg_match('/^[a-f0-9]{64}$/D',$runtime['original_catalog_sha256']??''),'ORIGINAL_CATALOG_ATTESTATION_REQUIRED');$out['original_catalog_sha256']=$runtime['original_catalog_sha256'];}
+ }
  elseif($op==='video_count'){
   must(!empty($catalog['evaluation_read_v1']),'EVALUATION_DOMAIN_EXTENSION_REQUIRED');
   [$query,$params]=videoPlan($q,$catalog,$seen);
