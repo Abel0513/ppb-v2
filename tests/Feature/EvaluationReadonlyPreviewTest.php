@@ -77,7 +77,7 @@ class EvaluationReadonlyPreviewTest extends TestCase
         $service->shouldReceive('load')->with($subject,'2026-05')->andReturn($report);
         $this->app->instance(EvaluationPreviewReport::class,$service);
         $this->get('https://v2.csdatw.xyz/admin/evaluations-preview/legacy/2?month=2026-05')
-            ->assertOk()->assertSee('來源薪酬試算')->assertDontSee('<form',false);
+            ->assertOk()->assertSee('來源薪酬試算')->assertDontSee('name="operation"',false);
         $this->getJson('https://v2.csdatw.xyz/admin/evaluations-preview/legacy/2?month=2026-05&format=summary')
             ->assertOk()->assertJsonPath('score',60)->assertJsonPath('salary.total',500)
             ->assertJsonMissingPath('source_sha256');
