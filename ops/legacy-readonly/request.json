@@ -1,35 +1,42 @@
 [
   {
-    "operation": "source",
-    "path": "Application/WordPress/Controller/LaborRewardPdfController.class.php",
-    "offset": 1480,
-    "limit": 200
+    "operation": "inventory",
+    "offset": 400,
+    "limit": 50
   },
   {
-    "operation": "source",
-    "path": "Application/WordPress/Controller/LaborRewardPdfController.class.php",
-    "offset": 1680,
-    "limit": 200
+    "operation": "inventory",
+    "offset": 450,
+    "limit": 50
   },
   {
-    "operation": "source",
-    "path": "Application/WordPress/Controller/LaborRewardPdfController.class.php",
-    "offset": 1880,
+    "operation": "inventory",
+    "offset": 500,
+    "limit": 50
+  },
+  {
+    "operation": "inventory",
+    "offset": 550,
+    "limit": 50
+  },
+  {
+    "operation": "inventory",
+    "offset": 600,
+    "limit": 50
+  },
+  {
+    "operation": "inventory",
+    "offset": 650,
     "limit": 50
   },
   {
     "operation": "search",
-    "query": "LaborRewardPdf",
+    "query": "analyststats",
     "limit": 50
   },
   {
     "operation": "search",
-    "query": "getAnalystData",
-    "limit": 50
-  },
-  {
-    "operation": "search",
-    "query": "analyststatsLiff",
+    "query": "stylesheet",
     "limit": 50
   }
 ]
