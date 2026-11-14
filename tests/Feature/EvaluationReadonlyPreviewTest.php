@@ -39,7 +39,7 @@ class EvaluationReadonlyPreviewTest extends TestCase
             ['type'=>'v2','id'=>3,'label'=>'Native fixture','status'=>null,'mapped'=>true]]);
         $this->app->instance(EvaluationSubjects::class,$subjects);
         $this->get('https://v2.csdatw.xyz/admin/evaluations-preview?month=2026-05')
-            ->assertOk()->assertHeader('Cache-Control','private, no-store')
+            ->assertOk()->assertHeader('Cache-Control','no-store, private')
             ->assertSee('月評鑑與薪酬｜唯讀預覽')
             ->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;',false)
             ->assertDontSee('<script>alert(1)</script>',false)->assertDontSee('Native fixture')
