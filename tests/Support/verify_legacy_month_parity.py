@@ -66,7 +66,10 @@ foreach($input['groups'] as $g){[$month,$own,$win,$bonus,$long,$sub,$joined,$mar
 $selector=new App\Services\Ppb\Evaluation\LegacyMonthSelector;$reporter=new App\Services\Ppb\Evaluation\EvaluationReport(new App\Services\Ppb\Evaluation\LegacyScheduleCalculator,new App\Services\Ppb\Evaluation\LegacyRatingCalculator);$out=[];
 foreach($input['periods'] as $month=>$period){$attendance=[];foreach($input['attendance'] as $k=>$count)if(str_starts_with($k,$month.':'))for($i=0;$i<$count;$i++)$attendance[]=['attendance_status'=>(int)explode(':',$k)[1]];
  $report=$reporter->calculate($selector->select($rows,'legacy:2',$month,$schedules),$period['manual'],$schedules,$attendance,$period['videos'],$period['level']);$report['cached']=array_intersect_key($report['cached'],array_flip(['score_delivery_time','score_compliance','score_professionalism']));unset($report['deductions'],$report['salary_rows']);$out[$month]=$report;
-}echo json_encode($out,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION);
+}
+$months=array_keys($input['periods']);[$prior,$current]=$months;$base=$input['periods'][$current]['level']??$input['profile_level'];
+$out['next_rating']=(new App\Services\Ppb\Evaluation\LegacyRatingCalculator)->rating($base,$input['periods'][$prior]['level'],(int)$out[$current]['rating']['total_score'],(int)$out[$prior]['rating']['total_score']);
+echo json_encode($out,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION);
 '''
 def verify(payload):
  results=payload['results'];need(len(results)==4 and str(payload['run_id']).isdigit(),'ACTUAL_BATCH_REQUIRED');snapshots=[];commands=[]
@@ -89,7 +92,16 @@ def verify(payload):
   level=next((int(r['rating_level']) for r in a['ratings'] if r['rating_month']==month),None)
   periods[month]=dict(manual=manual,videos=a['video_counts'][month],level=level)
   expected[month]=oracle(a['pick_groups'],manual,a['attendance_counts'],a['video_counts'][month],level,month)
- p=subprocess.run(['php','-r',PHP,str(ROOT)],input=json.dumps(dict(groups=a['pick_groups'],attendance=a['attendance_counts'],periods=periods)),capture_output=True,text=True,timeout=15)
+ current_month=a['month'];prior_month=a['previous_month'];base=periods[current_month]['level']
+ if base is None:base=int(a['profile']['rating_level'])
+ old_base=periods[prior_month]['level'];score=int(expected[current_month]['rating']['total_score']);old_score=int(expected[prior_month]['rating']['total_score']);reset=old_base is not None and old_base!=base
+ next_level=base;terminate=False
+ if 0<score<40:next_level=max(0,base-1);terminate=True
+ elif 0<score<50:next_level=max(0,base-1)
+ elif not reset and old_score>=68 and score>=68:next_level=min(3,base+1)
+ elif not reset and 0<old_score<60 and 0<score<60:next_level=max(0,base-1)
+ expected['next_rating']=dict(rating_level=next_level,is_reset=reset,is_terminate=terminate)
+ p=subprocess.run(['php','-r',PHP,str(ROOT)],input=json.dumps(dict(groups=a['pick_groups'],attendance=a['attendance_counts'],periods=periods,profile_level=int(a['profile']['rating_level']))),capture_output=True,text=True,timeout=15)
  need(p.returncode==0,'V2_MONTHLY_CALCULATOR_FAILED');actual=json.loads(p.stdout);comparisons=0
  def compare(left,right):
   nonlocal comparisons
@@ -97,9 +109,11 @@ def verify(payload):
   for k,v in left.items():
    if isinstance(v,dict):compare(v,right[k])
    else:
-    got=right[k];need((v is None and got is None) or (v is not None and got is not None and Decimal(str(v))==Decimal(str(got))),'MONTHLY_PARITY_MISMATCH_'+k.upper());comparisons+=1
+    got=right[k]
+    if isinstance(v,bool):need(type(got) is bool and got==v,'MONTHLY_RATING_FLAG_MISMATCH');comparisons+=1;continue
+    need((v is None and got is None) or (v is not None and got is not None and Decimal(str(v))==Decimal(str(got))),'MONTHLY_PARITY_MISMATCH_'+k.upper());comparisons+=1
  compare(expected,actual)
- return dict(result='PASS',scope='REAL_TWO_MONTH_SOURCE_SELECTION_SCORES_AND_SALARY',analyst_id=2,months=list(periods),comparisons=comparisons,source_sha256=a['source_sha256'],independent_repeat_read=True,overlap_month_agrees=True,transactional_tables_verified=7,source_run='https://github.com/Abel0513/ppb-v2/actions/runs/'+str(payload['run_id']),ssm_command_ids=commands,legacy_writes=0,business_rows_in_report=0,admin_persistence='NOT_VERIFIED',deployed_ui='NOT_VERIFIED')
+ return dict(result='PASS',scope='REAL_TWO_MONTH_SOURCE_SELECTION_SCORES_GRADE_AND_SALARY',analyst_id=2,months=list(periods),comparisons=comparisons,source_sha256=a['source_sha256'],independent_repeat_read=True,overlap_month_agrees=True,transactional_tables_verified=7,source_run='https://github.com/Abel0513/ppb-v2/actions/runs/'+str(payload['run_id']),ssm_command_ids=commands,legacy_writes=0,business_rows_in_report=0,admin_persistence='NOT_VERIFIED',deployed_ui='NOT_VERIFIED')
 if __name__=='__main__':
  try:print(json.dumps(verify(json.load(sys.stdin))))
  except Exception as exc:

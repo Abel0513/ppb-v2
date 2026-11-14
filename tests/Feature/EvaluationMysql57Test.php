@@ -1,7 +1,7 @@
 <?php
 namespace Tests\Feature;
 
-use App\Services\Ppb\Evaluation\{EvaluationService,EvaluationWriter,LegacyInteractionCalculator,EvaluationReport,LegacyScheduleCalculator,LegacyRatingCalculator,LegacyMonthSelector};
+use App\Services\Ppb\Evaluation\{EvaluationService,EvaluationWriter,LegacyInteractionCalculator,EvaluationReport,LegacyScheduleCalculator,LegacyRatingCalculator,LegacyMonthSelector,LegacyReader,EvaluationSubjects};
 use Illuminate\Support\Facades\DB;
 use Mockery;
 use Symfony\Component\Process\Process;
@@ -58,6 +58,25 @@ class EvaluationMysql57Test extends TestCase
             try{$writer->save($subject,'2026-05','manual',$payload,'683f084d-b85d-437b-9d9c-b280ce473e85',3,$hash,71);self::fail('Injected event failure must roll back.');}catch(\RuntimeException $e){self::assertSame('INJECTED_EVENT_WRITE_FAILURE',$e->getMessage());}finally{$throw=false;}
             self::assertSame(3,(int)DB::table('ppb_evaluations')->value('revision'));self::assertSame(3,DB::table('ppb_evaluation_events')->count());self::assertSame(0,DB::transactionLevel());
             self::assertSame(0,(int)DB::selectOne("SELECT COUNT(*) n FROM information_schema.TABLES WHERE TABLE_SCHEMA='mysql' AND TABLE_NAME LIKE 'ppb_evaluation%'")->n);
+            // Exercise the real service's UTC month selection and imported/draft
+            // exclusions through the same live MySQL session, never a mock SQL DB.
+            DB::statement('CREATE TEMPORARY TABLE ppb_games (id BIGINT PRIMARY KEY,recommended_at DATETIME,market_type INT) ENGINE=InnoDB');
+            DB::statement('CREATE TEMPORARY TABLE ppb_assignments (id BIGINT PRIMARY KEY,original_analyst_id BIGINT) ENGINE=InnoDB');
+            DB::statement('CREATE TEMPORARY TABLE ppb_submissions (id BIGINT PRIMARY KEY,game_id BIGINT,assignment_id BIGINT,submitted_analyst_id BIGINT,kind VARCHAR(16),submitted_at DATETIME NULL,legacy_source_pick_id BIGINT NULL) ENGINE=InnoDB');
+            DB::table('ppb_games')->insert([['id'=>1,'recommended_at'=>'2026-04-30 16:00:00','market_type'=>1],['id'=>2,'recommended_at'=>'2026-05-31 15:59:59','market_type'=>2],['id'=>3,'recommended_at'=>'2026-05-31 16:00:00','market_type'=>1]]);
+            DB::table('ppb_assignments')->insert(['id'=>1,'original_analyst_id'=>9]);
+            foreach([[1,1,null,'2026-05-01 00:00:00'],[2,2,null,'2026-05-01 00:00:00'],[3,3,null,'2026-05-01 00:00:00'],[4,1,333,'2026-05-01 00:00:00'],[5,1,null,null]] as [$pid,$gid,$legacy,$submitted])DB::table('ppb_submissions')->insert(['id'=>$pid,'game_id'=>$gid,'assignment_id'=>1,'submitted_analyst_id'=>9,'kind'=>'pick','submitted_at'=>$submitted,'legacy_source_pick_id'=>$legacy]);
+            $snapshot=['picks'=>[],'pick_columns'=>[],'schedules'=>[],'attendance'=>[],'evaluations'=>[],'ratings'=>[],'video_counts'=>[],'recent'=>[],'source_sha256'=>str_repeat('b',64),'profile'=>['rating_level'=>1]];
+            $reader=Mockery::mock(LegacyReader::class);$reader->shouldReceive('query')->andReturn(['snapshot'=>$snapshot]);
+            $subjects=Mockery::mock(EvaluationSubjects::class);$subjects->shouldReceive('mappings')->andReturn([4=>9]);
+            $realService=new EvaluationService($reader,$subjects,new LegacyMonthSelector,$reporter,new LegacyRatingCalculator);
+            $writes=0;$loaded=$realService->load(['type'=>'legacy','id'=>4,'native_id'=>9],'2026-05');
+            self::assertSame(0,$writes,'Loading an evaluation must never create rows.');
+            self::assertSame(2,$loaded['current']['counts']['records']);
+            self::assertSame(['2026-05-01 00:00:00','2026-05-31 23:59:59'],array_column($loaded['current']['selected']['records'],'recommended_time'));
+            self::assertSame(['legacy:4','legacy:4'],array_column($loaded['current']['selected']['records'],'_author_key'));
+            self::assertSame(1,$loaded['current']['next_rating']['rating_level'],'Missing monthly grade falls back to source profile, not salary default2.');
+            self::assertSame(0,(int)DB::selectOne("SELECT COUNT(*) n FROM information_schema.TABLES WHERE TABLE_SCHEMA='mysql' AND TABLE_NAME LIKE 'ppb_%'")->n);
             DB::disconnect('mysql');
         }finally{
             DB::disconnect('mysql');

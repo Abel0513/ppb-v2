@@ -44,7 +44,9 @@ class EvaluationService
             $reports[$period]['level']=$level;$reports[$period]['selected']=$selected;
         }
         $current=$reports[$month];$previous=$reports[$prior];
-        $current['next_rating']=$this->rating->rating($current['level']??2,$previous['level'],(int)$current['rating']['total_score'],(int)$previous['rating']['total_score']);
+        $base=$current['level']??(int)($snapshot['profile']['rating_level']??2);
+        if(!in_array($base,[0,1,2,3],true))throw new \RuntimeException('UNVERIFIED_PROFILE_RATING_LEVEL');
+        $current['next_rating']=$this->rating->rating($base,$previous['level'],(int)$current['rating']['total_score'],(int)$previous['rating']['total_score']);
         return ['subject'=>$subject,'month'=>$month,'previous_month'=>$prior,'source_sha256'=>$sourceHash,'legacy_sha256'=>$snapshot['source_sha256'],
             'manual'=>$manuals[$month],'current'=>$current,'previous'=>$previous,'revision'=>$local->has($month)?$local[$month]->revision:0,
             'saved_next_rating'=>$local->has($month)?$local[$month]->next_rating_level:null,'recent'=>$snapshot['recent'],'source_rows'=>count($rows),
