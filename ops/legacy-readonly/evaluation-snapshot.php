@@ -18,6 +18,13 @@ function evaluationSafeRows(array $rows,array $table): void {
         else must(is_numeric($value),'SNAPSHOT_NONNUMERIC_DENIED');
     }
 }
+function evaluationGroup(array $pick,int $id,array $markets): array {
+    // SQL flag predicates distinguish NULL from 0. Never collapse those groups.
+    $flags=array_map(fn($field)=>$pick[$field]===null?null:(int)$pick[$field],['is_win','is_bonus','is_long','is_substitute']);
+    return [substr($pick['recommended_time'],0,7),(int)$pick['analyst_name']===$id,...$flags,
+        array_key_exists((int)$pick['gid'],$markets),(int)($markets[(int)$pick['gid']]??0),
+        ...array_map(fn($field)=>(int)$pick[$field],EVAL_SCORES)];
+}
 function evaluationSnapshot(PDO $pdo,array $q,array $catalog,array $seen): array {
     must(!empty($catalog['evaluation_read_v1']),'EVALUATION_DOMAIN_EXTENSION_REQUIRED');
     $id=$q['analyst_id']??null;$month=$q['month']??'';
@@ -74,12 +81,11 @@ function evaluationSnapshot(PDO $pdo,array $q,array $catalog,array $seen): array
         $summary=$payload;unset($summary['picks'],$summary['schedules'],$summary['attendance']);$groups=[];$counts=[];
         $markets=[];foreach($schedules as $schedule)$markets[(int)$schedule['id']]=$schedule['market_type'];
         foreach($picks as $pick){
-            $period=substr($pick['recommended_time'],0,7);$own=(int)$pick['analyst_name']===$id;
-            $values=array_map(fn($field)=>(int)$pick[$field],EVAL_SCORES);
-            $key=json_encode([$period,$own,(int)$pick['is_win'],(int)$pick['is_bonus'],(int)$pick['is_long'],(int)$pick['is_substitute'],array_key_exists((int)$pick['gid'],$markets),(int)($markets[(int)$pick['gid']]??0),...$values]);
+            $key=json_encode(evaluationGroup($pick,$id,$markets),JSON_THROW_ON_ERROR);
             $groups[$key]=($groups[$key]??0)+1;
         }
         foreach($attendance as $row){$key=substr($row['recommended_time'],0,7).':'.(int)$row['attendance_status'];$counts[$key]=($counts[$key]??0)+1;}
+        $summary['summary_flag_nulls_preserved']=true;
         $summary['pick_groups']=array_map(fn($key,$count)=>[...json_decode($key,true),$count],array_keys($groups),array_values($groups));
         $summary['attendance_counts']=$counts;$summary['raw_picks']=count($picks);$summary['private_names_returned']=0;return $summary;
     }
