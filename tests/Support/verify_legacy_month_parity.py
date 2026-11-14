@@ -72,16 +72,19 @@ $out['next_rating']=(new App\Services\Ppb\Evaluation\LegacyRatingCalculator)->ra
 echo json_encode($out,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION);
 '''
 def verify(payload):
- results=payload['results'];need(len(results)==4 and str(payload['run_id']).isdigit(),'ACTUAL_BATCH_REQUIRED');snapshots=[];commands=[]
+ results=payload['results'];need(len(results)==4 and str(payload['run_id']).isdigit(),'ACTUAL_BATCH_REQUIRED');snapshots=[];commands=[];pins=[]
  for receipt in results:
   need(receipt.get('result')=='PASS' and receipt.get('legacy_file_writes')==0 and receipt.get('legacy_db_writes')==0,'READ_RECEIPT_NOT_PASS')
-  commands.append(receipt['ssm_command_id']);data=receipt['remote']['data']
-  need(data['db_actor']=='ppb_legacy_ro@localhost' and data['transaction_readonly'] is True and data['old_db_write_grants'] is False and data['global_privileges'] is False,'READONLY_BOUNDARY_NOT_PROVEN')
+  need(re.fullmatch('[0-9a-f-]{36}',receipt.get('ssm_command_id','')),'ACTUAL_SSM_RECEIPT_REQUIRED')
+  commands.append(receipt['ssm_command_id']);pins.append((receipt['document_version'],receipt['document_hash']));data=receipt['remote']['data']
+  need(data['db_actor']=='ppb_legacy_ro@localhost' and data['transaction_readonly'] is True and data['old_db_write_grants'] is False and data['global_privileges'] is False and data['database_writes']==0,'READONLY_BOUNDARY_NOT_PROVEN')
   if 'snapshot' in data:
    need(data['transaction_isolation']=='REPEATABLE-READ','TRANSACTION_ISOLATION_NOT_PROVEN');s=data['snapshot'];need(s['transactional_tables_verified']==7 and s['private_names_returned']==0 and s['analyst_id']==2,'SNAPSHOT_BOUNDARY_NOT_PROVEN');snapshots.append(s)
+ need(len(set(pins))==1 and re.fullmatch('[a-f0-9]{64}',pins[0][1]),'SAME_PINNED_RUNTIME_REQUIRED')
  need(len(snapshots)==3 and len(set(commands))==4,'INDEPENDENT_READS_REQUIRED');a,b,prior=snapshots
  a['attendance_counts']=dict(a['attendance_counts'])
  need(a['month']=='2026-05' and a['source_sha256']==b['source_sha256'],'REPEAT_SNAPSHOT_CHANGED')
+ need(sum(g[17] for g in a['pick_groups'])==a['raw_picks'],'GROUP_COVERAGE_NOT_PROVEN')
  canon=lambda x:json.dumps(x,sort_keys=True,separators=(',',':'))
  need(canon(sorted([g for g in a['pick_groups'] if g[0]=='2026-04']))==canon(sorted([g for g in prior['pick_groups'] if g[0]=='2026-04'])),'OVERLAP_MONTH_SOURCE_CHANGED')
  periods={};expected={}
@@ -113,7 +116,7 @@ def verify(payload):
     if isinstance(v,bool):need(type(got) is bool and got==v,'MONTHLY_RATING_FLAG_MISMATCH');comparisons+=1;continue
     need((v is None and got is None) or (v is not None and got is not None and Decimal(str(v))==Decimal(str(got))),'MONTHLY_PARITY_MISMATCH_'+k.upper());comparisons+=1
  compare(expected,actual)
- return dict(result='PASS',scope='REAL_TWO_MONTH_SOURCE_SELECTION_SCORES_GRADE_AND_SALARY',analyst_id=2,months=list(periods),comparisons=comparisons,source_sha256=a['source_sha256'],independent_repeat_read=True,overlap_month_agrees=True,transactional_tables_verified=7,source_run='https://github.com/Abel0513/ppb-v2/actions/runs/'+str(payload['run_id']),ssm_command_ids=commands,legacy_writes=0,business_rows_in_report=0,admin_persistence='NOT_VERIFIED',deployed_ui='NOT_VERIFIED')
+ return dict(result='PASS',scope='REAL_TWO_MONTH_SOURCE_SELECTION_SCORES_GRADE_AND_SALARY',analyst_id=2,months=list(periods),comparisons=comparisons,source_sha256=a['source_sha256'],document_version=pins[0][0],document_hash=pins[0][1],independent_repeat_read=True,overlap_month_agrees=True,transactional_tables_verified=7,source_run='https://github.com/Abel0513/ppb-v2/actions/runs/'+str(payload['run_id']),ssm_command_ids=commands,legacy_writes=0,business_rows_in_report=0,live_video_positive_case=any(int(n)>0 for n in a['video_counts'].values()),live_late_positive_case=any(k.endswith(':1') and n>0 for k,n in a['attendance_counts'].items()),admin_persistence='NOT_VERIFIED',deployed_ui='NOT_VERIFIED')
 if __name__=='__main__':
  try:print(json.dumps(verify(json.load(sys.stdin))))
  except Exception as exc:

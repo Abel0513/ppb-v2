@@ -65,10 +65,11 @@ class EvaluationMysql57Test extends TestCase
             // exclusions through the same live MySQL session, never a mock SQL DB.
             DB::statement('CREATE TEMPORARY TABLE ppb_games (id BIGINT PRIMARY KEY,recommended_at DATETIME,market_type INT) ENGINE=InnoDB');
             DB::statement('CREATE TEMPORARY TABLE ppb_assignments (id BIGINT PRIMARY KEY,game_id BIGINT,kind VARCHAR(16),original_analyst_id BIGINT,current_analyst_id BIGINT) ENGINE=InnoDB');
-            DB::statement('CREATE TEMPORARY TABLE ppb_submissions (id BIGINT PRIMARY KEY,game_id BIGINT,assignment_id BIGINT,submitted_analyst_id BIGINT,kind VARCHAR(16),submitted_at DATETIME NULL,legacy_source_pick_id BIGINT NULL) ENGINE=InnoDB');
+            DB::statement('CREATE TEMPORARY TABLE ppb_submissions (id BIGINT PRIMARY KEY,game_id BIGINT,assignment_id BIGINT,submitted_analyst_id BIGINT,kind VARCHAR(16),status VARCHAR(32) DEFAULT \'submitted\',submitted_at DATETIME NULL,legacy_source_pick_id BIGINT NULL) ENGINE=InnoDB');
             DB::table('ppb_games')->insert([['id'=>1,'recommended_at'=>'2026-04-30 16:00:00','market_type'=>1],['id'=>2,'recommended_at'=>'2026-05-31 15:59:59','market_type'=>2],['id'=>3,'recommended_at'=>'2026-05-31 16:00:00','market_type'=>1]]);
             foreach([1,2,3] as $gid)DB::table('ppb_assignments')->insert(['id'=>$gid,'game_id'=>$gid,'kind'=>'pick','original_analyst_id'=>9,'current_analyst_id'=>9]);
             foreach([[1,1,null,'2026-05-01 00:00:00'],[2,2,null,'2026-05-01 00:00:00'],[3,3,null,'2026-05-01 00:00:00'],[4,1,333,'2026-05-01 00:00:00'],[5,1,null,null]] as [$pid,$gid,$legacy,$submitted])DB::table('ppb_submissions')->insert(['id'=>$pid,'game_id'=>$gid,'assignment_id'=>$gid,'submitted_analyst_id'=>9,'kind'=>'pick','submitted_at'=>$submitted,'legacy_source_pick_id'=>$legacy]);
+            DB::table('ppb_submissions')->insert([['id'=>7,'game_id'=>1,'assignment_id'=>1,'submitted_analyst_id'=>9,'kind'=>'pick','status'=>'legacy_imported','submitted_at'=>'2026-05-01 00:00:00','legacy_source_pick_id'=>null],['id'=>8,'game_id'=>1,'assignment_id'=>1,'submitted_analyst_id'=>9,'kind'=>'pick','status'=>'draft','submitted_at'=>'2026-05-01 00:00:00','legacy_source_pick_id'=>null]]);
             $snapshot=['picks'=>[],'pick_columns'=>[],'schedules'=>[],'attendance'=>[],'evaluations'=>[],'ratings'=>[],'video_counts'=>[],'recent'=>[],'source_sha256'=>str_repeat('b',64),'profile'=>['rating_level'=>1]];
             $reader=Mockery::mock(LegacyReader::class);$reader->shouldReceive('query')->andReturn(['snapshot'=>$snapshot]);
             $subjects=Mockery::mock(EvaluationSubjects::class);$subjects->shouldReceive('mappings')->andReturn([4=>9]);
@@ -105,7 +106,7 @@ class EvaluationMysql57Test extends TestCase
 
             foreach([[101,4,9,1,'pick','pick'],[102,5,10,1,'pick','pick'],[103,5,11,1,'pick','pick'],[104,6,12,1,'pick','pick'],[105,7,12,1,'pick','pick'],[106,8,13,999,'pick','pick'],[107,9,14,1,'long','pick']] as [$source,$legacy,$native,$game,$kind,$sourceKind]){
                 DB::table('ppb_legacy_pick_contents')->insert(['source_pick_id'=>$source,'game_id'=>1,'legacy_analyst_id'=>$legacy,'kind'=>$sourceKind]);
-                DB::table('ppb_submissions')->insert(['id'=>$source,'game_id'=>$game,'assignment_id'=>1,'submitted_analyst_id'=>$native,'kind'=>$kind,'submitted_at'=>'2026-05-01 00:00:00','legacy_source_pick_id'=>$source]);
+                DB::table('ppb_submissions')->insert(['id'=>$source,'game_id'=>$game,'assignment_id'=>1,'submitted_analyst_id'=>$native,'kind'=>$kind,'status'=>'legacy_imported','submitted_at'=>'2026-05-01 00:00:00','legacy_source_pick_id'=>$source]);
             }
             $actualSubjects=new EvaluationSubjects($reader);self::assertSame([4=>9],$actualSubjects->mappings());
             self::assertSame(0,(int)DB::selectOne("SELECT COUNT(*) n FROM information_schema.TABLES WHERE TABLE_SCHEMA='mysql' AND TABLE_NAME LIKE 'ppb_%'")->n);

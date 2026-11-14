@@ -152,9 +152,9 @@ Actual month evidence: run43605575359:
 All PASS. Seven underlying tables are visibly InnoDB, queries run in one
 REPEATABLE READ / READ ONLY transaction. Complete bounded two-month coverage,
 repeat fingerprint equality and overlapping-month selection agree. The independent
-Python source-formula oracle and V2 PHP selectors/calculators agree in78 comparisons
+Python source-formula oracle and V2 PHP selectors/calculators agree in81 comparisons
 for analyst2 /2026-04 and2026-05 (scores, explicit selector counts, short/long/video/
-attendance pay). Input fingerprint:
+attendance pay and next-month grade). Input fingerprint:
 fb50a2940589d62c6321b018040227e170207caf1b22af2106e25595bf166292.
 Verifier: tests/Support/verify_legacy_month_parity.py. This is real source-data
 calculation parity, NOT full production persistence or deployed-UI acceptance.
@@ -183,9 +183,45 @@ The same request only reads its receipt. Native V2 author IDs may equal legacy I
 without becoming the same person. Analyst account_id remains optional; no LINE,
 LIFF, legacy auth/config/entrypoint was changed or replaced.
 
-Still pending, explicitly NOT accepted: native attendance/video entry integration;
-complete original entry/PDF/self-service identity mapping; all-analyst coverage;
+Native V2 attendance/video inputs are now implemented and isolated-MySQL-tested.
+Actual substitution submissions produce one attendance deduction per game/original
+analyst, while the original per-pick evaluation absence rule remains separate. V2
+waivers preserve one explicitly recorded submission lineage; no old attendance
+row is deleted. Video dates use Taipei input/UTC storage; repeated guest slots count
+once and cancellation retains history. Both use the same UUID/revision/event journal.
+
+Still pending, explicitly NOT accepted: complete original entry/PDF/self-service
+identity mapping; all-analyst live coverage;
 V2 production migration/persistence; full deployed HTTP/browser acceptance.
-The page warns that native salary is incomplete until those inputs exist. PR58
+Native input UI is implemented; it is not a production acceptance claim. PR58
 remains Draft. Owner comment6877548981 authorizes continuation, CI and pushing,
 not final merge, production migration/writes or publication.
+
+
+Current draft tests (18eb6d4):37 tests /214 assertions locally; latest GitHub CI
+must be checked against the exact head before reporting its status. MySQL5.7.44
+runs socket-only in a pinned network-disabled ephemeral container. ONLY session
+TEMPORARY tables in its existing system schema are used, with real transactions,
+unique constraints, JSON receipts and rollback after an injected event failure.
+No test database or persistent test table, no deployed fixtures. Tests include
+UTC month edges, imported/draft exclusion, mismatched lineage rejection, bijective
+mapping, original-profile grade fallback, zero-write replay, stale revision409,
+waiver effects, guest deduplication/cancellation and actual Blade/route validation.
+
+Actual remaining authority boundary: the fixed reader deliberately does not grant
+or expose analyst_profiles.line_id. The observed old LIFF flow maps that private
+identifier to the numeric analyst ID. No V2 LINE/LIFF authentication provider or
+approved private identity-resolution transport exists in this snapshot. Do not
+replace it with a public analyst_id parameter, scrape old credentials, call an old
+mutating LIFF endpoint or require analyst admin accounts. Its integration remains
+a separate explicit, narrowly reviewed identity delegation; administrative
+assessment development and readonly arithmetic parity do not prove it.
+
+Migration plan:five new V2 business/audit tables, V2-only FKs to existing accounts,
+games/submissions. No game/pick import or old-schema FK; manual source baselines are copied only on an explicit V2 save. The existing reviewed
+release gate must prove OS/DB/service isolation, metadata coverage and an exact
+private ppbaos backup before migrate. MySQL DDL autocommits: never claim transaction
+rollback of a failed migration. Stop after any partial/uncertain DDL; restore the
+private V2 backup under reviewed recovery, never auto-drop business history or
+retry blindly. Application-file rollback leaves the new additive tables intact.
+No migration or production business write has been executed for this Draft.

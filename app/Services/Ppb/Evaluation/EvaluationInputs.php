@@ -53,7 +53,7 @@ class EvaluationInputs
                 // Preserve that cardinality; retain the exact V2 lineage in audit.
                 $values['waived_submission_id']=DB::table('ppb_submissions as p')->join('ppb_assignments as a','a.id','=','p.assignment_id')
                     ->where('p.game_id',$gid)->whereColumn('p.game_id','a.game_id')->where('a.original_analyst_id',(int)$subject['native_id'])
-                    ->whereColumn('p.submitted_analyst_id','!=','a.original_analyst_id')->whereNotNull('p.submitted_at')->whereNull('p.legacy_source_pick_id')->orderBy('p.id')->value('p.id');
+                    ->whereColumn('p.submitted_analyst_id','!=','a.original_analyst_id')->whereIn('p.status',['submitted','approved','changes_requested'])->whereNotNull('p.submitted_at')->whereNull('p.legacy_source_pick_id')->orderBy('p.id')->value('p.id');
             }
             if($old)$query->update($values);else DB::table('ppb_evaluation_attendance')->insert($values+['subject_type'=>$subject['type'],'subject_id'=>$subject['id'],'game_id'=>$gid,'created_at'=>now()]);
             return ['before'=>$old?(array)$old:null,'after'=>$values+['game_id'=>$gid]];

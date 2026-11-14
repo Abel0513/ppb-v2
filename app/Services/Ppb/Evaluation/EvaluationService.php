@@ -86,7 +86,7 @@ class EvaluationService
             ->join('ppb_evaluation_ratings as r',fn($q)=>$q->on('r.source_id','=','p.id')->where('r.source_type','v2'))
             ->whereColumn('a.game_id','p.game_id')->whereColumn('a.kind','p.kind')
             ->where('p.submitted_analyst_id',(int)$subject['native_id'])->where(fn($q)=>$q->whereColumn('p.submitted_analyst_id','a.original_analyst_id')->orWhereNotNull('c.id'))
-            ->whereNull('p.legacy_source_pick_id')->whereNotNull('p.submitted_at')->whereNotNull('g.recommended_at')->where('p.kind','pick')->whereIn('r.result_state',[1,2])
+            ->whereNull('p.legacy_source_pick_id')->whereIn('p.status',['submitted','approved','changes_requested'])->whereNotNull('p.submitted_at')->whereNotNull('g.recommended_at')->where('p.kind','pick')->whereIn('r.result_state',[1,2])
             ->orderByDesc('g.recommended_at')->orderByDesc('p.id')->limit(20)->get(['p.id','g.recommended_at','r.result_state']);
         return $rows->map(fn($r)=>['id'=>(int)$r->id,'recommended_time'=>CarbonImmutable::parse($r->recommended_at,'UTC')->tz('Asia/Taipei')->format('Y-m-d H:i:s'),'is_win'=>(int)$r->result_state,'_source_type'=>'v2'])->all();
     }
@@ -98,7 +98,7 @@ class EvaluationService
         $records=DB::table('ppb_submissions as p')->join('ppb_games as g','g.id','=','p.game_id')->join('ppb_assignments as a','a.id','=','p.assignment_id')
             ->where(fn($q)=>$q->where('p.submitted_analyst_id',$nativeId)->orWhere('a.original_analyst_id',$nativeId))
             ->whereColumn('a.game_id','p.game_id')->whereColumn('a.kind','p.kind')->whereIn('p.kind',['pick','bonus','long'])
-            ->whereNull('p.legacy_source_pick_id')->whereNotNull('p.submitted_at')->whereNotNull('p.submitted_analyst_id')
+            ->whereNull('p.legacy_source_pick_id')->whereIn('p.status',['submitted','approved','changes_requested'])->whereNotNull('p.submitted_at')->whereNotNull('p.submitted_analyst_id')
             ->whereBetween('g.recommended_at',[$date->subMonth()->startOfMonth()->utc()->format('Y-m-d H:i:s'),$date->endOfMonth()->utc()->format('Y-m-d H:i:s')])
             ->orderBy('g.recommended_at')->orderBy('p.id')->limit(2001)
             ->get(['p.id','p.game_id','p.submitted_analyst_id','p.kind','a.original_analyst_id','g.recommended_at','g.market_type']);
