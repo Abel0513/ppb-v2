@@ -32,7 +32,6 @@ RELEASE = PRIVATE / 'current-release.json'
 PHP = '/www/server/php/84/bin/php'
 EXPECTED_BEFORE_SHA = '68e97e3977c7beb695d5b5015be077acb817ab4a75761a6606d3bd47610bf357'
 EXPECTED_AFTER_SHA = '9c6ae7cdabe12db131e64eec8ffb0c880550d0659cafa37e692a4135287a82ab'
-
 BASE = '/www/wwwroot/ppbaos.com:/tmp:/etc/ssl/certs:/usr/share/zoneinfo'
 OLD = 'php_admin_value[open_basedir] = ' + BASE
 NEW = OLD + ':' + str(SOCKET)
