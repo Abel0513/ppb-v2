@@ -77,6 +77,8 @@ Route::prefix('admin')->middleware([
     // Owner-only read-only preview. Never requires/migrates ppb_evaluation* tables.
     Route::get('/evaluations-preview', [\App\Http\Controllers\Ppb\EvaluationPreviewController::class, 'index'])
         ->middleware(PpbCan::class.':accounts.manage')->name('ppb.evalpreview.index');
+    Route::get('/evaluations-preview/health', [\App\Http\Controllers\Ppb\EvaluationPreviewController::class, 'health'])
+        ->middleware(PpbCan::class.':accounts.manage')->name('ppb.evalpreview.health');
     Route::get('/evaluations-preview/legacy/{id}', [\App\Http\Controllers\Ppb\EvaluationPreviewController::class, 'show'])
         ->whereNumber('id')->middleware(PpbCan::class.':accounts.manage')->name('ppb.evalpreview.show');
 
