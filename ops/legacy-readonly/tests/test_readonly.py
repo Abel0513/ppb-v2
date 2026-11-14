@@ -5,6 +5,31 @@ ROOT=Path(__file__).resolve().parents[1]
 def module(name):
  s=importlib.util.spec_from_file_location('legacy_'+name,ROOT/(name+'.py'));m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m
 w=module('worker');d=module('dispatch')
+class ManagementProbe(unittest.TestCase):
+ def test_profile_names_are_only_headers_not_passwords_or_options(self):
+  m=module('management-probe')
+  self.assertEqual(m.profile_names('[local_dba]\nuser=root\npassword=NEVER_EXPORT\n[bad/name]\n[client]\n'),['client','local_dba'])
+ def test_privilege_proof_requires_global_all_with_grant_option(self):
+  m=module('management-probe')
+  self.assertTrue(m.admin_capability(["GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY PASSWORD '*PRIVATE' WITH GRANT OPTION"]))
+  for grant in ["GRANT ALL PRIVILEGES ON old.* TO 'u'@'localhost' WITH GRANT OPTION","GRANT ALL PRIVILEGES ON *.* TO 'u'@'localhost'","GRANT SELECT ON *.* TO 'u'@'localhost' WITH GRANT OPTION"]:
+   self.assertFalse(m.admin_capability([grant]))
+ def test_authentication_errors_and_hashes_cannot_be_exported(self):
+  m=module('management-probe')
+  from types import SimpleNamespace
+  p=SimpleNamespace(returncode=1,stdout='PRIVATE',stderr='PASSWORD_PRIVATE')
+  with patch.object(m,'invoke',return_value=p):
+   self.assertEqual(m.connection([], '/tmp/mysql.sock','credentialless-root'),{'method':'credentialless-root','result':'UNAVAILABLE'})
+  p=SimpleNamespace(returncode=0,stdout="5.7.44-log\troot@localhost\t/tmp/mysql.sock\nGRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY PASSWORD '*PRIVATE' WITH GRANT OPTION\n",stderr='')
+  with patch.object(m,'invoke',return_value=p):
+   result=m.connection([], '/tmp/mysql.sock','credentialless-root')
+   self.assertTrue(result['required_privileges_proven']);self.assertNotIn('PRIVATE',json.dumps(result))
+ def test_probe_has_no_business_sql_or_mutation_and_no_application_paths(self):
+  m=module('management-probe');text=(ROOT/'management-probe.py').read_text()
+  self.assertNotIn('shell=True',text);self.assertNotIn('/www/wwwroot',text)
+  for sql in ['CREATE USER \'','GRANT SELECT','ALTER USER','INSERT INTO','UPDATE mysql','DELETE FROM']:
+   self.assertNotIn(sql,text)
+  with patch.object(m.os,'geteuid',return_value=997):self.assertEqual(m.run(),{'result':'AUTHORIZED_ROOT_REQUIRED'})
 class Files(unittest.TestCase):
  def test_traversal_credentials_and_non_source_denied(self):
   for path in ['../db.php','/etc/passwd','Application/Common/Conf/db.php','Application/Admin/Controller/auth.php','Application/Admin/View/.env','Application/Admin/View/x.sql','Application/Runtime/index.php']:

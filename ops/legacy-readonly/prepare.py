@@ -28,5 +28,8 @@ def run():
             need(hashlib.sha256(target.read_bytes()).hexdigest() in [previous.get(name),hashlib.sha256(data).hexdigest()],'UNREVIEWED_PUBLIC_TOOL_COLLISION')
         target.write_bytes(data);os.chown(target,0,0);target.chmod(0o644);hashes[name]=hashlib.sha256(data).hexdigest()
     need(not record.is_symlink(),'RUNTIME_MANIFEST_UNSAFE');record.write_text(json.dumps(hashes));record.chmod(0o640);os.chown(record,0,account.pw_gid)
-    return dict(result='READER_TOOLS_INSTALLED',user=USER,uid=account.pw_uid,legacy_file_changes=0,database_changes=0,db_ready=False)
+    import importlib.util
+    spec=importlib.util.spec_from_file_location('management_probe',Path(__file__).with_name('management-probe.py'))
+    probe=importlib.util.module_from_spec(spec);spec.loader.exec_module(probe)
+    return dict(result='READER_TOOLS_INSTALLED',user=USER,uid=account.pw_uid,legacy_file_changes=0,database_changes=0,db_ready=False,management_probe=probe.run())
 if __name__=='__main__':print('LEGACY_READER_INSTALL='+json.dumps(run()))
