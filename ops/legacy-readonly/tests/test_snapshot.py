@@ -20,3 +20,15 @@ class Snapshot(unittest.TestCase):
   self.assertIn("if op=='evaluation_summary':q=dict(q,operation='evaluation_snapshot',summary_only=True)",source)
   self.assertIn("'evaluation_snapshot'",bridge)
   self.assertNotIn("'evaluation_snapshot'",source.split("op=q.get('operation');need(op in ")[1].split('},')[0])
+
+ def test_null_zero_and_one_flags_produce_distinct_real_php_summary_groups(self):
+  code='require $argv[1];$p=array_fill_keys(EVAL_SCORES,0)+["analyst_name"=>"2","recommended_time"=>"2026-05-01 12:00:00","gid"=>1,"is_win"=>1,"is_long"=>0,"is_substitute"=>0];$out=[];foreach([null,0,1] as $flag){$p["is_bonus"]=$flag;$out[]=evaluationGroup($p,2,[1=>2]);}echo json_encode($out);'
+  result=subprocess.run([shutil.which('php'),'-r',code,str(ROOT/'evaluation-snapshot.php')],capture_output=True,text=True)
+  self.assertEqual(result.returncode,0,result.stderr);groups=json.loads(result.stdout)
+  self.assertEqual([x[3] for x in groups],[None,0,1]);self.assertEqual(len({json.dumps(x) for x in groups}),3)
+  self.assertTrue(all(len(x)==17 and x[1] is True and x[7]==2 for x in groups))
+
+ def test_nullable_schedule_reference_never_aliases_real_zero_primary_key(self):
+  code='require $argv[1];$p=array_fill_keys(EVAL_SCORES,0)+["analyst_name"=>"2","recommended_time"=>"2026-05-01 12:00:00","is_win"=>1,"is_long"=>0,"is_substitute"=>0,"is_bonus"=>0];$out=[];foreach([null,0] as $gid){$p["gid"]=$gid;$out[]=evaluationGroup($p,2,[0=>2]);}echo json_encode($out);'
+  p=subprocess.run([shutil.which('php'),'-r',code,str(ROOT/'evaluation-snapshot.php')],capture_output=True,text=True)
+  self.assertEqual(p.returncode,0,p.stderr);groups=json.loads(p.stdout);self.assertEqual([(g[6],g[7]) for g in groups],[(False,0),(True,2)])

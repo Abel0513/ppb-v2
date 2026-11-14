@@ -1,49 +1,42 @@
 [
   {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 440,
-    "limit": 200
+    "operation": "evaluation_summary",
+    "analyst_id": 29,
+    "month": "2026-05"
   },
   {
-    "operation": "source",
-    "path": "Application/Line/Controller/LiffController.class.php",
-    "offset": 0,
-    "limit": 200
+    "operation": "evaluation_summary",
+    "analyst_id": 40,
+    "month": "2026-05"
   },
   {
-    "operation": "source",
-    "path": "Application/Line/Controller/PipibaoController.class.php",
-    "offset": 350,
-    "limit": 150
+    "operation": "evaluation_summary",
+    "analyst_id": 49,
+    "month": "2026-05"
   },
   {
-    "operation": "source",
-    "path": "Application/Line/Controller/CsdaController.class.php",
-    "offset": 200,
-    "limit": 120
+    "operation": "evaluation_summary",
+    "analyst_id": 52,
+    "month": "2026-05"
   },
   {
-    "operation": "source",
-    "path": "Application/WordPress/Controller/LaborRewardPdfController.class.php",
-    "offset": 0,
-    "limit": 180
+    "operation": "evaluation_summary",
+    "analyst_id": 53,
+    "month": "2026-05"
   },
   {
-    "operation": "source",
-    "path": "Application/WordPress/Controller/LaborRewardPdfController.class.php",
-    "offset": 900,
-    "limit": 150
+    "operation": "evaluation_summary",
+    "analyst_id": 54,
+    "month": "2026-05"
   },
   {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 3120,
-    "limit": 200
+    "operation": "evaluation_summary",
+    "analyst_id": 55,
+    "month": "2026-05"
   },
   {
-    "operation": "search",
-    "query": "LaborRewardPdf",
-    "limit": 30
+    "operation": "evaluation_summary",
+    "analyst_id": 60,
+    "month": "2026-05"
   }
 ]

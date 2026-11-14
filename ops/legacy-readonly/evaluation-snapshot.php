@@ -18,6 +18,14 @@ function evaluationSafeRows(array $rows,array $table): void {
         else must(is_numeric($value),'SNAPSHOT_NONNUMERIC_DENIED');
     }
 }
+function evaluationGroup(array $pick,int $id,array $markets): array {
+    // SQL flag predicates distinguish NULL from 0. Never collapse those groups.
+    $flags=array_map(fn($field)=>$pick[$field]===null?null:(int)$pick[$field],['is_win','is_bonus','is_long','is_substitute']);
+    $joined=$pick['gid']!==null&&array_key_exists((int)$pick['gid'],$markets);
+    return [substr($pick['recommended_time'],0,7),(int)$pick['analyst_name']===$id,...$flags,
+        $joined,$joined?(int)$markets[(int)$pick['gid']]:0,
+        ...array_map(fn($field)=>(int)$pick[$field],EVAL_SCORES)];
+}
 function evaluationSnapshot(PDO $pdo,array $q,array $catalog,array $seen): array {
     must(!empty($catalog['evaluation_read_v1']),'EVALUATION_DOMAIN_EXTENSION_REQUIRED');
     $id=$q['analyst_id']??null;$month=$q['month']??'';
@@ -41,7 +49,7 @@ function evaluationSnapshot(PDO $pdo,array $q,array $catalog,array $seen): array
     must(count($profiles)===1&&in_array((int)$profiles[0]['user_type'],[0,1],true),'EVALUATION_SUBJECT_NOT_FOUND');
     $columns=array_merge(['id','gid','analyst_name','recommended_time','is_win','is_bonus','is_long','is_substitute'],EVAL_SCORES);
     $picks=$fetch('pay_analyst_pick',$columns,'WHERE (analyst_name=? OR is_substitute=?) AND recommended_time BETWEEN ? AND ? ORDER BY recommended_time,id',[$id,$id,$start,$end],2000);
-    $gids=array_values(array_unique(array_map(fn($r)=>(int)$r['gid'],$picks)));$schedules=[];
+    $gids=array_values(array_unique(array_map(fn($r)=>(int)$r['gid'],array_filter($picks,fn($r)=>$r['gid']!==null))));$schedules=[];
     if($gids)$schedules=$fetch('pay_schedule',['id','recommended_time','market_type','reviewer','game_type','game_id'],'WHERE id IN ('.implode(',',array_fill(0,count($gids),'?')).') ORDER BY id',$gids,2000);
     $a=$schema.'.pay_attendance_record';$s=$schema.'.pay_schedule';
     must(!array_diff(['id','gid','uid','attendance_status'],$seen[$a]??[])&&!array_diff(['id','recommended_time'],$seen[$s]??[]),'ATTENDANCE_GRANTS_MISSING');
@@ -74,12 +82,11 @@ function evaluationSnapshot(PDO $pdo,array $q,array $catalog,array $seen): array
         $summary=$payload;unset($summary['picks'],$summary['schedules'],$summary['attendance']);$groups=[];$counts=[];
         $markets=[];foreach($schedules as $schedule)$markets[(int)$schedule['id']]=$schedule['market_type'];
         foreach($picks as $pick){
-            $period=substr($pick['recommended_time'],0,7);$own=(int)$pick['analyst_name']===$id;
-            $values=array_map(fn($field)=>(int)$pick[$field],EVAL_SCORES);
-            $key=json_encode([$period,$own,(int)$pick['is_win'],(int)$pick['is_bonus'],(int)$pick['is_long'],(int)$pick['is_substitute'],array_key_exists((int)$pick['gid'],$markets),(int)($markets[(int)$pick['gid']]??0),...$values]);
+            $key=json_encode(evaluationGroup($pick,$id,$markets),JSON_THROW_ON_ERROR);
             $groups[$key]=($groups[$key]??0)+1;
         }
         foreach($attendance as $row){$key=substr($row['recommended_time'],0,7).':'.(int)$row['attendance_status'];$counts[$key]=($counts[$key]??0)+1;}
+        $summary['summary_flag_nulls_preserved']=true;
         $summary['pick_groups']=array_map(fn($key,$count)=>[...json_decode($key,true),$count],array_keys($groups),array_values($groups));
         $summary['attendance_counts']=$counts;$summary['raw_picks']=count($picks);$summary['private_names_returned']=0;return $summary;
     }
