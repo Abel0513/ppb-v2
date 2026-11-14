@@ -13,6 +13,9 @@ NAME=re.compile(r'[A-Za-z0-9_-]{1,80}')
 def invoke(args,timeout=4):
     # Environment cannot inject an alternative login file, password, shell or pager.
     env={'HOME':'/root','USER':'root','LOGNAME':'root','PATH':'/usr/bin:/bin','LC_ALL':'C'}
+    # MySQL5.7 lacks --no-login-paths. Its documented test-login-file override
+    # prevents loading the root login file during the single passwordless probe.
+    if '--skip-password' in args:env['MYSQL_TEST_LOGIN_FILE']='/dev/null'
     try:return subprocess.run(args,capture_output=True,text=True,timeout=timeout,env=env)
     except (OSError,subprocess.TimeoutExpired):return None
 def profile_names(output):
@@ -75,9 +78,10 @@ def run():
         output['login_file_ignored_warning']='ignored' in warning
         output['login_file_permissions_warning']=any(x in warning for x in ['world-writable','world writable','owner','permissions'])
         output['editor_return_code']=p.returncode
-        output['editor_output_empty']=not bool(p.stdout.strip())
+        output['editor_output_empty']=not bool(p.stdout.strip() or p.stderr.strip())
         if 'ignored' in warning:output['login_path_inventory']='FILE_IGNORED_NOT_VERIFIED'
-    names=profile_names(p.stdout) if p is not None and p.returncode==0 else []
+    # Some5.7 builds print the masked profile listing to stderr, not stdout.
+    names=profile_names(p.stdout+'\n'+p.stderr) if p is not None and p.returncode==0 else []
     output['login_paths']=names[:16];output['login_paths_truncated']=len(names)>16
     sockets=[]
     for value in SOCKETS:
@@ -88,7 +92,7 @@ def run():
     if len(sockets)!=1:
         output['connection_probe']='EXACTLY_ONE_LOCAL_SOCKET_REQUIRED';return output
     # One explicit credentialless local root attempt, not password guessing.
-    output['connections'].append(connection(['--no-defaults','--no-login-paths','--user=root','--skip-password'],sockets[0],'credentialless-root'))
+    output['connections'].append(connection(['--no-defaults','--user=root','--skip-password'],sockets[0],'credentialless-root'))
     # Login paths contain only client login parameters, not arbitrary init SQL.
     for name in names[:4]:output['connections'].append(connection(['--no-defaults','--login-path='+name],sockets[0],'login:'+name))
     output['untested_login_paths']=max(0,len(names)-4)
