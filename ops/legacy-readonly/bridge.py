@@ -10,14 +10,14 @@ def need(ok,reason):
  if not ok:raise RuntimeError(reason)
 def validate(q):
  need(isinstance(q,dict),'REQUEST_SCHEMA')
- need(q.get('operation') in {'db_permissions','select','video_count'},'APPLICATION_OPERATION_DENIED')
+ need(q.get('operation') in {'db_permissions','select','video_count','evaluation_snapshot'},'APPLICATION_OPERATION_DENIED')
  if q['operation']=='select':need(q.get('table') in TABLES,'APPLICATION_TABLE_DENIED')
  return q
 def execute(q):
  validate(q);need(os.geteuid()==pwd.getpwnam('ppb-legacy-ro').pw_uid,'NONROOT_READER_REQUIRED')
  manifest=CONFIG/'runtime.json';s=manifest.lstat();need(stat.S_ISREG(s.st_mode) and s.st_uid==0 and s.st_mode&0o022==0,'READER_MANIFEST_UNSAFE')
  hashes=json.loads(manifest.read_text())
- for name in ['db-worker.php','bridge.py']:
+ for name in ['db-worker.php','bridge.py','evaluation-snapshot.php']:
   path=PUBLIC/name;s=path.lstat();need(stat.S_ISREG(s.st_mode) and s.st_uid==0 and s.st_nlink==1 and s.st_mode&0o022==0 and hashlib.sha256(path.read_bytes()).hexdigest()==hashes[name],'READER_CODE_CHANGED')
  result=subprocess.run(['/www/server/php/84/bin/php','-d','auto_prepend_file=','-d','auto_append_file=','-d','display_errors=0','-d','log_errors=0',str(PUBLIC/'db-worker.php')],input=json.dumps(q),capture_output=True,text=True,timeout=25)
  need(len(result.stdout.encode())<=1048576,'RESPONSE_LIMIT')
