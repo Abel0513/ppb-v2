@@ -2,48 +2,45 @@
   {
     "operation": "source",
     "path": "Application/Admin/Controller/AnalystRatingController.class.php",
+    "offset": 640,
+    "limit": 190
+  },
+  {
+    "operation": "source",
+    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
+    "offset": 2615,
+    "limit": 200
+  },
+  {
+    "operation": "search",
+    "query": "line_id",
+    "limit": 30
+  },
+  {
+    "operation": "search",
+    "query": "line_name",
+    "limit": 30
+  },
+  {
+    "operation": "search",
+    "query": "liffId",
+    "limit": 30
+  },
+  {
+    "operation": "source",
+    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
     "offset": 0,
     "limit": 160
   },
   {
     "operation": "source",
-    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
-    "offset": 160,
+    "path": "Application/Admin/Controller/AdminController.class.php",
+    "offset": 0,
     "limit": 160
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
-    "offset": 300,
-    "limit": 160
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
-    "offset": 460,
-    "limit": 180
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 2240,
-    "limit": 200
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 2420,
-    "limit": 200
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 3470,
-    "limit": 200
   },
   {
     "operation": "search",
-    "query": "function join(",
+    "query": "function join",
     "limit": 10
   }
 ]
