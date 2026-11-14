@@ -32,6 +32,19 @@ features use the reviewed fixed executor and data manifests, not per-release AWS
 IAM/SSM installation. Report genuine missing technical authority without pretending
 that user authorization changed IAM. Never claim unperformed deployment/DB checks.
 
+## Standing design baseline — 2026-11-15
+
+Owner design comment6883893790: the whole evaluation module must match the actual
+legacy UI and operation flow. Future V2 features without an explicitly approved
+new design also default to legacy layout/interaction. Read actual View, CSS, JS
+and action sources first; do not substitute current V2 cards, memory or generic
+mobile redesigns. Preserve fields/order/names/colors/buttons/modals/flows and
+source-ground each page. Missing or redacted sources are NOT permission to guess.
+Keep V2 calculations, salary snapshots, permissions, provenance, escaping, CSRF,
+request receipts and idempotence. Never copy legacy SQL/unsafe auth/side effects.
+PR58 stays Draft; this UI batch grants no production migration, writes or release.
+Do not remove fixed reader redaction or widen privileged access to obtain UI files.
+
 ## First Codex task: READ-ONLY audit
 
 **Only the first onboarding/audit task is read-only.** Before the user approves a specific implementation batch, inspect and report only: no edits, dependency installation, lockfile generation, commits, pushes, merges, PRs or deployment. Deliver the first audit in the task response, not as a new repository file. **This is NOT a permanent ban on coding or V2 database work.** After the user approves an implementation batch, Codex may independently modify V2 code, run appropriate tests, adjust V2-owned schema/data, and prepare a PR within that approved scope, without asking for permission for every file or row. Production application rollout and destructive or irreversible changes still require a separate acceptance gate.
