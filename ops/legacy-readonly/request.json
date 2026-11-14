@@ -1,38 +1,50 @@
 [
   {
-    "operation": "permissions"
-  },
-  {
-    "operation": "inventory",
+    "operation": "source",
+    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
     "offset": 0,
-    "limit": 50
+    "limit": 160
   },
   {
-    "operation": "inventory",
-    "offset": 50,
-    "limit": 50
+    "operation": "source",
+    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
+    "offset": 160,
+    "limit": 160
   },
   {
-    "operation": "search",
-    "query": "評鑑",
-    "limit": 20
+    "operation": "source",
+    "path": "Application/Admin/Controller/AnalystPerformanceController.class.php",
+    "offset": 0,
+    "limit": 160
   },
   {
-    "operation": "search",
-    "query": "评鉴",
-    "limit": 20
+    "operation": "source",
+    "path": "Application/Admin/Controller/AnalystPerformanceController.class.php",
+    "offset": 160,
+    "limit": 160
   },
   {
-    "operation": "search",
-    "query": "evaluation",
-    "limit": 20
+    "operation": "source",
+    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
+    "offset": 2160,
+    "limit": 160
   },
   {
-    "operation": "search",
-    "query": "score",
-    "limit": 20
+    "operation": "source",
+    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
+    "offset": 2320,
+    "limit": 160
   },
   {
-    "operation": "db_permissions"
+    "operation": "source",
+    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
+    "offset": 2480,
+    "limit": 160
+  },
+  {
+    "operation": "source",
+    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
+    "offset": 2640,
+    "limit": 160
   }
 ]
