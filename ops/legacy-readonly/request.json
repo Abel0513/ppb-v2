@@ -1,46 +1,20 @@
 [
   {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
-    "offset": 640,
-    "limit": 190
+    "operation": "db_permissions"
   },
   {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 2615,
-    "limit": 200
+    "operation": "evaluation_summary",
+    "analyst_id": 2,
+    "month": "2026-05"
   },
   {
-    "operation": "search",
-    "query": "line_id",
-    "limit": 30
+    "operation": "evaluation_summary",
+    "analyst_id": 2,
+    "month": "2026-05"
   },
   {
-    "operation": "search",
-    "query": "line_name",
-    "limit": 30
-  },
-  {
-    "operation": "search",
-    "query": "liffId",
-    "limit": 30
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 0,
-    "limit": 160
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminController.class.php",
-    "offset": 0,
-    "limit": 160
-  },
-  {
-    "operation": "search",
-    "query": "function join",
-    "limit": 10
+    "operation": "evaluation_summary",
+    "analyst_id": 2,
+    "month": "2026-04"
   }
 ]
