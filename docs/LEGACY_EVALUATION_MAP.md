@@ -191,14 +191,14 @@ row is deleted. Video dates use Taipei input/UTC storage; repeated guest slots c
 once and cancellation retains history. Both use the same UUID/revision/event journal.
 
 Still pending, explicitly NOT accepted: complete original entry/PDF/self-service
-identity mapping; all-analyst live coverage;
+identity mapping;
 V2 production migration/persistence; full deployed HTTP/browser acceptance.
 Native input UI is implemented; it is not a production acceptance claim. PR58
 remains Draft. Owner comment6877548981 authorizes continuation, CI and pushing,
 not final merge, production migration/writes or publication.
 
 
-Current draft tests (18eb6d4):37 tests /214 assertions locally; latest GitHub CI
+Current draft tests:42 tests /245 assertions locally; latest GitHub CI
 must be checked against the exact head before reporting its status. MySQL5.7.44
 runs socket-only in a pinned network-disabled ephemeral container. ONLY session
 TEMPORARY tables in its existing system schema are used, with real transactions,
@@ -225,3 +225,19 @@ rollback of a failed migration. Stop after any partial/uncertain DDL; restore th
 private V2 backup under reviewed recovery, never auto-drop business history or
 retry blindly. Application-file rollback leaves the new additive tables intact.
 No migration or production business write has been executed for this Draft.
+
+
+## Complete readonly cohort revalidation (2026-11-14)
+
+Nullable source flags retain SQL NULL rather than silently becoming zero; nullable
+schedule references cannot alias a real primary key0. Existing arithmetic kernels
+were retained. Actual eligible roster34 (25 with rows), two-month snapshots,
+2754 comparisons PASS across Runs43611427261/43612034105/43612532291/
+43613070040/43615571202. Cohort digest:
+4e7cd449f85be869350d5b0de5852a66b312f30e0ea5b96c8bbefab485038b0a.
+Video-positive source case is present; a separate June9 snapshot proves the real
+late-attendance case. Empty analysts are tested, not silently omitted. Snapshots
+are individually readonly/RR with7 InnoDB tables, not globally atomic across runs.
+Reader installation Run43614951108, SSM20c34a0f-62f8-436e-b289-db54d0a14499,
+retains original catalog and grants. Legacy writes0. This source parity does not
+prove deployed UI, private self-service identity or production persistence.

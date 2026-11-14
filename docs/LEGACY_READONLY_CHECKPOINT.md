@@ -1,3 +1,43 @@
+# Current resume checkpoint — 2026-11-14
+
+PR58 remains Draft. Owner comment6877548981 authorizes implementation, readonly
+reconciliation, tests and pushing, not final merge, production migration, business
+writes or publication. Do not repeat completed DBA/OS/FPM/WP setup.
+
+## Current completed work
+
+- DBA provisioning and evaluation column delegation succeeded. Fixed reader uses
+  ppb_legacy_ro@localhost, no global/write/GRANT OPTION, typed4/private-join4.
+  Names remain inside fixed aggregate joins and are not returned.
+- Actual reviewed reader installation Run43614951108, SSM
+  20c34a0f-62f8-436e-b289-db54d0a14499, bootstrap60/runtime58.
+  Nullable flags and nullable schedule keys preserve original SQL semantics.
+  Legacy file and database changes0; DBA installer and original catalog unchanged.
+- Complete eligible numeric cohort34, 25 with rows, two-month May selection:
+  2754 independent source-rule/PHP comparisons PASS. Runs43611427261,
+  43612034105,43612532291,43613070040,43615571202. Each snapshot uses readonly
+  REPEATABLE-READ and proves all7 tables InnoDB. No cross-run atomicity claim.
+  Positive video and separate June late-pay cases PASS. Raw receipts stay outside
+  Git; safe aggregate report contains no business rows or private names.
+- Draft implementation includes admin pages, manual/record ratings, native
+  attendance/video inputs, source lineage, five additive V2 business/audit table
+  migration, UUID/revision/fingerprint receipts, CSV/print and legacy admin aliases.
+  Existing calculator kernels retained. No production migration or app deployment.
+- Local42 tests/245 assertions PASS with real isolated MySQL5.7.44 temporary tables
+  only; no test database or persistent test table. Latest exact-head CI must be
+  verified separately before reporting it passed.
+
+## Remaining acceptance boundaries
+
+Bookend roster/fingerprint and zero-key evidence, exact-head CI and documentation
+must be completed. LINE/LIFF private identity resolution and original PDF/entry
+integration are not accepted. Do not replace analyst identity with bare numeric ID
+or force backend accounts. Production persistence and deployed UI/HTTP acceptance
+remain NOT VERIFIED. Formal release requires the owner gate and existing isolation,
+metadata, private backup and migration safety checks; no new AWS/DBA setup needed.
+
+## Historical record (superseded, do not rerun)
+
 # Resume checkpoint — 2026-11-14
 
 Do not restart previously accepted AWS/FPM/metadata/WP work. Main PR60 merged
