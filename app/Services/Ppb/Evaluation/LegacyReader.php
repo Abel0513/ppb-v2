@@ -53,6 +53,15 @@ class LegacyReader
             ||($s['transactional_tables_verified']??null)!==7||!preg_match('/^[a-f0-9]{64}$/D',$s['source_sha256']??'')){
             throw new \RuntimeException('LEGACY_SNAPSHOT_SCOPE_NOT_PROVEN');
         }
+        $prior=\DateTimeImmutable::createFromFormat('!Y-m',$month)->modify('-1 month')->format('Y-m');
+        if(($s['previous_month']??null)!==$prior||!is_array($s['video_counts']??null)){
+            throw new \RuntimeException('LEGACY_SNAPSHOT_COVERAGE_NOT_PROVEN');
+        }
+        foreach([$prior,$month] as $period){
+            if(!array_key_exists($period,$s['video_counts'])||!is_int($s['video_counts'][$period])||$s['video_counts'][$period]<0){
+                throw new \RuntimeException('LEGACY_SNAPSHOT_COVERAGE_NOT_PROVEN');
+            }
+        }
         return $s;
     }
 
