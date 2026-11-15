@@ -56,6 +56,7 @@
 @if($errors->any())<div class="error" style="margin-bottom:16px"><strong>請修正以下資料：</strong><ul style="margin:5px 0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 @if($game && ($game->hasVerifiedWp() || $game->hasUnresolvedWp()))<div class="error">此賽事已有 WP 發布或待查紀錄，暫停一般編輯，以免破壞發布與歷史關聯。<a class="link" href="{{ route('ppb.games.show',$game) }}">返回詳情</a></div>@else
 <form method="post" action="{{ $isEdit ? route('ppb.games.update',$game) : route('ppb.games.store') }}" id="ppbScheduleForm">@csrf @if($isEdit)@method('PUT')@endif
+@if($isEdit)<input type="hidden" name="revision_token" value="{{ old('revision_token', \App\Services\Ppb\ScheduleVersion::game($game)) }}">@endif
 <h2 class="card-title" style="margin:0 0 16px">1. 排班資料</h2>
 <div class="ppb-sched-grid">
 <label class="field-label">賽事類型

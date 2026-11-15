@@ -97,11 +97,14 @@ class ScheduleManager
             return $game;
         },3);
     }
-    public function update(PpbGame $game,array $data,array $slots): PpbGame {
-        return DB::transaction(function () use ($game,$data,$slots) {
+    public function update(PpbGame $game,array $data,array $slots,?string $expectedVersion=null): PpbGame {
+        $expectedVersion ??= ScheduleVersion::game($game);
+        return DB::transaction(function () use ($game,$data,$slots,$expectedVersion) {
             // Scope lock precedes game lock (consistent with insert/delete/cancel).
             $this->scope((string)$game->month_key,(int)$game->game_type);
             $locked=PpbGame::whereKey($game->id)->lockForUpdate()->firstOrFail();
+            $children=$locked->assignments()->orderBy('id')->lockForUpdate()->get();
+            ScheduleVersion::assert($expectedVersion,ScheduleVersion::game($locked,$children));
             if ($locked->status==='cancelled') $this->reject('已取消的賽事只能查看歷史。');
             if ($locked->hasVerifiedWp() || $locked->hasUnresolvedWp()) $this->reject('已有 WP 發布或待查紀錄，先確認 WP 狀態才可編輯。');
             if ($data['month_key']!==$locked->month_key || $data['game_type']!==$locked->game_type) {
@@ -151,10 +154,13 @@ class ScheduleManager
             ]);
         }
     }
-    public function delete(PpbGame $game): void {
-        DB::transaction(function () use ($game) {
+    public function delete(PpbGame $game,?string $expectedVersion=null): void {
+        $expectedVersion ??= ScheduleVersion::game($game);
+        DB::transaction(function () use ($game,$expectedVersion) {
             $this->scope((string)$game->month_key,(int)$game->game_type);
             $locked=PpbGame::whereKey($game->id)->lockForUpdate()->firstOrFail();
+            $children=$locked->assignments()->orderBy('id')->lockForUpdate()->get();
+            ScheduleVersion::assert($expectedVersion,ScheduleVersion::game($locked,$children));
             if ($locked->hasVerifiedWp() || $locked->publications()->exists() || $locked->submissions()->exists()) {
                 $this->reject('已有 WP 紀錄或投稿的賽事不能刪除，請使用「取消賽事」。');
             }
@@ -171,10 +177,13 @@ class ScheduleManager
             if ($num) $this->compactAfter($locked->month_key,(int)$locked->game_type,(int)$num);
         },3);
     }
-    public function cancel(PpbGame $game,string $reason): void {
-        DB::transaction(function () use ($game,$reason) {
+    public function cancel(PpbGame $game,string $reason,?string $expectedVersion=null): void {
+        $expectedVersion ??= ScheduleVersion::game($game);
+        DB::transaction(function () use ($game,$reason,$expectedVersion) {
             $this->scope((string)$game->month_key,(int)$game->game_type);
             $locked=PpbGame::whereKey($game->id)->lockForUpdate()->firstOrFail();
+            $children=$locked->assignments()->orderBy('id')->lockForUpdate()->get();
+            ScheduleVersion::assert($expectedVersion,ScheduleVersion::game($locked,$children));
             if ($locked->status==='cancelled') $this->reject('賽事已取消。');
             $published=$locked->hasVerifiedWp();
             if (!$published && $locked->hasUnresolvedWp()) $this->reject('WP 上傳結果待查，先確認發布狀態才能取消。');

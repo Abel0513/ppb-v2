@@ -2,6 +2,8 @@
 namespace Tests\Feature;
 
 use App\Models\PpbAccount;
+use App\Models\PpbAssignment;
+use App\Services\Ppb\ScheduleVersion;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\DB;
 use Mockery;
@@ -141,7 +143,7 @@ class ManuscriptAuthorizationTest extends TestCase
             }
             // Assignment change after form display must invalidate even a new draft.
             DB::table('ppb_submissions')->delete();$token=$this->token();
-            $this->postJson('https://v2.csdatw.xyz/admin/assignments/1/substitute',['to_analyst_id'=>10,'reason'=>'Staff reassignment fixture'])->assertRedirect();
+            $this->postJson('https://v2.csdatw.xyz/admin/assignments/1/substitute',['to_analyst_id'=>10,'reason'=>'Staff reassignment fixture','revision_token'=>ScheduleVersion::assignment(PpbAssignment::findOrFail(1))])->assertRedirect();
             self::assertSame(9,(int)DB::table('ppb_assignments')->value('original_analyst_id'));
             self::assertSame(10,(int)DB::table('ppb_assignments')->value('current_analyst_id'));
             self::assertSame(71,(int)DB::table('ppb_substitutions')->value('performed_by_account_id'));$writes=0;
