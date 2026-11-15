@@ -127,6 +127,7 @@ class EvaluationService
                 $q->whereRaw("BINARY c.subject_type = BINARY (".$type." ELSE 'v2' END)",$typeBindings)->whereRaw('c.subject_id = '.$id.' ELSE a.original_analyst_id END',$idBindings);
             })
             ->join('ppb_evaluation_ratings as r',fn($q)=>$q->on('r.source_id','=','p.id')->where('r.source_type','v2'))
+            ->where('r.subject_type',$subject['type'])->where('r.subject_id',$subject['id'])
             ->whereColumn('a.game_id','p.game_id')->whereColumn('a.kind','p.kind')
             ->where('p.submitted_analyst_id',(int)$subject['native_id'])->where(fn($q)=>$q->whereColumn('p.submitted_analyst_id','a.original_analyst_id')->orWhereNotNull('c.id'))
             ->whereNull('p.legacy_source_pick_id')->whereIn('p.status',['submitted','approved','changes_requested'])->whereNotNull('p.submitted_at')->whereNotNull('g.recommended_at')->where('p.kind','pick')->whereIn('r.result_state',[1,2])

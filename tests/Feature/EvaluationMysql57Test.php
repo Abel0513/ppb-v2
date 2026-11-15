@@ -71,7 +71,7 @@ class EvaluationMysql57Test extends TestCase
             foreach([[1,1,null,'2026-05-01 00:00:00'],[2,2,null,'2026-05-01 00:00:00'],[3,3,null,'2026-05-01 00:00:00'],[4,1,333,'2026-05-01 00:00:00'],[5,1,null,null]] as [$pid,$gid,$legacy,$submitted])DB::table('ppb_submissions')->insert(['id'=>$pid,'game_id'=>$gid,'assignment_id'=>$gid,'submitted_analyst_id'=>9,'kind'=>'pick','submitted_at'=>$submitted,'legacy_source_pick_id'=>$legacy]);
             DB::table('ppb_submissions')->insert([['id'=>7,'game_id'=>1,'assignment_id'=>1,'submitted_analyst_id'=>9,'kind'=>'pick','status'=>'legacy_imported','submitted_at'=>'2026-05-01 00:00:00','legacy_source_pick_id'=>null],['id'=>8,'game_id'=>1,'assignment_id'=>1,'submitted_analyst_id'=>9,'kind'=>'pick','status'=>'draft','submitted_at'=>'2026-05-01 00:00:00','legacy_source_pick_id'=>null]]);
             $snapshot=['picks'=>[],'pick_columns'=>[],'schedules'=>[],'attendance'=>[],'evaluations'=>[],'ratings'=>[],'video_counts'=>[],'recent'=>[],'source_sha256'=>str_repeat('b',64),'profile'=>['id'=>4,'rating_level'=>1]];
-            $reader=Mockery::mock(LegacyReader::class)->makePartial();$reader->shouldReceive('query')->andReturnUsing(fn($query)=>['transaction_isolation'=>'REPEATABLE-READ','snapshot'=>array_replace($snapshot,['format'=>'ppb-evaluation-source-v1','analyst_id'=>$query['analyst_id'],'month'=>$query['month'],'transactional_tables_verified'=>7])]);
+            $reader=Mockery::mock(LegacyReader::class)->makePartial();$reader->shouldReceive('query')->andReturnUsing(fn($query)=>['transaction_isolation'=>'REPEATABLE-READ','snapshot'=>array_replace($snapshot,['format'=>'ppb-evaluation-source-v1','analyst_id'=>$query['analyst_id'],'month'=>$query['month'],'previous_month'=>(new \DateTimeImmutable($query['month'].'-01'))->modify('-1 month')->format('Y-m'),'video_counts'=>[$query['month']=>0,(new \DateTimeImmutable($query['month'].'-01'))->modify('-1 month')->format('Y-m')=>0],'transactional_tables_verified'=>7])]);
             $subjects=Mockery::mock(EvaluationSubjects::class);$subjects->shouldReceive('mappings')->andReturn([4=>9]);
             $realService=new EvaluationService($reader,$subjects,new LegacyMonthSelector,$reporter,new LegacyRatingCalculator);
             $writes=0;$loaded=$realService->load(['type'=>'legacy','id'=>4,'native_id'=>9],'2026-05');
@@ -178,6 +178,70 @@ class EvaluationMysql57Test extends TestCase
                 self::fail('A stale cross-month salary request must fail before writing.');
             }catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){self::assertSame(409,$e->getStatusCode());}
             self::assertSame(0,$writes,'Rejecting a stale salary source cannot write even a temporary evaluation row.');
+
+            // A second session represents another subject/month writer. No
+            // persistent tables or data are needed to prove cross-session exclusion.
+            $peer=new \PDO('mysql:unix_socket='.$socket.'/mysqld.sock;dbname=mysql','root','',[
+                \PDO::ATTR_ERRMODE=>\PDO::ERRMODE_EXCEPTION]);
+            $writeLock='ppb-v2-eval-write:'.substr(hash('sha256','mysql'),0,32);
+            $take=$peer->prepare('SELECT GET_LOCK(?,0)');$take->execute([$writeLock]);
+            self::assertSame(1,(int)$take->fetchColumn());
+            $busyService=Mockery::mock(EvaluationService::class);
+            $busyService->shouldReceive('load')->andThrow(new \RuntimeException('REPORT_READ_BEFORE_CROSS_MONTH_WRITE_EXCLUSION'));
+            $busyWriter=new EvaluationWriter($busyService,new LegacyInteractionCalculator);
+            $writes=0;
+            try{
+                $busyWriter->save($substitute,'2026-05','salary_snapshot',[],
+                    '683f084d-b85d-437b-9d9c-b280ce473ea0',$afterGrade['revision'],$afterGrade['source_sha256'],71);
+                self::fail('Another evaluation writer must exclude this save before reading a stale report.');
+            }catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){self::assertSame(409,$e->getStatusCode());}
+            finally{
+                $writes=0;
+                self::assertTrue($realWriter->save($substitute,'2026-05','salary_snapshot',[],
+                    $salaryId,$subReport['revision'],$subReport['source_sha256'],71)['replayed']);
+                self::assertSame(0,$writes,'Committed UUID replay remains read-only even while another writer owns exclusion.');
+                $release=$peer->prepare('SELECT RELEASE_LOCK(?)');$release->execute([$writeLock]);
+            }
+            self::assertSame(0,$writes,'A busy writer must fail before any DML.');
+            $guardedService=Mockery::mock(EvaluationService::class);
+            $guardedService->shouldReceive('load')->once()->andReturnUsing(function($subject,$month)use($peer,$writeLock,$realService){
+                $attempt=$peer->prepare('SELECT GET_LOCK(?,0)');$attempt->execute([$writeLock]);
+                self::assertSame(0,(int)$attempt->fetchColumn(),'Exclusion must already be held during source validation.');
+                return $realService->load($subject,$month);
+            });
+            (new EvaluationWriter($guardedService,new LegacyInteractionCalculator))->save($substitute,'2026-05','salary_snapshot',[],
+                '683f084d-b85d-437b-9d9c-b280ce473ea1',$afterGrade['revision'],$afterGrade['source_sha256'],71);
+            $take->execute([$writeLock]);self::assertSame(1,(int)$take->fetchColumn(),'Successful save must release session exclusion.');
+            $release->execute([$writeLock]);
+            $failedService=Mockery::mock(EvaluationService::class);
+            $failedService->shouldReceive('load')->once()->andThrow(new \RuntimeException('INJECTED_SOURCE_FAILURE'));
+            try{
+                (new EvaluationWriter($failedService,new LegacyInteractionCalculator))->save($substitute,'2026-05','salary_snapshot',[],
+                    '683f084d-b85d-437b-9d9c-b280ce473ea2',4,$afterGrade['source_sha256'],71);
+                self::fail('Source error must stop.');
+            }catch(\RuntimeException $e){self::assertSame('INJECTED_SOURCE_FAILURE',$e->getMessage());}
+            $take->execute([$writeLock]);self::assertSame(1,(int)$take->fetchColumn(),'Failed source validation must release exclusion too.');
+            $release->execute([$writeLock]);$peer=null;
+
+            $beforeUnrelated=$realService->load($substitute,'2026-05');
+            $other=$realService->load($origin,'2026-05');
+            $otherManual=array_intersect_key($other['manual'],array_flip(['score_interaction_w1','score_interaction_w2','score_interaction_w3','score_interaction_w4','score_interaction_w5','score_interaction_feedback','score_initiative','score_extra_adjustment']));
+            $otherManual['score_extra_adjustment']++;
+            $realWriter->save($origin,'2026-05','manual',$otherManual,'683f084d-b85d-437b-9d9c-b280ce473ea3',$other['revision'],$other['source_sha256'],71);
+            $afterUnrelated=$realService->load($substitute,'2026-05');
+            self::assertSame($beforeUnrelated['source_sha256'],$afterUnrelated['source_sha256'],'An unrelated analyst manual edit must not invalidate this source.');
+            self::assertSame($beforeUnrelated['current'],$afterUnrelated['current']);
+            self::assertSame($beforeUnrelated['saved_salary'],$afterUnrelated['saved_salary']);
+            self::assertSame($afterUnrelated['source_sha256'],$realService->load($substitute,'2026-05')['source_sha256'],'Unchanged repeated reads must be stable.');
+
+
+            // A rating owned by legacy:4 is not a v2:9 rating merely because
+            // the native submission author has the same numeric native ID.
+            $unmappedIdentity=$unmappedService->load(['type'=>'v2','id'=>9,'native_id'=>9],'2026-05');
+            self::assertSame(0,$unmappedIdentity['history']['2026-03']['counts']['rated']);
+            self::assertSame(['outcome'=>null,'count'=>0],$unmappedIdentity['current']['performance']['streak'],
+                'Recent outcomes must use the same proven rating subject as monthly selection.');
+            self::assertSame(['outcome'=>1,'count'=>1],$realService->load($origin,'2026-05')['current']['performance']['streak']);
 
             self::assertSame(0,(int)DB::selectOne("SELECT COUNT(*) n FROM information_schema.TABLES WHERE TABLE_SCHEMA='mysql' AND TABLE_NAME LIKE 'ppb_%'")->n);
             DB::disconnect('mysql');

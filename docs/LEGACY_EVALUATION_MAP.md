@@ -1,3 +1,34 @@
+# Cross-month save safety continuation — 2026-11-15
+
+Three newly reproduced defects (separate from accepted0227426):
+
+- Subject/month row revisions do not coordinate shared videos or prior-month
+  grades. Writer source validation previously ran before any shared exclusion.
+  A database-scoped MySQL session advisory lock now covers receipt recheck,
+  fresh validation and the transaction across all evaluation writers. Busy
+  requests fail409 before report loading/DML; committed UUID replay remains
+  read-only even while busy. Ownership is checked before transaction DML;
+  reconnect/lost-lock fails closed. Finally releases the captured session lock.
+  This coordinates EvaluationWriter calls, not arbitrary other V2 controllers
+  or external legacy changes. Existing legacy snapshot drift checks remain.
+- Missing/NULL/negative/non-integer legacy monthly video counts were accepted
+  and subsequently defaulted to0. Reader now requires explicit nonnegative
+  integer counts for both declared months and the correct previous-month scope.
+  This matches the existing installed reader protocol; no fixed tool change.
+- Native recent/streak joins used rating source IDs without the rating subject.
+  They now require the same subject type and ID as monthly rating selection;
+  an unproven native/legacy mapping cannot borrow the other domain's outcomes.
+
+New regressions first FAILED on missing coverage, report-read-before-exclusion,
+then native wrong-domain streak1 vs expected0. Existing accepted arithmetic,
+three-month history, source fingerprints and immutable salary receipts remain.
+Additional checks: two real MySQL sessions, release on success/failure, zero-DML
+busy rejection, replay while busy, unchanged repeated reads, unrelated analyst
+manual edits leave source/results/snapshot unchanged, correct mapped streak kept.
+Only isolated mysql5.7 session TEMPORARY tables; no test DB/persistent tables,
+production migration/write/deployment, fixed tool/IAM/SSM or legacy changes.
+This is Draft application validation, not production/complete UI acceptance.
+
 # Autonomous continuation — 2026-11-15
 
 Owner revoked the project-wide wait condition. Phase A installation blocks only
