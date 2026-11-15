@@ -29,7 +29,7 @@ class EvaluationSubjects
     public function all(): array
     {
         $source=$this->reader->profiles();
-        $maps=$this->mappings();$native=PpbAnalyst::query()->orderBy('id')->get(['id','name','display_name','status','user_type'])->keyBy('id');$out=[];
+        $maps=$this->mappings();$native=PpbAnalyst::query()->orderBy('id')->get()->keyBy('id');$out=[];
         foreach($source as $profile){
             if(!in_array((int)$profile['user_type'],[0,1],true))continue;
             $id=(int)$profile['id'];$local=isset($maps[$id])?$native->get($maps[$id]):null;
@@ -40,7 +40,7 @@ class EvaluationSubjects
         foreach($native as $analyst){
             if(!in_array((int)$analyst->user_type,[0,1],true)||in_array((int)$analyst->id,$maps,true))continue;
             $out[]=['type'=>'v2','id'=>(int)$analyst->id,'label'=>$analyst->display_name?:$analyst->name,
-                'native_id'=>(int)$analyst->id,'mapped'=>true,'sort'=>100000+(int)$analyst->id,'rating_level'=>2,'user_type'=>(int)$analyst->user_type,'status'=>$analyst->status];
+                'native_id'=>(int)$analyst->id,'mapped'=>true,'sort'=>100000+(int)$analyst->id,'rating_level'=>$analyst->getRawOriginal('rating_level')===null?null:(int)$analyst->rating_level,'user_type'=>(int)$analyst->user_type,'status'=>$analyst->status];
         }
         usort($out,fn($a,$b)=>[$a['sort'],$a['id']]<=>[$b['sort'],$b['id']]);return $out;
     }

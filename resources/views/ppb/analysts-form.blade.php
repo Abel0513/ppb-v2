@@ -13,9 +13,18 @@
 <label class="field-label" for="status">狀態</label><select class="field" name="status" id="status"><option value="active" @selected(old('status',$analyst?->status ?? 'active')==='active')>啟用</option><option value="inactive" @selected(old('status',$analyst?->status)==='inactive')>停用</option></select>
 <label class="field-label" for="user_type">身分類型（依舊版欄位備註）</label><select class="field" id="user_type" name="user_type">@foreach([0=>'0：分析師',1=>'1：核稿＋分析師',2=>'2：核稿',3=>'3：主持人'] as $type=>$label)<option value="{{ $type }}" @selected((string)old('user_type',$analyst?->user_type ?? 0)===(string)$type)>{{ $label }}</option>@endforeach</select>
 <p class="small-note">排班目前可選：短文／BONUS／長文為類型 0、1；核稿為類型 1、2。類型 3 為主持人，不代表停用；主持人不參與分析稿或核稿指派。</p>
-<label class="field-label" for="account_id">綁定登入帳號（選填）</label><select class="field" name="account_id" id="account_id"><option value="">不綁定</option>
+<label class="field-label" for="account_id">後台帳號關聯（選填）</label><select class="field" name="account_id" id="account_id"><option value="">不綁定</option>
 @foreach($accounts as $account)<option value="{{ $account->id }}" @selected((string)old('account_id',$analyst?->account_id)===(string)$account->id)>{{ $account->name }} · {{ $account->email }}</option>@endforeach
 </select><p class="small-note">僅可綁定具有「分析師」角色、未綁定其他分析師的帳號；沒有綁定不影響名冊身分。</p>
+<label class="field-label" for="color">排班文字色（選填，#RRGGBB）</label><input class="field" id="color" name="color" maxlength="7" pattern="#[0-9a-fA-F]{6}" value="{{ old('color',$analyst?->color) }}">
+<label class="field-label" for="wp_photo">WordPress 照片附件 ID（選填）</label><input class="field" id="wp_photo" name="wp_photo" type="number" min="1" max="{{ PHP_INT_MAX }}" step="1" value="{{ old('wp_photo',$analyst?->wp_photo) }}">
+<label class="field-label" for="author_id">WordPress 作者來源 ID（選填）</label><input class="field" id="author_id" name="author_id" type="number" min="0" max="{{ PHP_INT_MAX }}" step="1" value="{{ old('author_id',$analyst?->author_id) }}">
+<label class="field-label" for="rating_level">主檔評級（不取代月份評級）</label><select class="field" id="rating_level" name="rating_level"><option value="">未提供</option>@foreach([0,1,2,3] as $level)<option value="{{ $level }}" @selected((string)old('rating_level',$analyst?->rating_level)===(string)$level)>{{ $level }}</option>@endforeach</select>
+@if($canPrivate)
+<label class="field-label" for="line_id">LINE 身分來源關聯（選填）</label><input class="field" id="line_id" name="line_id" maxlength="255" autocomplete="off" value="{{ $analyst?->line_id }}">
+<label class="field-label" for="line_name">LINE 顯示名稱（選填）</label><input class="field" id="line_name" name="line_name" maxlength="255" autocomplete="off" value="{{ $analyst?->line_name }}">
+<p class="small-note">僅供受權管理者保存來源關聯，不等於已驗證 LINE 登入。</p>
+@endif
 <label class="field-label" for="internal_notes">內部備註（選填）</label><textarea class="field" name="internal_notes" id="internal_notes" maxlength="2000" style="height:110px;padding:12px">{{ old('internal_notes',$analyst?->internal_notes) }}</textarea>
 <div class="toolbar" style="margin-top:22px"><button class="action" type="submit">{{ $analyst ? '儲存修改' : '建立分析師' }}</button><a class="link" href="{{ route('ppb.analysts.index') }}">取消</a></div></form>
 </div></div></main></div></div>

@@ -62,7 +62,7 @@
             $bonus = $activeAssignments->firstWhere('kind','bonus');
             $long = $activeAssignments->firstWhere('kind','long');
             $reviewer = $reviewers->get($game->reviewer_analyst_id);
-            $reviewerStyle = $reviewer && isset($legacyColors[(int)$reviewer->id]) ? $legacyColors[(int)$reviewer->id] : null;
+            $reviewerStyle = $reviewer?->scheduleColors($legacyColors[(int)$reviewer->id] ?? null);
             $isCancelled = $game->status === 'cancelled';
             $legacyGameNotes = is_string($game->notes) ? json_decode($game->notes,true) : null;
             $legacyLottery = is_array($legacyGameNotes) && ($legacyGameNotes['_ppb_legacy_game_v1'] ?? false)
@@ -108,7 +108,7 @@
               <span class="ppb-shift-legend ppb-shift-lose">敗</span>
               <span class="ppb-shift-legend ppb-shift-pending">未結算</span>
             </div>
-            <div class="ppb-shift-reviewer">核稿：<span @if($reviewerStyle) style="background-color:{{ $reviewerStyle['background'] }};color:{{ $reviewerStyle['color'] }}" @endif>{{ $reviewer ? ($reviewer->display_name ?: $reviewer->name) : '未指派' }}</span></div>
+            <div class="ppb-shift-reviewer">核稿：<span @if($reviewerStyle) style="@if($reviewerStyle['background']!==null)background-color:{{ $reviewerStyle['background'] }};@endif color:{{ $reviewerStyle['color'] }}" @endif>{{ $reviewer ? ($reviewer->display_name ?: $reviewer->name) : '未指派' }}</span></div>
             {{-- PPB OP1 2026-11-05 | Compact actions, preserving original routes and permissions. --}}
             <div class="ppb-shift-actions">
               <details class="ppb-shift-manage">
@@ -137,7 +137,7 @@
           @for($slot=1;$slot<=5;$slot++)
             @php
               $assignment=$short->get($slot);
-              $nameColor=$assignment ? ($legacyColors[(int)$assignment->current_analyst_id] ?? null) : null;
+              $nameColor=$assignment?->currentAnalyst?->scheduleColors($legacyColors[(int)$assignment->current_analyst_id] ?? null);
               $legacyPreviewRow=$assignment ? $legacyImportByAssignment->get($assignment->id) : null;
               $legacyPreview=$legacyPreviewRow ? json_decode((string)$legacyPreviewRow->content_body,true) : null;
               if(!is_array($legacyPreview) || !($legacyPreview['_ppb_legacy_pick_v1'] ?? false)) $legacyPreview=null;
@@ -154,13 +154,13 @@
             @endphp
             <div class="ppb-shift-row">
               <span class="ppb-shift-label">推薦＋短文</span>
-              <span class="ppb-shift-name" @if($nameColor) style="background-color:{{ $nameColor['background'] }};color:{{ $nameColor['color'] }}" @endif title="{{ $legacyArchived ? '舊版歷史重複指派（唯讀）' : ($assignment?->currentAnalyst?->display_name ?: ($assignment?->currentAnalyst?->name ?: '尚未指派')) }}">{{ $legacyArchived ? $archiveName : ($assignment?->currentAnalyst?->display_name ?: ($assignment?->currentAnalyst?->name ?: '未指派')) }}</span>
+              <span class="ppb-shift-name" @if($nameColor) style="@if($nameColor['background']!==null)background-color:{{ $nameColor['background'] }};@endif color:{{ $nameColor['color'] }}" @endif title="{{ $legacyArchived ? '舊版歷史重複指派（唯讀）' : ($assignment?->currentAnalyst?->display_name ?: ($assignment?->currentAnalyst?->name ?: '尚未指派')) }}">{{ $legacyArchived ? $archiveName : ($assignment?->currentAnalyst?->display_name ?: ($assignment?->currentAnalyst?->name ?: '未指派')) }}</span>
               <span class="ppb-shift-pick" @if($legacyPreviewColor) style="background-color:{{ $legacyPreviewColor }}" @endif>{{ ($assignment || $legacyArchived) ? ($legacyPreview ? (($legacyPreview['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未串接投稿') : '尚未指派' }}</span>
               <span class="ppb-shift-note">{{ $legacyPreview ? (($legacyPreview['short_analysis'] ?? null) ?: '—') : ($assignment ? '稿件內容尚未接入新版' : '—') }}</span>
             </div>
           @endfor
           @php
-            $bonusColor=$bonus ? ($legacyColors[(int)$bonus->current_analyst_id] ?? null) : null;
+            $bonusColor=$bonus?->currentAnalyst?->scheduleColors($legacyColors[(int)$bonus->current_analyst_id] ?? null);
             $legacyBonusRow=$bonus ? $legacyImportByAssignment->get($bonus->id) : null;
             $legacyBonus=$legacyBonusRow ? json_decode((string)$legacyBonusRow->content_body,true) : null;
             if(!is_array($legacyBonus) || !($legacyBonus['_ppb_legacy_pick_v1'] ?? false)) $legacyBonus=null;
@@ -168,20 +168,20 @@
           @endphp
           <div class="ppb-shift-row">
             <span class="ppb-shift-label ppb-shift-label-bonus">BONUS</span>
-            <span class="ppb-shift-name" @if($bonusColor) style="background-color:{{ $bonusColor['background'] }};color:{{ $bonusColor['color'] }}" @endif>{{ $bonus?->currentAnalyst?->display_name ?: ($bonus?->currentAnalyst?->name ?: '未指派') }}</span>
+            <span class="ppb-shift-name" @if($bonusColor) style="@if($bonusColor['background']!==null)background-color:{{ $bonusColor['background'] }};@endif color:{{ $bonusColor['color'] }}" @endif>{{ $bonus?->currentAnalyst?->display_name ?: ($bonus?->currentAnalyst?->name ?: '未指派') }}</span>
             <span class="ppb-shift-pick" @if($legacyBonusColor) style="background-color:{{ $legacyBonusColor }}" @endif>{{ $bonus ? ($legacyBonus ? (($legacyBonus['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未串接投稿') : '尚未指派' }}</span>
             <span class="ppb-shift-note">{{ $legacyBonus ? (($legacyBonus['short_analysis'] ?? null) ?: '—') : ($bonus ? '稿件內容尚未接入新版' : '—') }}</span>
           </div>
           @if($game->has_long_article)
             @php
-              $longColor=$long ? ($legacyColors[(int)$long->current_analyst_id] ?? null) : null;
+              $longColor=$long?->currentAnalyst?->scheduleColors($legacyColors[(int)$long->current_analyst_id] ?? null);
               $legacyLongRow=$long ? $legacyImportByAssignment->get($long->id) : null;
               $legacyLong=$legacyLongRow ? json_decode((string)$legacyLongRow->content_body,true) : null;
               if(!is_array($legacyLong) || !($legacyLong['_ppb_legacy_pick_v1'] ?? false)) $legacyLong=null;
             @endphp
             <div class="ppb-shift-row ppb-shift-row-long">
               <span class="ppb-shift-label ppb-shift-label-long">分析文</span>
-              <span class="ppb-shift-name" @if($longColor) style="background-color:{{ $longColor['background'] }};color:{{ $longColor['color'] }}" @endif>{{ $long?->currentAnalyst?->display_name ?: ($long?->currentAnalyst?->name ?: '未指派') }}</span>
+              <span class="ppb-shift-name" @if($longColor) style="@if($longColor['background']!==null)background-color:{{ $longColor['background'] }};@endif color:{{ $longColor['color'] }}" @endif>{{ $long?->currentAnalyst?->display_name ?: ($long?->currentAnalyst?->name ?: '未指派') }}</span>
               {{-- PPB CT6 | Old is_long=1 pick.recommend_pick stores WP URL; short_analysis is the WP post ID. --}}
               @if(isset($longArticleLinks[(int)$game->id]))
                 <a class="ppb-shift-long-note" style="color:#0000ee;text-decoration:underline" href="{{ $longArticleLinks[(int)$game->id] }}" target="_blank" rel="noopener noreferrer" title="開啟原 WordPress 分析文章">{{ $longArticleLinks[(int)$game->id] }}</a>
