@@ -104,11 +104,12 @@ class IntegratedWorkflowTest extends TestCase
             self::assertSame(0,DB::connection()->transactionLevel());
             // Rating a resubmitted manuscript must use its current actual content.
             // Use the separate substitute match, whose submitted author is unchanged.
-            $stale=$this->report(10);
+            $stale=$this->report(10);$absenceOnly=$this->report(9);
             $this->postJson(self::HOST.'/admin/manuscripts/submissions/'.$subId.'/review',['decision'=>'changes_requested','review_note'=>'Synthetic revision','revision_token'=>$this->token(1,1)])->assertRedirect();
             $this->submit(1,1,'Changed integration manuscript')->assertRedirect();
             $changed=$this->report(10);
             self::assertNotSame($stale['source_sha256'],$changed['source_sha256'],'A W2 resubmission must invalidate old evaluation source fingerprints.');
+            self::assertSame($absenceOnly['source_sha256'],$this->report(9)['source_sha256'],'Editing substitute content cannot invalidate an unchanged original-analyst absence/pay source.');
             $this->evaluate(10,$stale,'salary_snapshot')->assertConflict();
             self::assertSame($snapshot,$this->report(9)['saved_salary'],'Later W2 changes cannot overwrite a settled snapshot.');
             $this->get(self::HOST.'/Admin/AnalystRating/salary.html?month=2026-11')->assertRedirect();
@@ -120,7 +121,7 @@ class IntegratedWorkflowTest extends TestCase
             self::assertCount(1,$this->report(9)['current']['selected']['records'],'Cancelling a match cannot silently delete authored evaluation history.');
             self::assertSame($snapshot,$this->report(9)['saved_salary']);
             self::assertFalse(json_decode(file_get_contents(base_path('resources/ppb/release.json')),true)['migrate'],'A Draft integration candidate must not opt into release migrations.');
-            $proof=['flow'=>'HTTP schedule → HTTP submit → HTTP approve → author lineage → HTTP evaluation → salary snapshot','request_replay'=>true,'permissions_separated'=>true,'substitution_lineage'=>true,'wp_metadata_guard'=>true,'rollback'=>true,'stale_source_409'=>true];$passed=true;
+            $proof=['flow'=>'HTTP schedule → HTTP submit → HTTP approve → author lineage → HTTP evaluation → salary snapshot','request_replay'=>true,'permissions_separated'=>true,'substitution_lineage'=>true,'wp_metadata_guard'=>true,'rollback'=>true,'stale_source_409'=>true,'absence_only_source_stable'=>true];$passed=true;
         }finally{
             $this->travelBack();DB::disconnect('mysql');unset($pdo);$container->destroy();self::assertFalse($container->exists());self::assertDirectoryDoesNotExist($container->directory);
             file_put_contents((getenv('RUNNER_TEMP')?:sys_get_temp_dir()).'/ppb-integrated-receipt.json',json_encode(['result'=>$passed?'PASS':'FAIL','isolation'=>$container->proof,'checks'=>$proof,'production_connections'=>0,'external_http_calls'=>0],JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR)."\n");

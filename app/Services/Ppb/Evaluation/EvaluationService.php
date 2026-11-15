@@ -151,11 +151,12 @@ class EvaluationService
             ->selectRaw('SHA2(JSON_ARRAY(p.status,p.submitted_at,p.recommend_pick,p.analysis_text,p.content_body),256) as manuscript_sha256')->get();
         if($records->count()>2000)throw new \RuntimeException('V2_EVALUATION_COVERAGE_LIMIT');
         $maps=$this->subjects->mappings();$reverse=array_flip($maps);$identity=fn($id)=>isset($reverse[$id])?'legacy:'.$reverse[$id]:'v2:'.$id;
+        $subjectKey=$subject['type'].':'.$subject['id'];
         $rows=[];$schedules=[];
         foreach($records as $r){
             $author=$identity((int)$r->submitted_analyst_id);$original=$identity((int)$r->original_analyst_id);$sub=$original!==$author;
             $p=array_fill_keys(LegacyScheduleCalculator::RATING_FIELDS,0);
-            $p+=['_manuscript_sha256'=>$r->manuscript_sha256,'_source_type'=>'v2','_source_id'=>(int)$r->id,'_author_key'=>$author,'_absence_key'=>$sub?$original:null,'_is_substitution'=>$sub,'_schedule_key'=>'v2:'.$r->game_id,
+            $p+=['_manuscript_sha256'=>$author===$subjectKey?$r->manuscript_sha256:null,'_source_type'=>'v2','_source_id'=>(int)$r->id,'_author_key'=>$author,'_absence_key'=>$sub?$original:null,'_is_substitution'=>$sub,'_schedule_key'=>'v2:'.$r->game_id,
                 'recommended_time'=>CarbonImmutable::parse($r->recommended_at,'UTC')->tz('Asia/Taipei')->format('Y-m-d H:i:s'),'is_win'=>0,'is_bonus'=>$r->kind==='bonus'?1:0,'is_long'=>$r->kind==='long'?1:0];
             $rows[]=$p;$schedules[$p['_schedule_key']]=['id'=>(int)$r->game_id,'market_type'=>(int)$r->market_type,'_display_code'=>((int)$r->game_type===1?'G':'E').($r->game_number??'?')];
         }

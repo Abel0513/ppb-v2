@@ -24,7 +24,9 @@ PR58 的 release.json 原為 migrate=true。本候選版維持 migrate=false；M
 
 現在以 MySQL5.7 SHA2(JSON_ARRAY(...),256) 綁定 status、submitted_at、
 recommend_pick、analysis_text、content_body，只將雜湊加入 V2 來源指紋，
-不把稿件正文匯出到評鑑報告或審計收據。既有最小 SQL fixture 補齊三個
+不把稿件正文匯出到評鑑報告或審計收據。內容雜湊僅綁實際投稿作者；
+缺勤來源仍使用原本關聯，避免代班者改正文誤使原分析師的薪酬請求失效。
+此相依邊界也先重現失敗，再限定雜湊範圍。既有最小 SQL fixture 補齊三個
 正式 W2 既有 nullable 文字欄位，保留所有原斷言。
 
 修復後：同一流程的新舊來源不同；使用舊來源保存薪酬回 409；歷史已保存
@@ -60,7 +62,8 @@ DATABASE。finally 與獨立 guardian 強制銷毀，驗證 container/data/IPC �
 呼叫都會使測試失敗。Http::preventStrayRequests，沒有正式 WP/LINE/業務呼叫。
 
 完整回歸包含 PR58 評鑑／薪酬、PR103 稿件、PR104 排班／稿件併發，
-以及本批 IntegratedWorkflowTest。精確 Commit、完整數量與三組 CI 放在候選 PR。
+以及本批 IntegratedWorkflowTest。本機完整回歸59項／1369斷言PASS；
+精確 Commit、三組 CI 與下載收據放在候選 PR。
 CI artifact 同時收錄 ppb-integrated-receipt.json 與 ppb-concurrency-receipt.json，
 只含非機密驗收 metadata；不能把未取得的遠端收據標為成功。
 
