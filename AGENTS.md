@@ -45,6 +45,35 @@ request receipts and idempotence. Never copy legacy SQL/unsafe auth/side effects
 PR58 stays Draft; this UI batch grants no production migration, writes or release.
 Do not remove fixed reader redaction or widen privileged access to obtain UI files.
 
+## Standing autonomous execution rule — 2026-11-15
+
+Owner's default: **自動開發 → 自動排查 → 自動修復 → 自動測試 → 自動整合 → 統一驗收**.
+Within each authorized batch, continue through analysis, implementation, debugging,
+regression testing and submission to the corresponding Draft PR without asking
+for approval at every step. Then take the next confirmed independent task.
+Use existing requirements and source evidence; do not invent features, repeat
+accepted work or split one investigation into successive diagnostic PRs.
+
+An external dependency blocks ONLY the tasks that actually require it. Investigate
+and try lawful solutions within existing authority; if unresolved, mark that item
+BLOCKED and continue other confirmed independent work. The earlier instruction
+that absence of a Phase A administrator receipt stops all development is revoked.
+Phase A package/approval preparation is complete; do not rebuild it, repeat known
+AccessDenied probes or request the same approval again. Actual ui_inventory,
+production Phase B catalogs and source-grounded UI restoration still require the
+real installation receipt and approved source access. Never guess missing UI.
+
+Autonomy does not expand technical privileges or production authorization. Seek
+approval only for genuinely new authority, irreversible production operations or
+unconfirmed business decisions. All existing legacy protection, credential,
+readonly, fixed SHA, IAM/SSM and GitHub review boundaries remain in force.
+PR58 and PR102 stay Draft; no migration, production deployment/business writes,
+payment or LINE/PDF sending under this continuation. No test DB/persistent test
+tables; preserve accepted calculations, salary snapshots, permissions and receipts.
+Do not claim background automation that has not actually been established. If no
+confirmed independent work remains, report the concrete remaining dependencies
+and save a safe checkpoint instead of creating artificial tasks.
+
 ## First Codex task: READ-ONLY audit
 
 **Only the first onboarding/audit task is read-only.** Before the user approves a specific implementation batch, inspect and report only: no edits, dependency installation, lockfile generation, commits, pushes, merges, PRs or deployment. Deliver the first audit in the task response, not as a new repository file. **This is NOT a permanent ban on coding or V2 database work.** After the user approves an implementation batch, Codex may independently modify V2 code, run appropriate tests, adjust V2-owned schema/data, and prepare a PR within that approved scope, without asking for permission for every file or row. Production application rollout and destructive or irreversible changes still require a separate acceptance gate.

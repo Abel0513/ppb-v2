@@ -1,3 +1,35 @@
+# Autonomous continuation — 2026-11-15
+
+Owner revoked the project-wide wait condition. Phase A installation blocks only
+real ui_inventory/source catalog/UI parity, not independent authorized work.
+AGENTS.md records the standing analyze→implement→repair→test→integrate→accept loop,
+without expanding any technical or production authority.
+
+Independent backend defects fixed in the Draft (not deployed):
+- Three-month native history now loads overrides for all three displayed months.
+  The same March period must keep its rating and settled short pay when selected
+  from April or May; the previous query silently excluded March in May's report.
+- The save source token includes effective monthly score/salary/level dependencies.
+  A previous-month grade can change current pay without changing current revision;
+  stale salary requests now fail409 before writes. Existing saved snapshots remain
+  immutable, and unchanged snapshot capture does not invalidate its own token.
+
+Regression evidence: both defects first reproduced in real isolated MySQL5.7
+session TEMPORARY tables. Full local52 tests/327 assertions PASS after repair.
+No test DB, persistent test tables, migration, deployed writes or arithmetic-kernel
+changes. Exact-head GitHub CI is recorded in PR58 after commit.
+
+Remaining confirmed work is dependency-specific:
+- Phase A receipt→actual paths→reviewed safe source→legacy UI parity: external
+  manager receipt required; package preparation is already closed.
+- LINE/LIFF self-service: requires an approved private identity-resolution
+  transport/provider contract, absent from the source snapshot. Do not replace it
+  with analyst IDs or admin accounts; this is not solved by Phase A installation.
+- Original PDF render/download/delivery: exact template/layout/entry evidence and
+  private identity integration still incomplete. Sending remains prohibited.
+- Production persistence/HTTP/PC/mobile acceptance: original release/migration
+  gates and authenticated acceptance remain unfulfilled; no offline PASS claim.
+
 # Current evaluation status — 2026-11-15 (Asia/Taipei)
 
 Latest handoff: PR58 comment6882913861 and PR95 comment6882914814 were read in

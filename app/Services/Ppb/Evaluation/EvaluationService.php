@@ -27,7 +27,7 @@ class EvaluationService
         [$native,$nativeSchedules]=$this->nativeRows($date,$subject);
         $rows=array_merge($rows,$native);$schedules+=$nativeSchedules;
         foreach($rows as &$p)$p['_game_code']=$schedules[$p['_schedule_key']]['_display_code']??'來源排程缺失';unset($p);
-        $overrides=DB::table('ppb_evaluation_ratings')->where('subject_type',$subject['type'])->where('subject_id',$subject['id'])->whereIn('month',[$prior,$month])->get();
+        $overrides=DB::table('ppb_evaluation_ratings')->where('subject_type',$subject['type'])->where('subject_id',$subject['id'])->whereIn('month',[$earlier,$prior,$month])->get();
         $bySource=[];foreach($overrides as $r)$bySource[$r->source_type.':'.$r->source_id]=(array)$r;
         foreach($rows as &$row){
             if($row['_author_key']!==$key)continue;
@@ -51,7 +51,12 @@ class EvaluationService
             $reports[$period]=$this->report->calculate($selected,$manual,$schedules,$attendance,(int)($snapshot['video_counts'][$period]??0)+$inputs[$period]['video_count'],$level);
             $reports[$period]['level']=$level;$reports[$period]['selected']=$selected;
         }
-        $sourceHash=hash('sha256',json_encode([$sourceHash,$inputs],JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
+        // A preceding month's V2 grade/manual/rating can affect this month's
+        // pay or next grade without changing this evaluation's own revision.
+        // Bind the effective calculations, not stored source hashes/event IDs:
+        // writing an otherwise unchanged snapshot must not invalidate itself.
+        $dependencies=array_map(static fn($r)=>array_intersect_key($r,array_flip(['view','rating','salary','level'])),$reports);
+        $sourceHash=hash('sha256',json_encode([$sourceHash,$inputs,$dependencies],JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));
         $current=$reports[$month];$previous=$reports[$prior];
         $base=$current['level']??(int)($snapshot['profile']['rating_level']??2);
         if(!in_array($base,[0,1,2,3],true))throw new \RuntimeException('UNVERIFIED_PROFILE_RATING_LEVEL');

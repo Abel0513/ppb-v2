@@ -106,7 +106,10 @@ class EvaluationMysql57Test extends TestCase
             $salaryId='683f084d-b85d-437b-9d9c-b280ce473e95';
             $savedPay=$realWriter->save($substitute,'2026-05','salary_snapshot',[],$salaryId,$subReport['revision'],$subReport['source_sha256'],71);
             self::assertSame(2,$savedPay['revision']);
-            $salaryReadback=$realService->load($substitute,'2026-05')['saved_salary'];
+            $salaryReport=$realService->load($substitute,'2026-05');
+            $salaryReadback=$salaryReport['saved_salary'];
+            self::assertSame($salaryReadback['snapshot']['source_sha256'],$salaryReport['source_sha256'],
+                'Saving a snapshot must not immediately invalidate its own source token.');
             self::assertSame($salaryId,$salaryReadback['request_id']);
             // MySQL JSON canonicalizes object key order; retain strict value types.
             foreach($subReport['current']['salary'] as $field=>$amount)self::assertSame($amount,$salaryReadback['snapshot']['salary'][$field]);
@@ -134,6 +137,47 @@ class EvaluationMysql57Test extends TestCase
             foreach([[9,'active',0],[10,'inactive',0],[11,'active',2],[12,'active',3]] as [$native,$status,$type])DB::table('ppb_analysts')->insert(['id'=>$native,'name'=>'NativeFixture'.$native,'display_name'=>null,'status'=>$status,'user_type'=>$type,'account_id'=>null]);
             $reader->shouldReceive('profiles')->andReturn([['id'=>4,'sort_id'=>1,'user_type'=>0,'rating_level'=>1]]);
             $subjectsList=$actualSubjects->all();self::assertCount(2,$subjectsList);self::assertSame('legacy',$subjectsList[0]['type']);self::assertSame(9,$subjectsList[0]['native_id']);self::assertSame('v2',$subjectsList[1]['type']);self::assertSame(10,$subjectsList[1]['id']);self::assertSame('inactive',$subjectsList[1]['status']);
+
+            // A three-month report must retain the earliest month's V2 ratings.
+            // Compare the SAME March period from April and May, including its
+            // settled salary. Dates are UTC; March starts at Feb28 16:00 Taipei.
+            DB::table('ppb_games')->insert(['id'=>201,'recommended_at'=>'2026-02-28 16:00:00','market_type'=>1,'game_number'=>201]);
+            DB::table('ppb_assignments')->insert(['id'=>201,'game_id'=>201,'kind'=>'pick','original_analyst_id'=>9,'current_analyst_id'=>9]);
+            DB::table('ppb_submissions')->insert(['id'=>201,'game_id'=>201,'assignment_id'=>201,'submitted_analyst_id'=>9,'kind'=>'pick','submitted_at'=>'2026-03-01 00:00:00']);
+            DB::table('ppb_evaluation_ratings')->insert(array_fill_keys(LegacyScheduleCalculator::RATING_FIELDS,60)+[
+                'source_type'=>'v2','source_id'=>201,'subject_type'=>'legacy','subject_id'=>4,'month'=>'2026-03',
+                'result_state'=>1,'revision'=>1,'source_sha256'=>str_repeat('c',64),'actor_id'=>71]);
+            $writes=0;
+            $aprilHistory=$realService->load($origin,'2026-04');
+            $mayHistory=$realService->load($origin,'2026-05');
+            self::assertSame(0,$writes,'Historical evaluation GETs must remain read-only.');
+            self::assertSame(1,$mayHistory['history']['2026-03']['counts']['rated']);
+            self::assertSame(60,$mayHistory['history']['2026-03']['selected']['records'][0]['score_delivery_time']);
+            self::assertSame(100,$mayHistory['history']['2026-03']['salary']['short']);
+            self::assertSame($aprilHistory['history']['2026-03'],$mayHistory['history']['2026-03'],
+                'Changing the selected month must not lose the same historical rating or pay.');
+
+            // A prior-month grade changes this month's salary without changing
+            // its own revision. The displayed source token must detect that.
+            $beforeGrade=$realService->load($substitute,'2026-05');
+            DB::table('ppb_evaluations')->insert($reporter->defaults('2026-04')+[
+                'subject_type'=>'v2','subject_id'=>10,'month'=>'2026-04','revision'=>1,
+                'next_rating_level'=>3,'source_sha256'=>str_repeat('d',64),'actor_id'=>71]);
+            $writes=0;
+            $afterGrade=$realService->load($substitute,'2026-05');
+            self::assertSame(0,$writes);
+            self::assertSame($beforeGrade['revision'],$afterGrade['revision']);
+            self::assertSame(3,$afterGrade['current']['level']);
+            self::assertSame(60,$afterGrade['current']['salary']['short']);
+            self::assertNotSame($beforeGrade['source_sha256'],$afterGrade['source_sha256'],
+                'Prior-month rating dependencies must invalidate a stale salary source token.');
+            self::assertSame($beforeGrade['saved_salary'],$afterGrade['saved_salary']);
+            try{
+                $realWriter->save($substitute,'2026-05','salary_snapshot',[],
+                    '683f084d-b85d-437b-9d9c-b280ce473e97',$beforeGrade['revision'],$beforeGrade['source_sha256'],71);
+                self::fail('A stale cross-month salary request must fail before writing.');
+            }catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){self::assertSame(409,$e->getStatusCode());}
+            self::assertSame(0,$writes,'Rejecting a stale salary source cannot write even a temporary evaluation row.');
 
             self::assertSame(0,(int)DB::selectOne("SELECT COUNT(*) n FROM information_schema.TABLES WHERE TABLE_SCHEMA='mysql' AND TABLE_NAME LIKE 'ppb_%'")->n);
             DB::disconnect('mysql');
