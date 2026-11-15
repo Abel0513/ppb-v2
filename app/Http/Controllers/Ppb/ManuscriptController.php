@@ -49,7 +49,11 @@ class ManuscriptController extends Controller
         }
         // Historical WP success and unresolved WP records are never edited by this
         // local-only workflow; a separate WP-aware editorial update must be designed.
-        if ($game->hasVerifiedWp() || $game->hasUnresolvedWp()) {
+        // A review transaction has already read the submission. Use a current
+        // locking read here, not that earlier REPEATABLE READ snapshot.
+        $publication = $game->publications()->where('status', '!=', 'failed')
+            ->orderBy('id')->lockForUpdate()->first(['id']);
+        if ($game->wp_locked_at !== null || $publication !== null) {
             throw ValidationException::withMessages(['manuscript' => '此場已有 WP 發布或待查紀錄，禁止以新版草稿覆蓋歷史內容。']);
         }
     }

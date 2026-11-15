@@ -25,6 +25,7 @@ schedules.manage；Controller 同時防守。不改 analyst.account_id 的可空
   送審、審閱及來源欄位；核稿表單也須帶 revision_token。
 - 鎖定順序 game→assignment→submission；重新核對版本、當前指派、稿件歸屬。
   過期、重複或來源不一致的操作回422，不寫稿件或審計事件。
+  WP保護查核使用目前鎖定讀取，避免沿用交易前段的一致性快照。
 - 送審→退回→改稿→再送審後，舊核稿頁不能批准新的內容。
 - status=legacy_imported、任何非NULL legacy_source_pick_id（含0）、WP已驗證／
   待對帳、取消及不一致稿件維持不可覆寫；即使知道當前版本雜湊也不能取得寫入權。

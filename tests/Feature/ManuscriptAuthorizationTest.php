@@ -107,6 +107,10 @@ class ManuscriptAuthorizationTest extends TestCase
             self::assertStringNotContainsString('Fixture body',$event->detail_json);
             self::assertSame(0,DB::table('ppb_publications')->count());
 
+            // Current locking reads must not reuse an earlier consistent-read snapshot.
+            $publicationLockedReads=0;DB::listen(function($q)use(&$publicationLockedReads){
+                if(str_contains($q->sql,'`ppb_publications`')&&str_contains(strtolower($q->sql),'for update'))$publicationLockedReads++;
+            });
             // A pending/verified WP game cannot be changed, even by staff.
             foreach([['status'=>'uploading','verified_at'=>null],['status'=>'published','verified_at'=>'2026-11-15 00:00:00']] as $publication){
                 DB::table('ppb_submissions')->where('id',$id)->update(['status'=>'draft']);$token=$this->token();
@@ -118,6 +122,7 @@ class ManuscriptAuthorizationTest extends TestCase
                 $this->postReview($id,$reviewToken)->assertUnprocessable();self::assertSame(0,$writes);
                 DB::table('ppb_publications')->delete();
             }
+            self::assertGreaterThan(0,$publicationLockedReads,'WP write protection must read current rows under lock.');
             // Marker alone is sufficient protection, regardless of mutable status.
             foreach([0,123] as $source){
                 DB::table('ppb_submissions')->where('id',$id)->update(['status'=>'draft','legacy_source_pick_id'=>null]);$token=$this->token();
