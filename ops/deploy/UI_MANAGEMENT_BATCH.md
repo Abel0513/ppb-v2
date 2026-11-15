@@ -55,6 +55,11 @@ PR58保持Draft；不含評鑑Migration、正式業務寫入、付款、PDF或LI
   releases/ssm-history/ui-phase-a-*/version-58.json、version-60.json；
   AES256、IfNoneMatch:*，不覆寫舊封存。無需S3設定、IAM或EC2 API寫權限。
 
+EC2 SSM代理亦須沿用既有實例身分，對上述fixed.tar.gz物件有GetObject權。
+這與GitHub Role的GetObject拒絕是不同身分；歷史安裝曾正常下載，但本Cloud
+無權重新讀取該profile的有效政策。本包不修改profile；下載不成功會由原
+安裝流程回收固定plugin階段與錯誤碼，不能省略SHA或換身分強制下載。
+
 現場未能證明日常Role的UpdateDefault/Delete有效權限；不以寫入探測。
 這個完整管理批次包含所有安裝必需動作，避免只預載後才逐項要求補權限。
 

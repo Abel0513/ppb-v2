@@ -11,3 +11,8 @@ class ManagementPackage(unittest.TestCase):
     manifest=json.loads(z.read('SHA256.json'))
     for name,sha in manifest['files'].items():self.assertEqual(hashlib.sha256(z.read(name)).hexdigest(),sha)
     self.assertFalse(any('..' in Path(n).parts or Path(n).is_absolute() or n.endswith(('.env','.cnf','.key')) for n in z.namelist()))
+    target=Path(tmp)/'standalone';z.extractall(target)
+   spec=importlib.util.spec_from_file_location('standalone_ui_manager',target/'manage-ui-phase-a.py');manager=importlib.util.module_from_spec(spec);spec.loader.exec_module(manager)
+   activation=manager.load_activation();self.assertEqual(activation.ROOT,target);self.assertEqual(activation.c.DOC,'PPB-V2-Controlled-Deploy')
+   (target/'release-client.py').write_text('UNREVIEWED')
+   with self.assertRaisesRegex(RuntimeError,'PACKET_PIN_MISMATCH'):manager.load_activation()
