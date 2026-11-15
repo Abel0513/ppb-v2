@@ -65,13 +65,13 @@ Route::prefix('admin')->middleware([
     Route::post('/assignments/{assignment}/status', [AssignmentController::class, 'status'])->middleware([PpbCan::class.':schedules.manage','throttle:20,1'])->name('ppb.assignments.status');
 
     // PPB W2 | 2026-11-06 | Authenticated editorial workflow.
-    // The controller checks either schedules.manage or exact linked analyst/reviewer identity.
-    Route::get('/manuscripts', [ManuscriptController::class, 'index'])->name('ppb.manuscripts.index');
-    Route::get('/games/{game}/manuscripts', [ManuscriptController::class, 'show'])->name('ppb.manuscripts.game');
+    // Backend management only; account_id never delegates analyst LINE/LIFF authority.
+    Route::get('/manuscripts', [ManuscriptController::class, 'index'])->middleware(PpbCan::class.':schedules.manage')->name('ppb.manuscripts.index');
+    Route::get('/games/{game}/manuscripts', [ManuscriptController::class, 'show'])->middleware(PpbCan::class.':schedules.manage')->name('ppb.manuscripts.game');
     Route::post('/manuscripts/assignments/{assignment}/save', [ManuscriptController::class, 'save'])
-        ->middleware('throttle:30,1')->name('ppb.manuscripts.save');
+        ->middleware([PpbCan::class.':schedules.manage','throttle:30,1'])->name('ppb.manuscripts.save');
     Route::post('/manuscripts/submissions/{submission}/review', [ManuscriptController::class, 'review'])
-        ->whereNumber('submission')->middleware('throttle:30,1')->name('ppb.manuscripts.review');
+        ->whereNumber('submission')->middleware([PpbCan::class.':schedules.manage','throttle:30,1'])->name('ppb.manuscripts.review');
 
 
     // Owner-only read-only preview. Never requires/migrates ppb_evaluation* tables.

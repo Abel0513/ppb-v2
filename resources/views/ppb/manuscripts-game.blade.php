@@ -9,7 +9,7 @@
     $approvedKinds=['pick'=>0,'bonus'=>0,'long'=>0];
     foreach($assignments as $candidate) {
         $candidateRows=$rows->get($candidate->id, collect());
-        if($candidateRows->count()===1 && $candidateRows->first()->status==='approved') {
+        if($candidateRows->count()===1 && ($validRows[$candidate->id]??false) && $candidateRows->first()->status==='approved') {
             $approvedKinds[$candidate->kind]=($approvedKinds[$candidate->kind]??0)+1;
             if($candidate->kind==='pick') $approvedPickBodies[]=trim((string)$candidateRows->first()->analysis_text);
         }
@@ -28,6 +28,7 @@
 @if($errors->any())<div class="error" role="alert">{{ $errors->first() }}</div>@endif
 <div class="card" style="margin-bottom:18px">
 <h2 class="card-title">投稿與核稿進度</h2>
+<p class="small-note">此處僅供具管理權限的人員處理稿件，所有操作記錄管理帳號；不代表分析師 LINE／LIFF 登入。分析師身分委派尚未接入。</p>
 <p class="small-note">短文已核准 {{ $approvedKinds['pick'] }}/5、BONUS {{ $approvedKinds['bonus'] }}/1、長文 {{ $game->has_long_article ? $approvedKinds['long'].'/1' : '未安排' }}。五篇短文內容{{ $shortDistinct?'互不相同':'尚未全部核准且確認彼此不同' }}。</p>
 @if(!$editable)<p class="small-note">本場已取消、已發布或 WP 狀態待查，為避免覆蓋歷史稿件，本頁僅供查看。</p>@elseif($allApproved)
 <p class="small-note">本頁稿件核稿門檻已達成。WordPress 實際發布功能尚未在此頁啟用。</p>
@@ -82,12 +83,13 @@
 @else<p class="small-note">這筆歷史紀錄沒有可直接顯示的分析文字，請查看原始稿件來源。</p>@endif
 @endif
 @endif
-@if($record && !$isLegacy && $record->review_note)
+@if($record && !$isLegacy && $record->review_note !== null && $record->review_note !== '')
 <p class="small-note" style="margin-top:12px">核稿意見：{{ $record->review_note }}</p>
 @endif
-@if($record && $reviewer && $editable && !$isLegacy && !$conflict && $record->status==='submitted')
+@if($record && $reviewer && $editable && !$isLegacy && !$conflict && $record->status==='submitted' && ($validRows[$assignment->id]??false))
 <form method="post" action="{{ route('ppb.manuscripts.review',$record->id) }}" style="margin-top:14px;border-top:1px solid #e3e7f1;padding-top:14px">
 @csrf
+<input type="hidden" name="revision_token" value="{{ $tokens[$assignment->id] }}">
 <label class="field-label" for="review-{{ $record->id }}">核稿意見（退回時必填）</label>
 <textarea id="review-{{ $record->id }}" class="field" name="review_note" maxlength="1000" rows="3" style="width:100%;margin:7px 0 14px"></textarea>
 <div class="toolbar"><button class="action" name="decision" value="approved" type="submit">核准稿件</button><button class="action" name="decision" value="changes_requested" type="submit">退回修改</button></div>
