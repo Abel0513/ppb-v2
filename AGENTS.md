@@ -77,3 +77,14 @@ For the first task, return in Traditional Chinese:
 4. Explicit confirmation of files changed (expected: NONE), database writes (NONE), network side effects (NONE), Git pushes/merges (NONE).
 
 Do not start implementation until the user approves the proposed batch.
+
+## Scoped shared-InnoDB concurrency exception — owner decision 2026-11-16
+
+PR #104 may create ordinary shared InnoDB tables only in a newly created,
+disposable MySQL 5.7 container: network=none, verified tmpfs datadir/temp/logs,
+no persistent volumes or production mounts/connections, existing container schema
+only (no CREATE DATABASE). Independent sessions and explicit barriers must prove
+interleavings. A separate guardian must destroy the container/data on success,
+failure, signals and deadline; verify destruction. This exception never permits
+production/persistent test tables, business writes, migrations or deployment.
+PR #58/#102/#103/#104 remain Draft for this batch. Preserve all other safeguards.

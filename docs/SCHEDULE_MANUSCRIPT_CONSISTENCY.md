@@ -21,38 +21,60 @@
 - ScheduleManager原scope→game→assignments鎖序及G/E插入／縮排演算法不變。
   現有服務內部呼叫可省略版本，使用傳入model的狀態作前提；所有HTTP入口必填。
 
-## 實際可執行的驗證
+## 真正共享 InnoDB 雙 Session 驗證（本批）
 
-`ScheduleConsistencyTest` 是實際Laravel route／Blade／Controller及MySQL5.7測試，
-使用network=none、tmpfs、session TEMPORARY tables，不新增DB或持久表。
+使用者已明確核准 PR104 的隔離共享表例外；不是正式資料庫建表授權。
+`ConcurrentScheduleTest` 啟動固定 digest 的 MySQL5.7.44 新容器，
+network=none、skip-networking、rootfs唯讀、非root OS身分；datadir、tmp、
+MySQL logs全部tmpfs，Docker log driver=none，無持久volume、正式掛載或新DB。
+唯一host bind是0700隨機目錄內的Unix socket/pid，不存資料列。
+在Docker inspect及實際mount驗證後，才於既有mysql schema建立共享InnoDB表。
 
-| 項目 | 已取得證據 | 尚缺證據 |
+兩個獨立PHP/PDO worker回傳不同CONNECTION_ID，同時讀取同一隨機fixture標記。
+透過stdin/stdout命令確認與SQL完成屏障安排順序；觀測INNODB_LOCK_WAITS
+確認真正阻塞後才放行。輪詢僅等待IO/metadata可用，不能以sleep決定交易順序。
+所有操作呼叫實際Controller／ScheduleManager；WP狀態只用本機metadata fixture
+及既有VerifiedWpRecorder契約，不呼叫WP HTTP，不宣稱正式WP驗收。
+
+### 修復前失敗與根因
+
+| 實際重現 | 原結果 | 修復 |
 | --- | --- | --- |
-| 稿件保存／代班 | 鎖序trace是game先於assignment；代班後稿件及原作者逐欄不變 | 雙Session對相同業務列交錯 |
-| 狀態／取消與新請求 | 取消後代班／恢復active被拒；已發布取消保留G/E | 雙Session交錯提交 |
-| 已提交指派 | syncSlots拒絕替換，連先寫入的game metadata也回滾 | 雙Session競爭同列 |
-| WP保護 | uploading／published／wp_locked_at均拒絕指派變更，零DML | 真實交錯，不呼叫正式WP |
-| 兩位管理員過期操作 | 連續兩個HTTP請求／服務呼叫，舊代班、狀態及edit版本409；刷新後正常 | 同時阻塞與喚醒順序 |
-| 原子回滾 | 代班／狀態審計失敗回滾；取消後順移審計失敗回滾所有game與event | 併發失敗情境 |
-| 不必要拒絕 | 其他game變動不改本game版本；正常送審／退稿仍走PR103回歸 | 雙Session等待時間／死鎖測量 |
+| 外層快照後另一Session新增尾端賽事，再append | 500／1062，重用已占用編號 | scope內以current locking read取得尾端編號 |
+| 舊核稿憑證等待另一Session退稿再投稿 | 422，未符合過期409契約 | 鎖定目前稿件／指派後先驗版本，過期409 |
+| 外層REPEATABLE READ快照之後新增WP待查，再取消 | 200且錯誤取消／釋出編號 | publication保護改current locking read |
+| 外層快照之後新增稿件，再插入其前方 | 200且錯誤順移已投稿G/E | 稿件、代班、歷史保護改current locking read |
+| 一個slot代班至另一個已完成slot的分析師，隨後恢復後者 | 302，形成同場同類型重複active | 恢復時查核目前有效指派 |
+| 外層快照後其他slot代班至相同目標 | 302，重複active | 指派重複檢查改current locking read |
 
-保留正式限流；大量測試中的獨立刪除／回滾情境用測試時鐘分隔，沒有降低正式限制。
-既有ManuscriptAuthorizationTest只更新正常代班請求的必填版本欄位，其所有
-已驗收授權、送審、核稿、歷史及回滾斷言保留。
+保留原作者、投稿本文、代班追加歷程、WP不可變鎖號及既有G/E演算法。
+版本失效409與業務狀態拒絕422分開；沒有改變管理權限或LINE委派邊界。
 
-## 雙Session驗收尚未完成：不可把CI綠燈當作全部併發PASS
+### 交錯與回滾矩陣
 
-MySQL5.7 session TEMPORARY TABLE僅建立者可見。測試實際用第二個PDO查詢
-第一個Session的ppb_games，取得42S02／1146，證明兩者不是共享業務列。
-這是可見範圍證據，**不是雙Session交易競爭驗收**。
+- 投稿→代班：作者及已投稿本文保留；代班→舊投稿：409，無稿件寫入。
+- 核稿→完成：合法順序成功；完成→舊核稿：409，不核准失效指派。
+- 取消→代班／投稿：422；待查／已發布metadata→代班／投稿：422。
+- 舊快照遇到重新投稿、待查、已投稿及重複目標：讀取目前鎖定狀態並拒絕。
+- 同場不同slot競爭同一分析師：只能成功一個；恢復不得借用已被占用分析師。
+- 同scope不同game更新序列化；取消順移後等候的舊game編輯409。
+- 不同G/E scope在對方持有scope時仍可提交，避免全域不必要阻塞。
+- 代班／投稿審計故障及取消縮排審計故障：全部同交易回滾，等待者重新讀取。
+- 真實1205逾時：無半套資料／交易殘留；釋鎖後重新讀取的新請求成功。
+- 刻意反向鎖序的引擎負向對照：1213、完整回滾；不是應用程式正式鎖序。
+  應用路徑遵守scope（需要編號時）→game→assignment及其子資料。
 
-目前仍遵守使用者「不新增測試DB或持久測試表」的嚴格解讀。已提出一次釐清：
-是否允許僅在network=none、datadir=tmpfs、測後強制銷毀容器內建立可共享InnoDB表，
-不新增DB、不連正式DB、不留下表／資料。未取得答案前不建立或執行此類測試。
+### 清理與證據
 
-若嚴格只允許session TEMPORARY，無法完成兩個Session存取相同業務列的驗收；
-不得用兩份不同資料、重用同一MySQL連線或一般鎖範例冒充。
-既有單Session測試仍持續執行，但共享列交錯、死鎖及等待時間的結論維持待驗。
+獨立guardian擁有容器建立及清理；EOF、失敗、訊號與硬性期限都移除容器。
+owner label防止清理其他容器。PHP finally/shutdown再驗證不存在，tmpfs資料釋放，
+socket/pid目錄移除。另以實際共享sentinel表測試父程序失敗、SIGTERM、SIGKILL
+及已確認啟動的短期限，逐一驗證容器與目錄不存在。
+
+CI產出`shared-innodb-concurrency-receipt`，只有版本、隔離、Session ID、
+交錯狀態、固定查詢標籤、回滾與銷毀結果；不含SQL本文、稿件、憑證或正式資料。
+既有單Session回歸保留；本批本機完整結果16項／838斷言PASS。
+共享表14張、交錯26組、異常清理4種；精確head CI及下載收據見本PR驗收結果。
 
 不Migration、不合併、不部署、不執行正式業務寫入／WP發布／LINE發送；
-不重做AWS、DBA或R1/R2。稿件管理仍為明確後台權限，LINE委派未啟用。
+不重做AWS、DBA或R1/R2。PR58/102/103/104保持Draft。

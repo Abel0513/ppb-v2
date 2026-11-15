@@ -26,6 +26,30 @@ class ScheduleManager
         return PpbGame::where('month_key',$month)->where('game_type',$type)
             ->whereNotNull('active_number');
     }
+    // Current reads are required even when a caller already opened a
+    // REPEATABLE READ transaction before invoking this nested service.
+    private function verifiedWp(PpbGame $game): bool {
+        return $game->wp_locked_at!==null || $game->publications()->where('status','published')
+            ->whereNotNull('verified_at')->orderBy('id')->lockForUpdate()->first(['id'])!==null;
+    }
+    private function unresolvedWp(PpbGame $game): bool {
+        return $game->publications()->where('status','!=','failed')
+            ->where(fn($q)=>$q->where('status','!=','published')->orWhereNull('verified_at'))
+            ->orderBy('id')->lockForUpdate()->first(['id'])!==null;
+    }
+    private function assignmentHistory(PpbAssignment $assignment): bool {
+        return $assignment->substitutions()->orderBy('id')->lockForUpdate()->first(['id'])!==null
+            || DB::table('ppb_submissions')->where('assignment_id',$assignment->id)
+                ->orderBy('id')->lockForUpdate()->first(['id'])!==null;
+    }
+    private function attachedHistory(PpbGame $game): bool {
+        $assignments=$game->assignments()->orderBy('id')->lockForUpdate()->get(['id']);
+        if ($game->submissions()->orderBy('id')->lockForUpdate()->first(['id'])!==null) return true;
+        if ($assignments->isNotEmpty() && DB::table('ppb_substitutions')->whereIn('assignment_id',$assignments->pluck('id')->all())
+            ->orderBy('id')->lockForUpdate()->first(['id'])!==null) return true;
+        return DB::table('ppb_schedule_events')->where('game_id',$game->id)->where('event','legacy_archived_pick')
+            ->orderBy('id')->lockForUpdate()->first(['id'])!==null;
+    }
     private function event(int $gameId,string $action,array $details=[]): void {
         DB::table('ppb_schedule_events')->insert([
             'game_id'=>$gameId,'actor_id'=>Auth::guard('ppb')->id(),
@@ -42,11 +66,11 @@ class ScheduleManager
         $cursor=$target;
         foreach ($occupied as $game) {
             if ($game->active_number !== $cursor) break; // available gap
-            if ($game->hasVerifiedWp() || $game->hasUnresolvedWp()) {
+            if ($this->verifiedWp($game) || $this->unresolvedWp($game)) {
                 $this->reject('插入位置後有已上傳或待查 WordPress 的賽事，無法順延；請新增至最後。');
             }
             // PPB INS1: submitted, substituted and archived legacy exception rows never move.
-            if ($game->hasRenumberBlockingHistory()) {
+            if ($this->attachedHistory($game)) {
                 $this->reject('插入位置後存在已有投稿、代班或歷史例外的賽事，無法安全順延；請新增至最後。');
             }
             $toShift[]=$game;
@@ -64,15 +88,16 @@ class ScheduleManager
         for ($target=$vacated;$target<100000;$target++) {
             if ($this->active($month,$type)->where('active_number',$target)->exists()) break;
             $next=$this->active($month,$type)->where('active_number',$target+1)->lockForUpdate()->first();
-            if (!$next || $next->hasVerifiedWp() || $next->hasUnresolvedWp()
-                || $next->hasRenumberBlockingHistory()) break; // PPB INS1: preserve all attached history.
+            if (!$next || $this->verifiedWp($next) || $this->unresolvedWp($next)
+                || $this->attachedHistory($next)) break; // PPB INS1: preserve all attached history.
             $old=(int)$next->game_number;
             $next->update(['game_number'=>$target,'active_number'=>$target]);
             $this->event($next->id,'renumber.compact',['old'=>$old,'new'=>$target]);
         }
     }
     private function nextNumber(string $month,int $type): int {
-        return 1+(int)($this->active($month,$type)->max('active_number') ?? 0);
+        $last=$this->active($month,$type)->orderByDesc('active_number')->lockForUpdate()->first(['active_number']);
+        return 1+(int)($last?->active_number ?? 0);
     }
     private function resolveNumber(string $month,int $type,string $position,?int $anchorId): int {
         if ($position==='append') return $this->nextNumber($month,$type);
@@ -106,7 +131,7 @@ class ScheduleManager
             $children=$locked->assignments()->orderBy('id')->lockForUpdate()->get();
             ScheduleVersion::assert($expectedVersion,ScheduleVersion::game($locked,$children));
             if ($locked->status==='cancelled') $this->reject('已取消的賽事只能查看歷史。');
-            if ($locked->hasVerifiedWp() || $locked->hasUnresolvedWp()) $this->reject('已有 WP 發布或待查紀錄，先確認 WP 狀態才可編輯。');
+            if ($this->verifiedWp($locked) || $this->unresolvedWp($locked)) $this->reject('已有 WP 發布或待查紀錄，先確認 WP 狀態才可編輯。');
             if ($data['month_key']!==$locked->month_key || $data['game_type']!==$locked->game_type) {
                 $this->reject('既有賽事不可直接跨月份或 G/E 類型搬移，請使用取消與重新建立。');
             }
@@ -140,7 +165,7 @@ class ScheduleManager
             if ($new && (int)$assignment->current_analyst_id===$new['analyst'] && $assignment->status==='active') {
                 $keep[$key]=true; continue;
             }
-            if ($assignment->substitutions()->exists() || DB::table('ppb_submissions')->where('assignment_id',$assignment->id)->exists()) {
+            if ($this->assignmentHistory($assignment)) {
                 $this->reject('此排班已有投稿或代班歷史，不可移除或更換原分析師。');
             }
             $assignment->delete();
@@ -161,12 +186,10 @@ class ScheduleManager
             $locked=PpbGame::whereKey($game->id)->lockForUpdate()->firstOrFail();
             $children=$locked->assignments()->orderBy('id')->lockForUpdate()->get();
             ScheduleVersion::assert($expectedVersion,ScheduleVersion::game($locked,$children));
-            if ($locked->hasVerifiedWp() || $locked->publications()->exists() || $locked->submissions()->exists()) {
+            if ($this->verifiedWp($locked) || $locked->publications()->orderBy('id')->lockForUpdate()->first(['id'])!==null || $locked->submissions()->orderBy('id')->lockForUpdate()->first(['id'])!==null) {
                 $this->reject('已有 WP 紀錄或投稿的賽事不能刪除，請使用「取消賽事」。');
             }
-            if ($locked->assignments()->whereHas('substitutions')->exists()
-                || DB::table('ppb_schedule_events')->where('game_id',$locked->id)
-                    ->where('event','legacy_archived_pick')->exists()) {
+            if ($this->attachedHistory($locked)) {
                 $this->reject('已有代班或歷史例外關聯的賽事不得直接刪除。');
             }
             if ($locked->status==='cancelled') $this->reject('已取消賽事保留歷史，不再刪除。');
@@ -185,8 +208,8 @@ class ScheduleManager
             $children=$locked->assignments()->orderBy('id')->lockForUpdate()->get();
             ScheduleVersion::assert($expectedVersion,ScheduleVersion::game($locked,$children));
             if ($locked->status==='cancelled') $this->reject('賽事已取消。');
-            $published=$locked->hasVerifiedWp();
-            if (!$published && $locked->hasUnresolvedWp()) $this->reject('WP 上傳結果待查，先確認發布狀態才能取消。');
+            $published=$this->verifiedWp($locked);
+            if (!$published && $this->unresolvedWp($locked)) $this->reject('WP 上傳結果待查，先確認發布狀態才能取消。');
             $num=$locked->active_number;
             // A published WP article permanently reserves the number.
             $locked->update([

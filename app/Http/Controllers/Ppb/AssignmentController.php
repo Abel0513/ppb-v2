@@ -47,9 +47,9 @@ class AssignmentController extends Controller
             abort_unless($locked->status === 'scheduled', 422, '只能新增未取消、未完成賽事的排班。');
             abort_unless(PpbAnalyst::whereKey($data['analyst_id'])->where('status','active')->exists(),422,'分析師未啟用。');
             abort_if(PpbAssignment::where('game_id',$game->id)
-                ->where('original_analyst_id',$data['analyst_id'])->where('kind',$data['kind'])->exists(), 422, '同一場相同類型已存在這位分析師的排班。');
+                ->where('original_analyst_id',$data['analyst_id'])->where('kind',$data['kind'])->orderBy('id')->lockForUpdate()->first(['id'])!==null, 422, '同一場相同類型已存在這位分析師的排班。');
             abort_if(PpbAssignment::where('game_id',$game->id)->where('current_analyst_id',$data['analyst_id'])
-                ->where('kind',$data['kind'])->where('status','active')->exists(),422,'同一場同一類型，該分析師已有進行中的排班。');
+                ->where('kind',$data['kind'])->where('status','active')->orderBy('id')->lockForUpdate()->first(['id'])!==null,422,'同一場同一類型，該分析師已有進行中的排班。');
             $assignment = PpbAssignment::create([
                 'game_id'=>$game->id, 'original_analyst_id'=>$data['analyst_id'],
                 'current_analyst_id'=>$data['analyst_id'], 'kind'=>$data['kind'],
@@ -76,7 +76,7 @@ class AssignmentController extends Controller
             abort_if((int)$locked->current_analyst_id === (int)$data['to_analyst_id'],422,'代班者不可與目前負責人相同。');
             abort_unless(PpbAnalyst::whereKey($data['to_analyst_id'])->where('status','active')->exists(),422,'代班者必須是啟用的分析師。');
             abort_if(PpbAssignment::where('game_id',$locked->game_id)->where('kind',$locked->kind)
-                ->where('current_analyst_id',$data['to_analyst_id'])->where('status','active')->exists(),422,'代班者在同場同類型已有排班。');
+                ->where('current_analyst_id',$data['to_analyst_id'])->where('status','active')->orderBy('id')->lockForUpdate()->first(['id'])!==null,422,'代班者在同場同類型已有排班。');
             PpbSubstitution::create([
                 'assignment_id'=>$locked->id,
                 'from_analyst_id'=>$locked->current_analyst_id,
@@ -100,6 +100,14 @@ class AssignmentController extends Controller
             ScheduleVersion::assert($data['revision_token'],ScheduleVersion::assignment($locked));
             $this->assertUnpublished($game);
             abort_if($data['status']==='active' && $game->status==='cancelled',422,'已取消的賽事不可恢復排班。');
+            if($data['status']==='active'){
+                // The game lock serializes all assignment writers; use a
+                // current read even when a caller already owns a snapshot.
+                abort_if(PpbAssignment::where('game_id',$game->id)->where('kind',$locked->kind)
+                    ->where('current_analyst_id',$locked->current_analyst_id)->where('status','active')
+                    ->where('id','!=',$locked->id)->orderBy('id')->lockForUpdate()->first(['id'])!==null,
+                    422,'同一場同一類型，該分析師已有進行中的排班。');
+            }
             $locked->update(['status'=>$data['status']]);
             $this->audit($request,'shift.status#'.$locked->id);
         });
