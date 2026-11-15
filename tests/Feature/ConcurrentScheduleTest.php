@@ -27,7 +27,8 @@ class ConcurrentScheduleTest extends TestCase
         $result=$peer->take('done');$this->lastOperation=['case'=>$case,'result'=>$result];self::assertSame($expected,$result['status'],$case.' '.json_encode($result));self::assertSame(0,$result['transaction_level']);self::assertFalse($result['pdo_transaction']);self::assertNull($result['driver_code']);
         if($expected===500)self::assertSame('INJECTED_CONCURRENT_AUDIT_FAILURE',$result['error']);
         $g=array_search('game_lock',$result['trace'],true);$a=array_search('assignment_lock',$result['trace'],true);$scope=array_search('scope_lock',$result['trace'],true);
-        if($a!==false){if($g===false&&str_contains($case,'next_number'))$g=array_search('game_write',$result['trace'],true);self::assertNotFalse($g);self::assertLessThan($a,$g,'GAME must precede ASSIGNMENT');}
+        if($a!==false){if($g===false)$g=array_search('game_insert',$result['trace'],true); // Newly inserted rows are already exclusively owned.
+            self::assertNotFalse($g);self::assertLessThan($a,$g,'GAME must precede ASSIGNMENT');}
         if($scope!==false&&$g!==false)self::assertLessThan($g,$scope,'SCOPE must precede GAME');
         return $result;
     }
@@ -86,6 +87,12 @@ class ConcurrentScheduleTest extends TestCase
             self::assertSame(0,(int)$this->scalar('SELECT COUNT(*) FROM ppb_submissions'));
             $this->clear();$this->seedSubmission();$this->pair('review_then_complete',['op'=>'review'],['op'=>'status','status'=>'completed'],302,302);
             self::assertSame('approved',$this->scalar('SELECT status FROM ppb_submissions'));self::assertSame('completed',$this->scalar('SELECT status FROM ppb_assignments WHERE id=1'));
+            $this->clear();$this->seedSubmission();$this->pair('review_then_cancel',['op'=>'review'],['op'=>'cancel'],302,200);
+            self::assertSame('approved',$this->scalar('SELECT status FROM ppb_submissions'));self::assertSame('cancelled',$this->scalar('SELECT status FROM ppb_games WHERE id=1'));
+            $this->clear();$this->seedSubmission();$this->pair('cancel_then_review',['op'=>'cancel'],['op'=>'review'],200,422);
+            self::assertSame('submitted',$this->scalar('SELECT status FROM ppb_submissions'));
+            $this->clear();$this->seedSubmission();$this->pair('two_reviewers_one_version',['op'=>'review'],['op'=>'review'],302,409);
+            $this->restoreVersusOldReview();
             $this->clear();$this->seedSubmission();$this->pair('complete_then_review',['op'=>'status','status'=>'completed'],['op'=>'review'],302,409);
             self::assertSame('submitted',$this->scalar('SELECT status FROM ppb_submissions'));
             foreach(['substitute','save'] as $operation){$this->clear();$this->pair('cancel_then_'.$operation,['op'=>'cancel'],['op'=>$operation],200,422);self::assertSame(0,(int)$this->scalar('SELECT COUNT(*) FROM ppb_substitutions'));self::assertSame(0,(int)$this->scalar('SELECT COUNT(*) FROM ppb_submissions'));}
@@ -93,6 +100,10 @@ class ConcurrentScheduleTest extends TestCase
                 $this->clear();$this->pair($wp.'_then_'.$operation,['op'=>$wp],['op'=>$operation],200,422,$wp==='wp_pending_fixture'?'publication_write':'game_lock');
                 self::assertSame(0,(int)$this->scalar('SELECT COUNT(*) FROM ppb_submissions'));self::assertSame(0,(int)$this->scalar('SELECT COUNT(*) FROM ppb_substitutions'));
             }
+            $this->clear();$this->pair('save_then_verified_metadata',['op'=>'save'],['op'=>'wp_verified_fixture'],302,200);
+            self::assertSame(9,(int)$this->scalar('SELECT submitted_analyst_id FROM ppb_submissions'));self::assertNotNull($this->scalar('SELECT wp_locked_at FROM ppb_games WHERE id=1'));
+            $this->clear();$this->pair('substitute_then_pending_metadata',['op'=>'substitute'],['op'=>'wp_pending_fixture'],302,200);
+            self::assertSame(10,(int)$this->scalar('SELECT current_analyst_id FROM ppb_assignments WHERE id=1'));self::assertSame(1,(int)$this->scalar('SELECT COUNT(*) FROM ppb_substitutions'));
             $this->clear();$this->seedSubmission();$this->snapshotPair('review_snapshot_pending_wp',['op'=>'review'],['op'=>'wp_pending_fixture'],422,'first_submission_read');
             $this->clear();$this->pair('two_slots_same_target',['op'=>'substitute','target'=>10],['op'=>'substitute','assignment'=>2,'target'=>10],302,422);
             self::assertSame(1,(int)$this->scalar('SELECT COUNT(*) FROM ppb_assignments WHERE game_id=1 AND current_analyst_id=10'));
@@ -105,6 +116,8 @@ class ConcurrentScheduleTest extends TestCase
             $this->evidence[]=['case'=>'different_scope_no_block','sessions'=>[$a->ready['session'],$b->ready['session']],'B_committed_while_A_held_scope'=>true];
             $this->clear();$this->pair('failed_substitution_then_other_writer',['op'=>'substitute','target'=>10,'fail_audit'=>true],['op'=>'substitute','target'=>12],500,302);
             self::assertSame(1,(int)$this->scalar('SELECT COUNT(*) FROM ppb_substitutions'));self::assertSame(12,(int)$this->scalar('SELECT current_analyst_id FROM ppb_assignments WHERE id=1'));
+            $this->clear();$this->pair('failed_status_then_other_status',['op'=>'status','status'=>'completed','fail_audit'=>true],['op'=>'status','status'=>'cancelled'],500,302);
+            self::assertSame('cancelled',$this->scalar('SELECT status FROM ppb_assignments WHERE id=1'));self::assertSame(1,(int)$this->scalar('SELECT COUNT(*) FROM ppb_auth_audits'));
             $this->clear();$this->pair('failed_submission_then_substitute',['op'=>'save','fail_audit'=>true],['op'=>'substitute'],500,302);
             self::assertSame(0,(int)$this->scalar('SELECT COUNT(*) FROM ppb_submissions'));
             $this->clear();$before=$this->state();
@@ -125,6 +138,19 @@ class ConcurrentScheduleTest extends TestCase
             $receipt=['format'=>'ppb-shared-innodb-concurrency-v1','result'=>$passed?'PASS':'FAIL','isolation'=>$container->proof,'cases'=>$this->evidence,'last_operation'=>$this->lastOperation,'wp_http_calls'=>0,'production_connections'=>0];
             file_put_contents((getenv('RUNNER_TEMP')?:sys_get_temp_dir()).'/ppb-concurrency-receipt.json',json_encode($receipt,JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR)."\n");
         }
+    }
+    private function restoreVersusOldReview():void
+    {
+        $this->clear();$this->seedSubmission();
+        // Capture a real authorized active-assignment token, then complete via
+        // the real controller. Never synthesize a token for an inactive slot.
+        $review=$this->peer(['op'=>'review','actor'=>42]);
+        $complete=$this->peer(['op'=>'status','status'=>'completed']);$complete->send('start');$this->finish($complete,302,'completion before restoration');
+        $restore=$this->peer(['op'=>'status','status'=>'active','pause'=>'game_lock']);
+        $restore->send('start');$restore->take('barrier','game_lock');$review->send('start');$wait=$this->waitFor($review,$restore);
+        $restore->send('continue');$this->finish($restore,302,'restore');$this->finish($review,409,'old review after restoration');
+        self::assertSame('active',$this->scalar('SELECT status FROM ppb_assignments WHERE id=1'));self::assertSame('submitted',$this->scalar('SELECT status FROM ppb_submissions'));
+        $this->evidence[]=['case'=>'restore_then_old_review','sessions'=>[$restore->ready['session'],$review->ready['session']],'wait'=>$wait,'statuses'=>[302,409],'captured_active_token_before_completion'=>true,'rollback_clean'=>true];
     }
     public function test_disposable_cleanup_on_failure_signals_and_deadline():void
     {

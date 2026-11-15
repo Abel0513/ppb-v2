@@ -35,6 +35,7 @@ try{
     };
     $label=static function(string $sql):?string{
         $s=strtolower($sql);
+        if(str_starts_with($s,'insert into `ppb_games`'))return 'game_insert';
         if(str_contains($s,'for update'))foreach(['ppb_schedule_scopes'=>'scope_lock','ppb_games'=>'game_lock','ppb_assignments'=>'assignment_lock','ppb_submissions'=>'submission_lock','ppb_publications'=>'publication_lock'] as $table=>$name)if(str_contains($s,'`'.$table.'`'))return $name;
         if(preg_match('/^(insert|update|delete) /',$s))foreach(['ppb_submissions'=>'submission_write','ppb_assignments'=>'assignment_write','ppb_substitutions'=>'substitution_write','ppb_publications'=>'publication_write','ppb_auth_audits'=>'audit_write','ppb_schedule_events'=>'event_write','ppb_games'=>'game_write'] as $table=>$name)if(str_contains($s,'`'.$table.'`'))return $name;
         return null;
