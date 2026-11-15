@@ -65,6 +65,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: shared-innodb-concurrency-receipt
-          path: ${{ runner.temp }}/ppb-concurrency-receipt.json
+          path: |
+            ${{ runner.temp }}/ppb-concurrency-receipt.json
+            ${{ runner.temp }}/ppb-integrated-receipt.json
           if-no-files-found: warn
           retention-days: 14
