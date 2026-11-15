@@ -56,5 +56,15 @@ jobs:
           set -euo pipefail
           mkdir -p bootstrap/cache storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs
           php artisan route:list --except-vendor --json | tee "$RUNNER_TEMP/v2-routes.json"
-          # No SQLite/test DB, migrations, seeds or persistent tables.
+          # No new DATABASE, migrations or deployed writes. PR104 shared InnoDB
+          # fixtures exist only in a guarded network=none/tmpfs disposable container.
           vendor/bin/phpunit --do-not-cache-result
+
+      - name: Retain metadata-only shared-session and cleanup receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-innodb-concurrency-receipt
+          path: ${{ runner.temp }}/ppb-concurrency-receipt.json
+          if-no-files-found: warn
+          retention-days: 14

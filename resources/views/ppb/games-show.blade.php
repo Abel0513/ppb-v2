@@ -22,7 +22,7 @@
 <div class="card" style="margin-bottom:18px"><h2 class="card-title">分析師指派</h2><p class="small-note">5 位短文不得重複。BONUS 與長文可兼任；已有投稿、代班歷程時不能直接覆寫既有任務。</p>
 <div class="table-scroll"><table class="data-table"><thead><tr><th>角色</th><th>原負責人</th><th>現任負責人</th><th>狀態</th><th>代班紀錄</th></tr></thead><tbody>
 @forelse($sortedAssignments as $a)
-<tr><td><strong>{{ $a->kind==='pick'?'短文 '.$a->slot_no:($a->kind==='bonus'?'BONUS':($a->kind==='long'?'長文':'影片')) }}</strong></td>
+<tr data-assignment-id="{{ $a->id }}" data-assignment-revision="{{ \App\Services\Ppb\ScheduleVersion::assignment($a) }}"><td><strong>{{ $a->kind==='pick'?'短文 '.$a->slot_no:($a->kind==='bonus'?'BONUS':($a->kind==='long'?'長文':'影片')) }}</strong></td>
 <td>{{ $a->originalAnalyst?->display_name ?: $a->originalAnalyst?->name }}</td>
 <td>{{ $a->currentAnalyst?->display_name ?: $a->currentAnalyst?->name }}</td>
 <td>{{ $a->status }}</td><td>{{ $a->substitutions->count() }} 次</td></tr>
@@ -40,10 +40,12 @@
 @if($game->status!=='cancelled')
 <div style="margin-top:18px;border-top:1px solid #e3e7f1;padding-top:16px">
 <form method="post" action="{{ route('ppb.games.cancel',$game) }}" class="toolbar" onsubmit="return confirm('確定取消這場賽事？投稿及歷史紀錄將保留。')">@csrf
+<input type="hidden" name="revision_token" value="{{ old('revision_token', \App\Services\Ppb\ScheduleVersion::game($game)) }}">
 <label class="field-label" style="flex:1;min-width:200px">取消原因（必填）<input class="field" name="reason" maxlength="255" required placeholder="請說明取消原因"></label>
 <button class="action" type="submit">取消賽事</button></form>
 @if(!$wpLocked && !$game->submissions()->exists() && !$game->publications()->exists() && !$game->assignments()->whereHas('substitutions')->exists())
 <form method="post" action="{{ route('ppb.games.destroy',$game) }}" style="margin-top:12px" onsubmit="return confirm('永久刪除此場尚無投稿的賽事？操作不可復原，確認後會整理安全可動的 G/E 編號。')">@csrf @method('DELETE')
+<input type="hidden" name="revision_token" value="{{ old('revision_token', \App\Services\Ppb\ScheduleVersion::game($game)) }}">
 <button class="admin-button admin-button-danger" type="submit">刪除無投稿賽事</button>
 </form>@endif
 </div>@endif</div>@endif

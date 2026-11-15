@@ -2,6 +2,8 @@
 namespace Tests\Feature;
 
 use App\Models\PpbAccount;
+use App\Models\PpbAssignment;
+use App\Services\Ppb\ScheduleVersion;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Facades\DB;
 use Mockery;
@@ -97,7 +99,7 @@ class ManuscriptAuthorizationTest extends TestCase
             $reviewToken=$this->token();
             $this->postReview($id,$reviewToken,'changes_requested')->assertRedirect();
             $editToken=$this->token();$this->postSave($editToken,['analysis_text'=>'Revised fixture body'])->assertRedirect();
-            $writes=0;$this->postReview($id,$reviewToken)->assertUnprocessable();
+            $writes=0;$this->postReview($id,$reviewToken)->assertConflict();
             self::assertSame(0,$writes);self::assertSame('submitted',DB::table('ppb_submissions')->value('status'));
             $this->postReview($id,$this->token())->assertRedirect();
             self::assertSame('approved',DB::table('ppb_submissions')->value('status'));
@@ -141,11 +143,11 @@ class ManuscriptAuthorizationTest extends TestCase
             }
             // Assignment change after form display must invalidate even a new draft.
             DB::table('ppb_submissions')->delete();$token=$this->token();
-            $this->postJson('https://v2.csdatw.xyz/admin/assignments/1/substitute',['to_analyst_id'=>10,'reason'=>'Staff reassignment fixture'])->assertRedirect();
+            $this->postJson('https://v2.csdatw.xyz/admin/assignments/1/substitute',['to_analyst_id'=>10,'reason'=>'Staff reassignment fixture','revision_token'=>ScheduleVersion::assignment(PpbAssignment::findOrFail(1))])->assertRedirect();
             self::assertSame(9,(int)DB::table('ppb_assignments')->value('original_analyst_id'));
             self::assertSame(10,(int)DB::table('ppb_assignments')->value('current_analyst_id'));
             self::assertSame(71,(int)DB::table('ppb_substitutions')->value('performed_by_account_id'));$writes=0;
-            $this->postSave($token)->assertUnprocessable();self::assertSame(0,$writes);
+            $this->postSave($token)->assertConflict();self::assertSame(0,$writes);
             // A correctly refreshed staff request retains lawful management access.
             $this->postSave($this->token())->assertRedirect();$id=(int)DB::table('ppb_submissions')->value('id');
             foreach([70,72] as $linked){
@@ -156,7 +158,7 @@ class ManuscriptAuthorizationTest extends TestCase
             // A stale submitted analyst cannot be borrowed after another substitution.
             $submittedToken=$this->token();
             DB::table('ppb_assignments')->where('id',1)->update(['current_analyst_id'=>9]);$writes=0;
-            $this->postReview($id,$submittedToken)->assertUnprocessable();self::assertSame(0,$writes);
+            $this->postReview($id,$submittedToken)->assertConflict();self::assertSame(0,$writes);
             DB::table('ppb_assignments')->where('id',1)->update(['current_analyst_id'=>10]);
             // Ambiguous duplicate submissions cannot be reviewed through a crafted POST.
             $token=$this->token();$duplicate=(array)DB::table('ppb_submissions')->first();unset($duplicate['id']);DB::table('ppb_submissions')->insert($duplicate);$writes=0;

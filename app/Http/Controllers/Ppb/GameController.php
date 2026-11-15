@@ -234,7 +234,8 @@ class GameController extends Controller
             ->orderBy('sport')->orderBy('starts_at')->limit(300)->get();
         $selected=[];
         if($game) {
-            foreach ($game->assignments()->whereIn('kind',['pick','bonus','long'])->get() as $a) {
+            $game->loadMissing('assignments');
+            foreach ($game->assignments->whereIn('kind',['pick','bonus','long']) as $a) {
                 if($a->kind==='pick' && $a->slot_no) $selected['short'][$a->slot_no]=$a->current_analyst_id;
                 elseif($a->kind==='bonus') $selected['bonus']=$a->current_analyst_id;
                 elseif($a->kind==='long') $selected['long']=$a->current_analyst_id;
@@ -410,17 +411,19 @@ class GameController extends Controller
         return redirect()->route('ppb.games.show',$game)->with('status','賽事 '.$game->display_code.' 已建立。');
     }
     public function update(Request $request,PpbGame $game,ScheduleManager $manager): RedirectResponse {
+        $version=$request->validate(['revision_token'=>['required','regex:/^[a-f0-9]{64}$/D']])['revision_token'];
         [$data,$slots]=$this->validateInputs($request,$game);
-        $manager->update($game,$data,$slots);
+        $manager->update($game,$data,$slots,$version);
         return redirect()->route('ppb.games.show',$game)->with('status','賽事資訊與分析師指派已更新。');
     }
-    public function destroy(PpbGame $game,ScheduleManager $manager): RedirectResponse {
-        $manager->delete($game);
+    public function destroy(Request $request,PpbGame $game,ScheduleManager $manager): RedirectResponse {
+        $version=$request->validate(['revision_token'=>['required','regex:/^[a-f0-9]{64}$/D']])['revision_token'];
+        $manager->delete($game,$version);
         return redirect()->route('ppb.games.index')->with('status','賽事已刪除，可安全補位的編號已調整。');
     }
     public function cancel(Request $request,PpbGame $game,ScheduleManager $manager): RedirectResponse {
-        $data=$request->validate(['reason'=>['required','string','max:255']]);
-        $manager->cancel($game,$data['reason']);
+        $data=$request->validate(['reason'=>['required','string','max:255'],'revision_token'=>['required','regex:/^[a-f0-9]{64}$/D']]);
+        $manager->cancel($game,$data['reason'],$data['revision_token']);
         return redirect()->route('ppb.games.show',$game)->with('status','賽事已取消，投稿與歷史紀錄保留。');
     }
 }

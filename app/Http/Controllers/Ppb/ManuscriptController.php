@@ -161,12 +161,12 @@ class ManuscriptController extends Controller
             $current = PpbAssignment::whereKey($assignment->id)->lockForUpdate()->firstOrFail();
             if ($current->status !== 'active' || $current->game_id !== $game->id || $current->kind !== $kind ||
                 $current->current_analyst_id !== $assignment->current_analyst_id) {
-                throw ValidationException::withMessages(['manuscript' => '指派資料已異動，請重新整理後操作。']);
+                abort(409, '指派資料已異動，請重新整理後操作。');
             }
             $this->assertEditableGame($game);
             $row = $this->latestForAssignment($current->id);
             if ($data['revision_token'] !== $this->revision($row, $current)) {
-                throw ValidationException::withMessages(['manuscript' => '稿件已被其他操作更新，請重新整理，避免覆蓋較新的內容。']);
+                abort(409, '稿件已被其他操作更新，請重新整理，避免覆蓋較新的內容。');
             }
             if ($row && ($row->status === 'legacy_imported' || $row->legacy_source_pick_id !== null)) {
                 throw ValidationException::withMessages(['manuscript' => '歷史匯入稿件只能閱讀，不能用新版草稿覆蓋。']);
@@ -235,6 +235,11 @@ class ManuscriptController extends Controller
             $assignment = $first->assignment_id
                 ? PpbAssignment::whereKey($first->assignment_id)->lockForUpdate()->first() : null;
             $row = DB::table('ppb_submissions')->where('id', $submission)->lockForUpdate()->first();
+            if ($row && $assignment && (int)$row->game_id===(int)$game->id
+                && (int)$row->assignment_id===(int)$assignment->id) {
+                abort_unless(hash_equals($this->revision($row, $assignment), $data['revision_token']),409,
+                    '稿件或指派已更新，請重新讀取後核稿。');
+            }
             if (!$row || $row->status !== 'submitted' || !$row->assignment_id || $row->legacy_source_pick_id !== null) {
                 throw ValidationException::withMessages(['manuscript' => '只有新版已送審的稿件可核稿；歷史資料不得直接變更。']);
             }
@@ -243,9 +248,6 @@ class ManuscriptController extends Controller
                 throw ValidationException::withMessages(['manuscript' => '稿件指派資訊不一致，禁止核稿。']);
             }
             $this->latestForAssignment($assignment->id); // Duplicates require reconciliation, not choosing one.
-            if (!hash_equals($this->revision($row, $assignment), $data['revision_token'])) {
-                throw ValidationException::withMessages(['manuscript'=>'稿件或指派已更新，請重新讀取後核稿。']);
-            }
             DB::table('ppb_submissions')->where('id', $row->id)->update([
                 'status' => $data['decision'],
                 'review_note' => $note !== '' ? $note : null,
