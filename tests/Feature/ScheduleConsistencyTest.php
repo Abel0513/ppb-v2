@@ -38,7 +38,7 @@ class ScheduleConsistencyTest extends TestCase
             self::assertSame('5.7.44',DB::selectOne('SELECT VERSION() v')->v);self::assertCount(4,DB::select('SHOW DATABASES'));
             DB::statement('CREATE TEMPORARY TABLE ppb_schedule_scopes (month_key CHAR(7),game_type INT,PRIMARY KEY(month_key,game_type)) ENGINE=InnoDB');
             DB::statement("CREATE TEMPORARY TABLE ppb_games (id BIGINT AUTO_INCREMENT PRIMARY KEY,month_key CHAR(7) DEFAULT '2026-11',game_type INT DEFAULT 1,game_number INT,active_number INT,status VARCHAR(24) DEFAULT 'scheduled',sport VARCHAR(30),league VARCHAR(50),home_team VARCHAR(50),away_team VARCHAR(50),matchup_mode VARCHAR(24),matchup_text VARCHAR(255),fixture_id BIGINT NULL,play_type INT,play_value VARCHAR(160),market_type INT,reviewer_analyst_id BIGINT NULL,has_long_article TINYINT DEFAULT 0,recommended_at DATETIME,starts_at DATETIME NULL,notes TEXT NULL,wp_locked_at DATETIME NULL,cancelled_at DATETIME NULL,cancel_reason VARCHAR(255) NULL,created_at DATETIME NULL,updated_at DATETIME NULL,UNIQUE(month_key,game_type,active_number)) ENGINE=InnoDB");
-            DB::statement('CREATE TEMPORARY TABLE ppb_assignments (id BIGINT AUTO_INCREMENT PRIMARY KEY,game_id BIGINT,original_analyst_id BIGINT,current_analyst_id BIGINT,kind VARCHAR(20),slot_no INT,status VARCHAR(24),notes TEXT NULL,created_at DATETIME NULL,updated_at DATETIME NULL) ENGINE=InnoDB');
+            DB::statement('CREATE TEMPORARY TABLE ppb_assignments (id BIGINT AUTO_INCREMENT PRIMARY KEY,game_id BIGINT,original_analyst_id BIGINT,current_analyst_id BIGINT,kind VARCHAR(20),slot_no INT,status VARCHAR(24),notes TEXT NULL,created_at DATETIME NULL,updated_at DATETIME NULL,UNIQUE(game_id,kind,slot_no),UNIQUE(game_id,original_analyst_id,kind)) ENGINE=InnoDB');
             DB::statement('CREATE TEMPORARY TABLE ppb_analysts (id BIGINT PRIMARY KEY,account_id BIGINT NULL,name VARCHAR(80),display_name VARCHAR(80),status VARCHAR(24),user_type INT) ENGINE=InnoDB');
             DB::statement('CREATE TEMPORARY TABLE ppb_substitutions (id BIGINT AUTO_INCREMENT PRIMARY KEY,assignment_id BIGINT,from_analyst_id BIGINT,to_analyst_id BIGINT,performed_by_account_id BIGINT,reason VARCHAR(255),changed_at DATETIME) ENGINE=InnoDB');
             DB::statement('CREATE TEMPORARY TABLE ppb_submissions (id BIGINT AUTO_INCREMENT PRIMARY KEY,game_id BIGINT,assignment_id BIGINT,kind VARCHAR(20),submitted_analyst_id BIGINT NULL,status VARCHAR(24),content_body LONGTEXT NULL,recommend_pick TEXT NULL,analysis_text LONGTEXT NULL,submitted_at DATETIME NULL,last_edited_by_account_id BIGINT NULL,reviewed_by_account_id BIGINT NULL,reviewed_at DATETIME NULL,review_note TEXT NULL,legacy_source_pick_id BIGINT NULL,created_at DATETIME NULL,updated_at DATETIME NULL) ENGINE=InnoDB');
@@ -149,6 +149,15 @@ class ScheduleConsistencyTest extends TestCase
             self::assertNull(PpbGame::find(2));self::assertSame(3,PpbGame::findOrFail(3)->active_number);
             $this->deleteJson('https://v2.csdatw.xyz/admin/games/3',['revision_token'=>ScheduleVersion::game(PpbGame::findOrFail(3))])->assertUnprocessable();
             self::assertSame(3,PpbGame::findOrFail(3)->active_number);
+            // Existing G/E behavior: append skips reserved cancelled numbers;
+            // inserting before a submitted game must stop rather than renumber it.
+            $data=['month_key'=>'2026-11','game_type'=>1,'matchup_text'=>'Append fixture'];
+            $appended=$manager->create($data,['short'=>[]]);self::assertSame(4,$appended->game_number);
+            DB::table('ppb_submissions')->insert(['game_id'=>$appended->id,'assignment_id'=>null,'kind'=>'pick','submitted_analyst_id'=>9,'status'=>'submitted']);
+            $countBefore=DB::table('ppb_games')->count();
+            try{$manager->create($data,['short'=>[]],'before',$appended->id);self::fail('Submitted history must prevent insertion renumber.');}
+            catch(\Illuminate\Validation\ValidationException $e){self::assertArrayHasKey('schedule',$e->errors());}
+            self::assertSame($countBefore,DB::table('ppb_games')->count());self::assertSame(4,PpbGame::findOrFail($appended->id)->game_number);self::assertSame(3,PpbGame::findOrFail(3)->active_number);
             // Literal two-session visibility proof, NOT a shared-row race test.
             // MySQL5.7 session TEMPORARY tables cannot serve that latter purpose.
             $peer=new \PDO('mysql:unix_socket='.$socket.'/mysqld.sock;dbname=mysql','root','',[\PDO::ATTR_ERRMODE=>\PDO::ERRMODE_EXCEPTION]);
