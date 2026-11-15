@@ -87,10 +87,12 @@ class EvaluationMysql57Test extends TestCase
             $waive=['input_kind'=>'attendance','game_id'=>1,'attendance_status'=>null];
             $waiveId='683f084d-b85d-437b-9d9c-b280ce473e91';$saved=$realWriter->save($origin,'2026-05','input',$waive,$waiveId,0,$beforeInput['source_sha256'],71);self::assertSame(1,$saved['revision']);
             $afterInput=$realService->load($origin,'2026-05');self::assertSame(0,$afterInput['current']['counts']['absences']);self::assertSame(0,$afterInput['current']['salary']['absent']);self::assertSame(6,(int)DB::table('ppb_evaluation_attendance')->value('waived_submission_id'));
+            self::assertNotSame($beforeInput['source_sha256'],$afterInput['source_sha256']);
             $writes=0;self::assertTrue($realWriter->save($origin,'2026-05','input',$waive,$waiveId,0,$beforeInput['source_sha256'],71)['replayed']);self::assertSame(0,$writes);
             $video=['input_kind'=>'video','scheduled_at'=>'2026-05-12T12:00','guest_1'=>'legacy:4','guest_2'=>'legacy:4','guest_3'=>'v2:10','cancelled'=>false];
             $realWriter->save($origin,'2026-05','input',$video,'683f084d-b85d-437b-9d9c-b280ce473e92',1,$afterInput['source_sha256'],71);
             $withVideo=$realService->load($origin,'2026-05');self::assertSame(1,$withVideo['inputs']['video_count']);self::assertSame(400,$withVideo['current']['salary']['video']);self::assertSame('2026-05-12 04:00:00',DB::table('ppb_evaluation_videos')->value('scheduled_at'));
+            self::assertNotSame($afterInput['source_sha256'],$withVideo['source_sha256']);
             $video['video_id']=(int)DB::table('ppb_evaluation_videos')->value('id');$video['cancelled']=true;
             $realWriter->save($origin,'2026-05','input',$video,'683f084d-b85d-437b-9d9c-b280ce473e93',2,$withVideo['source_sha256'],71);
             self::assertSame(0,$realService->load($origin,'2026-05')['current']['salary']['video']);
@@ -229,11 +231,31 @@ class EvaluationMysql57Test extends TestCase
             $otherManual['score_extra_adjustment']++;
             $realWriter->save($origin,'2026-05','manual',$otherManual,'683f084d-b85d-437b-9d9c-b280ce473ea3',$other['revision'],$other['source_sha256'],71);
             $afterUnrelated=$realService->load($substitute,'2026-05');
+            self::assertNotSame($other['source_sha256'],$realService->load($origin,'2026-05')['source_sha256']);
             self::assertSame($beforeUnrelated['source_sha256'],$afterUnrelated['source_sha256'],'An unrelated analyst manual edit must not invalidate this source.');
             self::assertSame($beforeUnrelated['current'],$afterUnrelated['current']);
             self::assertSame($beforeUnrelated['saved_salary'],$afterUnrelated['saved_salary']);
             self::assertSame($afterUnrelated['source_sha256'],$realService->load($substitute,'2026-05')['source_sha256'],'Unchanged repeated reads must be stable.');
 
+
+            // A two-month-old committed grade affects the following month;
+            // propagation to later months occurs only via explicit grade saves.
+            DB::table('ppb_evaluations')->insert($reporter->defaults('2026-02')+[
+                'subject_type'=>'legacy','subject_id'=>4,'month'=>'2026-02','revision'=>1,
+                'next_rating_level'=>0,'source_sha256'=>str_repeat('e',64),'actor_id'=>71]);
+            $march=$realService->load($origin,'2026-03');
+            self::assertSame(0,$march['current']['level']);
+            self::assertSame(35,$march['current']['salary']['short']);
+            $realWriter->save($origin,'2026-03','rebuild',[],'683f084d-b85d-437b-9d9c-b280ce473ea4',
+                $march['revision'],$march['source_sha256'],71);
+            $april=$realService->load($origin,'2026-04');
+            self::assertSame($march['current']['next_rating']['rating_level'],$april['current']['level']);
+            $realWriter->save($origin,'2026-04','rebuild',[],'683f084d-b85d-437b-9d9c-b280ce473ea5',
+                $april['revision'],$april['source_sha256'],71);
+            $may=$realService->load($origin,'2026-05');
+            self::assertSame($april['current']['next_rating']['rating_level'],$may['current']['level']);
+            self::assertSame($realService->load($origin,'2026-04')['history']['2026-03'],$may['history']['2026-03']);
+            self::assertSame($beforeUnrelated['saved_salary'],$realService->load($substitute,'2026-05')['saved_salary']);
 
             // A rating owned by legacy:4 is not a v2:9 rating merely because
             // the native submission author has the same numeric native ID.
