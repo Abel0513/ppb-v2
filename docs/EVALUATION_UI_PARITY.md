@@ -3,10 +3,13 @@
 設計依據：PR #58 comment6883893790，整個評鑑模組及未另指定新設計的
 V2 功能均沿用舊系統版面與操作，不以現有 V2 卡片當舊版依據。
 
-**RESULT=BLOCKED_LEGACY_UI_SOURCE_NOT_VISIBLE。尚未改寫 UI，也未完成 UI 還原。**
+**Phase A：管理包已驗證、等待既有 AWS 管理者執行；未安裝。**
+管理包準備已結案，不重驗 Artifact、不重包、不重新要求同批授權。
+
+**RESULT=OFFLINE_PREPARATION_COMPLETE_SOURCE_PENDING。尚未改寫 UI，也未完成 UI 還原。**
 此狀態與既有計算／薪酬快照／權限／來源指紋／冪等測試 PASS 並不矛盾。
 
-## 現場來源證據
+## 歷史受限來源證據（不是新 ui_inventory）
 
 - Run43639195703（PR98）：8項 inventory PASS，取得前400個路徑。
   SSM df292103-fbf8-4468-9211-00e6963d3ea7 至
@@ -51,7 +54,50 @@ V2路徑皆相對本Repository。View與asset欄的「未取得」不是預設�
 
 需要的是在既有隔離身分下、經審核的UI來源可見範圍：先發現真實模板／
 資產目錄，再安全取得View/CSS/JS及引用關係。這不是DBA、IAM或R2重裝；
-也不能直接重跑可能覆蓋現場FPM/policy的bootstrap。現有介面尚不能完成。
+也不能直接重跑可能覆蓋現場FPM/policy的bootstrap。管理者尚未回傳安裝收據。
 
 正式PC／手機逐頁外觀與互動驗收仍未執行。PR58保持Draft；不Migration、
 正式寫入、付款、LINE／PDF發送、合併或部署。
+
+
+## 現有 V2 Blade 結構（本批本機檔案盤點）
+
+以下是現況，不是舊版設計依據。檔案根目錄為 `resources/views/ppb/`。
+
+| 檔案 | 現有結構／互動 | 還原時必須保留的安全行為 |
+| --- | --- | --- |
+| evaluations/index.blade.php | 月份查詢、每頁5人、13欄列表；逐筆載入摘要 | 同源唯讀 GET、載入與失敗狀態，不把不可用資料當0 |
+| evaluations/show.blade.php | 月評分／賽果、五週互動、主動性與額外調整、三月歷史、升降級、薪酬六分項、出勤、影片、逐稿評分、CSV／列印 | 權限、來源指紋、型別、修訂／冪等收據、薪酬快照與過期提示 |
+| evaluations/request.blade.php | 共用 CSRF、request_id、revision、source hash、月份隱藏欄位 | 不能因版面還原移除或讓前端繞過驗證 |
+| evaluations/preview/index.blade.php | 唯讀月份／分頁、8欄摘要、health入口 | owner限定、GET唯讀，不載入保存服務 |
+| evaluations/preview/show.blade.php | 唯讀評分、歷史、等級、薪酬、月表現、列印 | 不以列印代替原PDF產製／發送，不暴露私人身分 |
+| layout.blade.php | 全域 CSS／JS、viewport、styles stack | `assets/ppb/ppb-admin-csda-source.css`／`.js` 是現有V2資產，不代表已取得評鑑頁原始資產 |
+
+列表腳本為 `public/assets/ppb/ppb-evaluations.js`，使用同源 GET、no-store、textContent。
+詳細頁現有 grid／details 為目前V2實作，不能宣稱已還原舊版 Modal 或手機布局。
+`routes/ppb_admin.php` 中 salary／rating／performance 舊入口目前導向同一列表；
+須在取得來源後核對獨立頁及返回路徑，不能以路由可達代替操作一致性。
+
+## 待取得的真實模板及資產（實體路徑一律待發現）
+
+| 邏輯範圍 | 待取得的證據 | 實體路徑狀態 |
+| --- | --- | --- |
+| 月評鑑／薪酬／評級列表及歷史 | 各Action實際 display 綁定、tpl、include、layout、header／sidebar／footer | 未取得，不推測模板檔名 |
+| 詳情／稿件評分 | 表格欄序、Modal markup、評分 JS、保存後刷新／錯誤提示 | 未取得 |
+| 週互動／主動性／調整／出勤／影片 | 表單、欄位順序、驗證提示、切換／取消行為 | 未取得 |
+| 月表現／近十場／BONUS | 表格、排序、月份篩選、分頁與狀態顯示 | 未取得 |
+| LINE／LIFF及PDF原始入口 | 真實View及按鈕綁定、權限及導覽；不執行發送 | 僅有Controller及邏輯View識別證據，無實體路徑 |
+| 全部頁面共用及專用樣式 | CSS引用鏈、media／print、尺寸／色彩／桌機手機差異 | 未取得 |
+| 互動及視覺資產 | JS引用鏈、Modal／tab／collapse、圖片／字型／icon路徑及授權範圍 | 未取得；不下載或輸出任意二進位資產 |
+
+## Phase B 離線候選能力與接續閘門
+
+`ops/legacy-readonly/offline-ui/` 提供離線結構解析候選與設計；正式 catalog 為空。
+合成 fixture 測試不代表讀到現場來源，也不代表 UI 一致性 PASS。
+未加入 worker 操作、固定工具包或 SSM 文件，未執行遠端安裝。
+
+1. 管理者回傳非機密 JSON 後，核對真實 SSM Command ID、文件版本、核准工具 SHA、R2／隔離狀態不變、零舊系統寫入及無 Migration；不接受只有管理包驗證成功。
+2. 成功後使用既有受控通道執行真正 ui_inventory，保留分頁／完整性證據。
+3. 以發現的真實路徑及逐檔審核建立固定 catalog；整合讀取器前另外審核。沿用既有 OS 唯讀身分、敏感檔排除、tokenizer、輸出限制，不擴權。
+4. 取得安全來源後才能整批還原 Blade／CSS／JS；核對PC、手機、所有按鈕、Modal、導覽與失敗狀態。保留計算／薪酬／權限測試。
+5. PR58及PR102維持Draft；本批不Migration、不正式部署、不業務寫入。
