@@ -68,5 +68,6 @@ jobs:
           path: |
             ${{ runner.temp }}/ppb-concurrency-receipt.json
             ${{ runner.temp }}/ppb-integrated-receipt.json
+            ${{ runner.temp }}/ppb-analyst-master-receipt.json
           if-no-files-found: warn
           retention-days: 14

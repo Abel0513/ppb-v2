@@ -115,7 +115,7 @@ class GameController extends Controller
             $games->appends($request->except('p'));
         }
         $ids=$games->getCollection()->pluck('reviewer_analyst_id')->filter()->unique()->values();
-        $reviewers=$ids->isEmpty()?collect():PpbAnalyst::whereIn('id',$ids)->get(['id','name','display_name'])->keyBy('id');
+        $reviewers=$ids->isEmpty()?collect():PpbAnalyst::whereIn('id',$ids)->get()->keyBy('id');
         // PPB INS2 | Compute every VISIBLE card boundary once, without changing PG8 ordering.
         // Blocked boundaries still render a tiny, explanatory control; safe ones open the
         // existing create modal. All SQL below is SELECT; ScheduleManager rechecks on POST.
