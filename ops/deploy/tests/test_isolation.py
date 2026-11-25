@@ -153,10 +153,88 @@ class ActivationAuthority(unittest.TestCase):
         self.t=tempfile.TemporaryDirectory();self.addCleanup(self.t.cleanup)
         self.old=os.getcwd();os.chdir(self.t.name);self.addCleanup(os.chdir,self.old)
         self.m=load('activate_scope_test',ROOT/'activate-isolation.py');self.calls=[]
+
+    def active_document_client(self, bootstrap_exists, hash_type='Sha256', digest='a'*64):
+        documents={
+            '7': '{"schemaVersion":"2.2","old":true}',
+            '9': (ROOT/'PPB-V2-Controlled-Deploy.isolated.ssm.json').read_text(),
+        }
+        if bootstrap_exists:
+            documents['8']=(ROOT/'PPB-V2-Controlled-Deploy.bootstrap.ssm.json').read_text()
+
+        def aws(*args):
+            self.calls.append(args)
+            op=args[:2]
+            if op==('sts','get-caller-identity'):return {'Account':r.ACCOUNT,'Arn':'fixture'}
+            if op==('ssm','get-document'):
+                version=args[args.index('--document-version')+1]
+                if version=='$DEFAULT':version='9'
+                return {'Content':json.dumps(json.loads(documents[version])), 'DocumentVersion':version}
+            if op==('ssm','list-document-versions'):
+                if '--next-token' not in args:
+                    return {'DocumentVersions':[{'DocumentVersion':'9'},{'DocumentVersion':'7'}],'NextToken':'next'}
+                return {'DocumentVersions':[{'DocumentVersion':'8'}] if bootstrap_exists else []}
+            if op==('ssm','describe-document'):
+                return {'Document':{'Hash':digest,'HashType':hash_type}}
+            self.fail(f'Unexpected call during verification: {op}')
+        return aws
+
+    def assert_verify_only_calls(self):
+        allowed={
+            ('sts','get-caller-identity'),
+            ('ssm','get-document'),
+            ('ssm','list-document-versions'),
+            ('ssm','describe-document'),
+        }
+        self.assertLessEqual({args[:2] for args in self.calls},allowed)
+
+    def test_already_active_verifies_reviewed_versions_without_writes(self):
+        result=self.m.activate(self.active_document_client(True),lambda _:None)
+        self.assertEqual(result['result'],'ISOLATION_ALREADY_ACTIVE_VERIFIED')
+        self.assertEqual(result['runtime_version'],'9')
+        self.assertEqual(result['bootstrap_document_version'],'8')
+        self.assertEqual(result['runtime_document_hash'],'a'*64)
+        self.assertIsNone(result['ssm_command_id'])
+        self.assert_verify_only_calls()
+        from contextlib import redirect_stdout
+        import io
+        with patch.object(self.m,'activate',return_value=result),redirect_stdout(io.StringIO()):
+            self.assertEqual(self.m.main(),0)
+
+    def test_already_active_without_reviewed_bootstrap_stops_without_writes(self):
+        result=self.m.activate(self.active_document_client(False),lambda _:None)
+        self.assertEqual(result['result'],'STOP')
+        self.assertEqual(result['reason'],'REVIEWED_RUNTIME_ACTIVE_BOOTSTRAP_MISSING')
+        self.assert_verify_only_calls()
+
+    def test_already_active_rejects_invalid_hash_metadata_without_writes(self):
+        for hash_type,digest,reason in [
+            ('Sha1','a'*64,'DOCUMENT_HASH_TYPE_INVALID'),
+            ('Sha256','z'*64,'DOCUMENT_HASH_INVALID'),
+        ]:
+            with self.subTest(reason=reason):
+                result=self.m.activate(self.active_document_client(True,hash_type,digest),lambda _:None)
+                self.assertEqual(result['result'],'STOP')
+                self.assertEqual(result['reason'],reason)
+                self.assert_verify_only_calls()
+
+    def test_default_read_denial_stops_before_writes(self):
+        def aws(*args):
+            self.calls.append(args)
+            if args[:2]==('sts','get-caller-identity'):return {'Account':r.ACCOUNT,'Arn':'fixture'}
+            raise RuntimeError('AWS_AccessDeniedException')
+        result=self.m.activate(aws,lambda _:None)
+        self.assertEqual(result['result'],'STOP')
+        self.assertEqual(result['reason'],'AWS_AccessDeniedException')
+        self.assertEqual(result['failed_action'],'ssm:GetDocument')
+        self.assert_verify_only_calls()
+
     def test_actual_update_denial_is_precise_and_no_root_command_is_sent(self):
         def aws(*args):
             self.calls.append(args)
             if args[:2]==('sts','get-caller-identity'):return {'Account':r.ACCOUNT,'Arn':'arn:aws:sts::429724121147:assumed-role/PPB-V2-GitHub-Deploy-Role/test'}
+            if args[:2]==('ssm','get-document') and '$DEFAULT' in args:
+                return {'Content':'{"schemaVersion":"2.2","old":true}','DocumentVersion':'1'}
             raise RuntimeError('AWS_AccessDeniedException')
         result=self.m.activate(aws,lambda _:None)
         self.assertEqual(result['result'],'STOP');self.assertEqual(result['reason'],'AWS_AccessDeniedException')
@@ -181,7 +259,40 @@ class ActivationAuthority(unittest.TestCase):
         import io
         with patch.dict(os.environ,GITHUB_RUN_ID='1'),redirect_stdout(io.StringIO()):result=self.m.activate(aws,lambda _:None)
         self.assertEqual(result['result'],'TOOLS_INSTALLED_ISOLATION_PENDING')
+        self.assertEqual(sum(x[:2]==('ssm','send-command') for x in self.calls),1)
         self.assertFalse(any(x[:2] in [('ssm','update-document-default-version'),('ssm','delete-document')] for x in self.calls))
+
+    def test_quarantine_stops_if_reviewed_runtime_becomes_default(self):
+        from contextlib import redirect_stdout
+        import io
+
+        bootstrap=(ROOT/'PPB-V2-Controlled-Deploy.bootstrap.ssm.json').read_text()
+        runtime=(ROOT/'PPB-V2-Controlled-Deploy.isolated.ssm.json').read_text()
+        default='1'
+
+        def aws(*args):
+            nonlocal default
+            self.calls.append(args)
+            op=args[:2]
+            if op==('sts','get-caller-identity'):return {'Account':r.ACCOUNT,'Arn':'fixture'}
+            if op==('ssm','get-document'):
+                version=args[args.index('--document-version')+1]
+                if version=='$DEFAULT':version=default
+                if version=='$LATEST':version='8'
+                return {'Content':{'1':'{}','8':bootstrap,'9':runtime}[version],'DocumentVersion':version}
+            if op==('ssm','describe-document'):return {'Document':{'Hash':'a'*64,'HashType':'Sha256'}}
+            if op==('ssm','get-command-invocation'):
+                default='9'
+                return dict(Status='Success',ResponseCode=0,StandardOutputContent='V2_FIXED_TOOLS_INSTALLED=YES\nV2_INVENTORY={"result":"INVENTORY_ONLY_ISOLATION_UNVERIFIED"}')
+            self.fail(f'Unexpected call during quarantine: {op}')
+
+        with patch.dict(os.environ,PPB_BOOTSTRAP_RECOVERY_COMMAND_ID='ff2db294-03d8-4f4a-9bb3-09ccbd93c5fe'),redirect_stdout(io.StringIO()):
+            result=self.m.activate(aws,lambda _:None)
+        self.assertEqual(result['result'],'STOP')
+        self.assertEqual(result['reason'],'QUARANTINE_REVIEWED_RUNTIME_ACTIVE')
+        self.assertEqual(default,'9')
+        self.assertNotIn(('ssm','update-document-default-version'),[args[:2] for args in self.calls])
+        self.assertNotIn(('ssm','delete-document'),[args[:2] for args in self.calls])
 
     def test_recovery_reads_prior_receipt_without_resending(self):
         bootstrap=(ROOT/'PPB-V2-Controlled-Deploy.bootstrap.ssm.json').read_text()

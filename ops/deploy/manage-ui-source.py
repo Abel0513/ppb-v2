@@ -6,7 +6,7 @@ ROOT=Path(__file__).resolve().parent
 ACCOUNT='429724121147';DOC='PPB-V2-Controlled-Deploy';INSTANCE='i-0135d6b2fac7a54c2'
 BUCKET='ppb-v2-release-artifacts-429724121147-use1';SOURCE='7b4a7e45585f98b5c6bf04ff44c328130ba3998a'
 BUNDLE='babf57824db0046930ada81db9174be3c9340bba3c15c866d59913e0f5a7f0b8'
-PINS={'activate-isolation.py':'3b763e3cde7a182adaa88f51e3c29df70ec14e6f8b89be5d353c1ed34f5171e2','release-client.py':'5a4335b2e151c0a52b54463844f83d6a7926594a780072803faf1f3d065a6edd','PPB-V2-Controlled-Deploy.bootstrap.ssm.json':'6c0879a9b672cfcb1496d533701fca4494cbc66fe2438c659bbb3962739244e4','PPB-V2-Controlled-Deploy.isolated.ssm.json':'f63b5aa86b017223e3df17381d615da6a88fc989e70a7b15429ed5c328094b4d'}
+PINS={'activate-isolation.py':'6f3502f6f127f6dbf05e053170b96cf414c8461c8df1d9f6e604805d18977cba','release-client.py':'5a4335b2e151c0a52b54463844f83d6a7926594a780072803faf1f3d065a6edd','PPB-V2-Controlled-Deploy.bootstrap.ssm.json':'6c0879a9b672cfcb1496d533701fca4494cbc66fe2438c659bbb3962739244e4','PPB-V2-Controlled-Deploy.isolated.ssm.json':'f63b5aa86b017223e3df17381d615da6a88fc989e70a7b15429ed5c328094b4d'}
 PREVIOUS={'61':'05d73f4e07f94748f11bcd291114cd3c296e7fde2f0ad04c90508bf456a48a3a','62':'92db95e386608ba55a1f4ba231df94c6af09b1eaaaf965886a4382c62f6fde24'}
 def need(value,code):
  if not value:raise RuntimeError(code)
@@ -164,9 +164,29 @@ def manage(apply=False,state_path='ui-source.state.json',call=None,pause=lambda 
     try:
      result=activation.activate(call=guarded,pause=pause)
      state['last_activation']={k:result.get(k) for k in ['result','stage','required_action','failed_action','reason','resource','ssm_command_id','bootstrap_document_version','runtime_version','retired_versions']};save(path,state)
+     if result['result']=='ISOLATION_ALREADY_ACTIVE_VERIFIED':
+      # Finish only a journaled manager cutover. The deploy-role activator stays read-only.
+      need(state['command_id'] and state['bootstrap_verified'],'MANAGED_INSTALL_NOT_VERIFIED')
+      guarded('ssm','get-command-invocation','--command-id',state['command_id'],'--instance-id',INSTANCE,'--plugin-name','installReviewedTools')
+      need(state['bootstrap_verified'],'RECEIPT_NOT_VERIFIED')
+      current_default=default_version(guarded)
+      need(current_default==result['runtime_version'],'VERIFIED_RUNTIME_CHANGED')
+      result['retired_versions']=[]
+      prior_file=Path(tmp)/'prior-document.json'
+      for version in PREVIOUS:
+       if version not in versions:continue
+       prior=guarded('ssm','get-document','--name',DOC,'--document-version',version,'--document-format','JSON')['Content']
+       need(json.loads(prior)==versions[version],'MANAGEMENT_ARCHIVE_CONTENT_DENIED')
+       prior_file.write_text(prior)
+       guarded('s3api','put-object','--bucket',BUCKET,'--key',f'releases/ssm-history/{run}/version-{version}.json','--body',str(prior_file),'--if-none-match','*','--server-side-encryption','AES256')
+       current_default=default_version(guarded)
+       need(current_default==result['runtime_version'],'VERIFIED_RUNTIME_CHANGED')
+       guarded('ssm','delete-document','--name',DOC,'--document-version',version)
+       result['retired_versions'].append(version)
+      need(PREVIOUS.keys().isdisjoint(document_versions(guarded)),'UNREVIEWED_VERSION_REMAINS')
     finally:os.chdir(cwd)
   finally:os.environ.clear();os.environ.update(old)
-  need(result['result']=='ISOLATED_EXECUTOR_ACTIVATED',result.get('reason','MANAGED_INSTALL_NOT_VERIFIED'));need(state['bootstrap_verified'],'R2_PRESERVATION_NOT_VERIFIED')
+  need(result['result'] in {'ISOLATED_EXECUTOR_ACTIVATED','ISOLATION_ALREADY_ACTIVE_VERIFIED'},result.get('reason','MANAGED_INSTALL_NOT_VERIFIED'));need(state['bootstrap_verified'],'R2_PRESERVATION_NOT_VERIFIED')
   receipt=dict(result='MANAGED_UI_SOURCE_INSTALL_VERIFIED',bundle_sha256=BUNDLE,ssm_command_id=state['command_id'],bootstrap_version=result['bootstrap_document_version'],runtime_version=result['runtime_version'],r2_protected_bytes_unchanged=True,legacy_file_changes=0,legacy_db_changes=0,migrations=False,iam_changes=0,retired_versions=result.get('retired_versions',[]),s3_verified=verified)
   state.update(phase='VERIFIED',receipt=receipt);save(path,state);return receipt
  except Exception as exc:

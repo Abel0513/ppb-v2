@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import time
 ROOT=Path(__file__).resolve().parent
 s=importlib.util.spec_from_file_location('release_client',ROOT/'release-client.py');c=importlib.util.module_from_spec(s);s.loader.exec_module(c)
@@ -24,6 +25,23 @@ def activate(call=c.aws,pause=time.sleep):
     def save():
         p=out/'activation.pending';p.write_text(json.dumps(result,indent=2));p.replace(out/'activation.json')
     def content(version):return call('ssm','get-document','--name',c.DOC,'--document-version',version,'--document-format','JSON')
+    def find_reviewed_version(value):
+        token=None
+        for _ in range(20):
+            args=['ssm','list-document-versions','--name',c.DOC]
+            if token:args+=['--next-token',token]
+            page=call(*args)
+            for item in page.get('DocumentVersions',[]):
+                version=item['DocumentVersion']
+                if json.loads(content(version)['Content'])==value:return version
+            token=page.get('NextToken')
+            if not token:return None
+        raise RuntimeError('DOCUMENT_VERSION_SCAN_LIMIT')
+    def document_hash(version):
+        meta=call('ssm','describe-document','--name',c.DOC,'--document-version',version)['Document']
+        c.need(meta.get('HashType')=='Sha256','DOCUMENT_HASH_TYPE_INVALID')
+        c.need(re.fullmatch('[a-f0-9]{64}',meta.get('Hash') or ''),'DOCUMENT_HASH_INVALID')
+        return meta['Hash']
     def install_version(value):
         try:
             latest=content('$LATEST')
@@ -32,16 +50,8 @@ def activate(call=c.aws,pause=time.sleep):
         # A one-time administrator can preload both reviewed versions; daily
         # activation should reuse them rather than request UpdateDocument again.
         try:
-            token=None
-            for _ in range(20):
-                args=['ssm','list-document-versions','--name',c.DOC]
-                if token:args+=['--next-token',token]
-                page=call(*args)
-                for item in page.get('DocumentVersions',[]):
-                    candidate=content(item['DocumentVersion'])
-                    if json.loads(candidate['Content'])==value:return item['DocumentVersion']
-                token=page.get('NextToken')
-                if not token:break
+            existing=find_reviewed_version(value)
+            if existing:return existing
         except RuntimeError as exc:result['version_read_before_install']=str(exc)
         # Authorized bounded write: create a reviewed non-default version only.
         result.update(stage='CREATE_REVIEWED_VERSION',required_action='ssm:UpdateDocument');save()
@@ -55,7 +65,13 @@ def activate(call=c.aws,pause=time.sleep):
         else:raise RuntimeError('DOCUMENT_ACTIVATION_TIMEOUT')
         c.need(json.loads(content(version)['Content'])==value,'DOCUMENT_READBACK_MISMATCH')
         return version
-    def quarantine(bootstrap,version):
+    def quarantine(bootstrap,version,runtime):
+        def quarantine_default():
+            current=content('$DEFAULT')
+            c.need(json.loads(current['Content'])!=runtime,'QUARANTINE_REVIEWED_RUNTIME_ACTIVE')
+            return current
+
+        quarantine_default()
         # No SQL/OS service writes: retain only this reviewed, no-input bootstrap
         # while runtime certification is pending. Archive ALL prior bytes first.
         import hashlib
@@ -77,11 +93,12 @@ def activate(call=c.aws,pause=time.sleep):
             key='releases/ssm-history/'+os.environ['GITHUB_RUN_ID']+'-attempt-'+os.environ.get('GITHUB_RUN_ATTEMPT','1')+'/version-'+old+'-'+digest+'.json'
             call('s3api','put-object','--bucket',c.BUCKET,'--key',key,'--body',str(path),'--if-none-match','*','--server-side-encryption','AES256')
             result['quarantine_archives'].append(dict(version=old,sha256=digest,key=key));save()
-        if json.loads(content('$DEFAULT')['Content'])!=bootstrap:
+        if json.loads(quarantine_default()['Content'])!=bootstrap:
             call('ssm','update-document-default-version','--name',c.DOC,'--document-version',version)
-        c.need(json.loads(content('$DEFAULT')['Content'])==bootstrap,'QUARANTINE_DEFAULT_NOT_VERIFIED')
+        c.need(json.loads(quarantine_default()['Content'])==bootstrap,'QUARANTINE_DEFAULT_NOT_VERIFIED')
         result['retired_versions']=[];save()
         for old,_ in versions:
+            c.need(quarantine_default()['DocumentVersion']!=old,'QUARANTINE_DELETE_TARGET_IS_DEFAULT')
             call('ssm','delete-document','--name',c.DOC,'--document-version',old)
             result['retired_versions'].append(old);save()
         token=None;kept=[]
@@ -103,18 +120,31 @@ def activate(call=c.aws,pause=time.sleep):
         result['caller_arn']=identity['Arn'];save()
         bootstrap=json.loads((ROOT/'PPB-V2-Controlled-Deploy.bootstrap.ssm.json').read_text())
         runtime=json.loads((ROOT/'PPB-V2-Controlled-Deploy.isolated.ssm.json').read_text())
+        result['stage']='CHECK_REVIEWED_DEFAULT'
+        default=content('$DEFAULT')
+        if json.loads(default['Content'])==runtime:
+            runtime_version=default['DocumentVersion']
+            result['runtime_version']=runtime_version
+            version=find_reviewed_version(bootstrap)
+            c.need(version,'REVIEWED_RUNTIME_ACTIVE_BOOTSTRAP_MISSING')
+            result.update(bootstrap_document_version=version,
+                          bootstrap_document_hash=document_hash(version),
+                          runtime_document_hash=document_hash(runtime_version))
+            current=content('$DEFAULT')
+            c.need(current['DocumentVersion']==runtime_version and json.loads(current['Content'])==runtime,
+                   'RUNTIME_DEFAULT_CHANGED')
+            result.update(result='ISOLATION_ALREADY_ACTIVE_VERIFIED',stage='VERIFIED')
+            save();return result
         version=install_version(bootstrap);result['bootstrap_document_version']=version;save()
-        meta=call('ssm','describe-document','--name',c.DOC,'--document-version',version)['Document']
-        c.need(meta['HashType']=='Sha256','DOCUMENT_HASH_TYPE_INVALID')
+        bootstrap_hash=document_hash(version)
         result.update(stage='INSTALL_INTENT',required_action='ssm:SendCommand');save()
         recovery=os.environ.get('PPB_BOOTSTRAP_RECOVERY_COMMAND_ID','')
         if recovery:
-            import re
             c.need(re.fullmatch('[a-f0-9-]{36}',recovery),'RECOVERY_COMMAND_INVALID')
             command=recovery
         else:
             sent=call('ssm','send-command','--document-name',c.DOC,'--document-version',version,
-                      '--document-hash',meta['Hash'],'--document-hash-type','Sha256','--instance-ids',c.INSTANCE,
+                      '--document-hash',bootstrap_hash,'--document-hash-type','Sha256','--instance-ids',c.INSTANCE,
                       '--max-concurrency','1','--max-errors','0','--timeout-seconds','120',
                       '--comment','Reviewed V2 bootstrap '+os.environ['GITHUB_RUN_ID'])
             command=sent['Command']['CommandId']
@@ -147,7 +177,7 @@ def activate(call=c.aws,pause=time.sleep):
             c.need(len(rows)==1,'INVENTORY_RECEIPT_MISSING')
             inventory=json.loads(rows[0]);result.update(inventory=inventory,fixed_tools_installed=True)
             if inventory.get('result')!='PASS':
-                quarantine(bootstrap,version)
+                quarantine(bootstrap,version,runtime)
                 result.update(result='TOOLS_INSTALLED_ISOLATION_PENDING',stage='SQL_OS_BOUNDARY_REQUIRED');save();return result
             c.need(inventory.get('isolation',{}).get('legacy_database_write') is False,'LEGACY_DATABASE_WRITE_NOT_EXCLUDED')
             result['database_isolation']='VERIFIED';break
@@ -189,7 +219,6 @@ def activate(call=c.aws,pause=time.sleep):
         result.update(result='ISOLATED_EXECUTOR_ACTIVATED',stage='VERIFIED',runtime_version=runtime_version)
         save();return result
     except Exception as exc:
-        import re
         code=str(exc);result['reason']=code if re.fullmatch('[A-Za-z0-9_]{1,160}',code) else 'ACTIVATION_NOT_VERIFIED'
         result['failed_action']=result.get('last_aws_action')
         if code=='AWS_InvalidDocumentContent':result['document_validation_error']=getattr(c,'LAST_SAFE_DOCUMENT_VALIDATION','UNAVAILABLE')
@@ -197,5 +226,5 @@ def activate(call=c.aws,pause=time.sleep):
 
 def main():
     result=activate();print(json.dumps(result))
-    return 0 if result['result']=='ISOLATED_EXECUTOR_ACTIVATED' else 2
+    return 0 if result['result'] in {'ISOLATED_EXECUTOR_ACTIVATED','ISOLATION_ALREADY_ACTIVE_VERIFIED'} else 2
 if __name__=='__main__':raise SystemExit(main())

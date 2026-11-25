@@ -24,7 +24,7 @@
 
 #102 安裝時三個 S3 物件已存在。本批是新 bundle 與新審核 JSON，dry-run 的 get-object 在物件尚未上傳前會失敗。請先用本工具的資料發布步驟（只 Put 上述三個精確鍵，IfNoneMatch、AES256，無 SSM／EC2 寫入），再做安裝預檢與 `--apply`。不要改 IAM、不要用日常 GitHub 部署 Role 重試。若 PutObject 得到 AccessDenied，停止並回傳 JSON，不要自行放寬權限。
 
-不要合併本控制平面 PR 來「順便上傳」：合併會觸發 `ppb-v2-activate-isolation.yml`，該流程會在上傳後用部署 Role 嘗試 SendCommand。本批必須由既有管理者在 CloudShell 依工具安全檢查完成。
+本批由既有管理者在 CloudShell 依工具安全檢查完成。合併會觸發 `ppb-v2-activate-isolation.yml`，其中工具包上傳是獨立的前置步驟。啟用步驟若確認 Default 與受審查的 isolated JSON 相符，且已有相符的 bootstrap 版本，就以唯讀驗證完成。若 Default 已相符但缺少受審查的 bootstrap 版本，啟用步驟會停止。若 Default 內容不同，則沿用既有啟用流程。
 
 ## 執行
 
