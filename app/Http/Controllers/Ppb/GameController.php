@@ -108,7 +108,7 @@ class GameController extends Controller
                     ->orderBy('id','desc')->offset(($historyPage-1)*$perPage)->limit($perPage)
                     ->get()->sort($sortAsc)->values();
             }
-            $virtualTotal=$futureCount>0 && $futureCount<$perPage && $historyCount>0
+            $virtualTotal=$futureCount>0 && $historyCount>0
                 ? $perPage+$historyCount : $total;
             // An unlimited today+ page with no history is the only page.
             $paginatorSize=$historyCount===0 ? max($perPage,$futureCount) : $perPage;
@@ -230,20 +230,26 @@ class GameController extends Controller
                 else unset($longArticleLinks[$id]);
             }
         }
-        return view('ppb.games-index',compact('games','month','type','status','matchNo','matchDate','reviewers','insertGaps','longArticleLinks','readOnly'));
+        $pickDisplay = app(\App\Services\Ppb\SchedulePickDisplay::class)->load($visible);
+        return view('ppb.games-index',compact('pickDisplay','games','month','type','status','matchNo','matchDate','reviewers','insertGaps','longArticleLinks','readOnly'));
     }
     private function formData(?PpbGame $game): array {
         $analysts=PpbAnalyst::query()->where('status','active')->whereIn('user_type',[0,1])->orderBy('name')
             ->get(['id','name','display_name']);
         $reviewers=PpbAnalyst::query()->where('status','active')->whereIn('user_type',[1,2])->orderBy('name')
             ->get(['id','name','display_name']);
-        $fixtures=DB::table('ppb_sport_fixtures')
-            ->where(function($q){ $q->whereNull('starts_at')->orWhere('starts_at','>=',now()->subDay()); })
-            ->orderBy('sport')->orderBy('starts_at')->limit(300)->get();
+        $date = old('match_date') ?? request()->query('match_date');
+        $date = is_string($date) && preg_match('/^20\d{2}-\d{2}-\d{2}$/D', $date)
+            && checkdate((int) substr($date, 5, 2), (int) substr($date, 8, 2), (int) substr($date, 0, 4))
+            ? CarbonImmutable::parse($date, 'Asia/Taipei')->startOfDay()
+            : ($game?->recommended_at?->toImmutable()->tz('Asia/Taipei')->startOfDay() ?? CarbonImmutable::today('Asia/Taipei'));
+        $fixtureId = (int) old('fixture_id', $game?->fixture_id);
+        $fixtures = $this->fixturesForDate($date, $fixtureId);
+        $absences = $this->absenceCounts($date);
         $selected=[];
         if($game) {
             $game->loadMissing('assignments');
-            foreach ($game->assignments->whereIn('kind',['pick','bonus','long']) as $a) {
+            foreach ($game->assignments->where('status', 'active')->whereIn('kind',['pick','bonus','long']) as $a) {
                 if($a->kind==='pick' && $a->slot_no) $selected['short'][$a->slot_no]=$a->current_analyst_id;
                 elseif($a->kind==='bonus') $selected['bonus']=$a->current_analyst_id;
                 elseif($a->kind==='long') $selected['long']=$a->current_analyst_id;
@@ -252,8 +258,56 @@ class GameController extends Controller
         $anchors=PpbGame::query()->whereNotNull('active_number')->where('status','!=','cancelled')
             ->where('month_key','>=',now('Asia/Taipei')->subMonths(2)->format('Y-m'))
             ->orderBy('game_type')->orderBy('game_number')->limit(1000)->get(['id','game_type','game_number','matchup_text','month_key']);
-        return compact('analysts','reviewers','fixtures','selected','anchors');
+        return compact('analysts','reviewers','fixtures','selected','anchors','absences');
     }
+    private function fixturesForDate(CarbonImmutable $date, int $selectedId)
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('ppb_sport_fixtures')) return collect();
+        $fixtures = DB::table('ppb_sport_fixtures')
+            ->where(fn ($query) => $query->whereBetween('starts_at', [
+                $date->subDay()->utc()->toDateTimeString(), $date->addDays(4)->utc()->toDateTimeString(),
+            ])->orWhereNull('starts_at'))
+            ->orderByRaw('CASE WHEN starts_at >= ? AND starts_at < ? THEN 0 WHEN starts_at IS NULL THEN 2 ELSE 1 END',
+                [$date->utc()->toDateTimeString(), $date->addDay()->utc()->toDateTimeString()])
+            ->orderBy('starts_at')->orderBy('sport')->orderBy('id')->limit(300)->get();
+        if ($selectedId && !$fixtures->contains('id', $selectedId)) {
+            $selected = DB::table('ppb_sport_fixtures')->where('id', $selectedId)->first();
+            if ($selected) $fixtures->push($selected);
+        }
+        return $fixtures;
+    }
+
+    private function absenceCounts(CarbonImmutable $date): array
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('ppb_evaluation_attendance')) return [];
+        $data = app(\App\Services\Ppb\Evaluation\LocalEvaluationData::class);
+        $inputs = app(\App\Services\Ppb\Evaluation\EvaluationInputs::class);
+        $start = $date->startOfMonth();
+        $end = $start->addMonth();
+        $rows = $inputs->attendanceRows($data->records($start, $end, true), $data->corrections($start, $end));
+        $maps = app(\App\Services\Ppb\Evaluation\EvaluationSubjects::class)->mappings();
+        $counts = [];
+        foreach ($rows as $row) {
+            if ($row['attendance_status'] !== 2) continue;
+            $id = $row['subject_type'] === 'v2' ? $row['subject_id'] : ($maps[$row['subject_id']] ?? null);
+            if ($id !== null) $counts[$id] = ($counts[$id] ?? 0) + 1;
+        }
+        return $counts;
+    }
+
+    public function formOptions(Request $request): JsonResponse
+    {
+        $input = $request->validate(['date' => ['required', 'date_format:Y-m-d'], 'fixture_id' => ['nullable', 'integer', 'min:1']]);
+        $date = CarbonImmutable::createFromFormat('!Y-m-d', $input['date'], 'Asia/Taipei');
+        $fixtures = $this->fixturesForDate($date, (int) ($input['fixture_id'] ?? 0))->map(fn ($fixture) => [
+            'id' => $fixture->id, 'sport' => $fixture->sport,
+            'label' => ($fixture->starts_at ? CarbonImmutable::parse($fixture->starts_at, 'UTC')->tz('Asia/Taipei')->format('m/d').'｜' : '')
+                .$fixture->league.' '.$fixture->away_team.'@'.$fixture->home_team,
+        ]);
+        return response()->json(['fixtures' => $fixtures, 'absences' => (object) $this->absenceCounts($date)],
+            200, ['Cache-Control' => 'private, no-store']);
+    }
+
     /** Authenticated read-only lookup: insert anchor choices for any selected month. */
     public function anchors(Request $request): JsonResponse {
         $data=$request->validate([
@@ -367,6 +421,28 @@ class GameController extends Controller
         if(mb_strlen(trim(($league!==''?$league.' ':'').$matchup))>255) {
             throw ValidationException::withMessages(['manual_matchup'=>'對戰組合內容過長。']);
         }
+        $play = $this->playFields($v);
+        $start=null;
+        if(!empty($v['starts_local'])) {
+            $start=CarbonImmutable::createFromFormat('!Y-m-d\TH:i',$v['starts_local'],'Asia/Taipei');
+            if(!$start || $start->format('Y-m-d\TH:i')!==$v['starts_local']) {
+                throw ValidationException::withMessages(['starts_local'=>'實際開賽時間格式錯誤。']);
+            }
+        }
+        $fields=[
+            'month_key'=>$dt->format('Y-m'),'game_type'=>(int)$v['game_type'],
+            'recommended_at'=>$dt->utc()->format('Y-m-d H:i:s'),
+            'starts_at'=>$start?->utc()->format('Y-m-d H:i:s'),
+            'matchup_mode'=>$mode,'matchup_text'=>trim(($league!==''?$league.' ':'').$matchup),
+            'fixture_id'=>$fixtureId,'league'=>$league?:null,'sport'=>$sport,
+            'home_team'=>$home,'away_team'=>$away,
+            ...$play,
+            'reviewer_analyst_id'=>!empty($v['reviewer_analyst_id'])?(int)$v['reviewer_analyst_id']:null,
+            'has_long_article'=>$hasLong,'notes'=>$v['notes']??null,
+        ];
+        return [$fields,$slots,$v];
+    }
+    private function playFields(array $v): array {
         $playType=(int)$v['play_type'];
         if(in_array($playType,[1,3],true) && trim((string)($v['play_value']??''))==='') {
             throw ValidationException::withMessages(['play_value'=>'請填寫讓分數值或大小分基準。']);
@@ -385,27 +461,10 @@ class GameController extends Controller
             5=>trim((string)($v['manual_play']??'')),
             default=>trim((string)($v['play_value']??'')),
         };
-        $start=null;
-        if(!empty($v['starts_local'])) {
-            $start=CarbonImmutable::createFromFormat('!Y-m-d\TH:i',$v['starts_local'],'Asia/Taipei');
-            if(!$start || $start->format('Y-m-d\TH:i')!==$v['starts_local']) {
-                throw ValidationException::withMessages(['starts_local'=>'實際開賽時間格式錯誤。']);
-            }
-        }
-        $fields=[
-            'month_key'=>$dt->format('Y-m'),'game_type'=>(int)$v['game_type'],
-            'recommended_at'=>$dt->utc()->format('Y-m-d H:i:s'),
-            'starts_at'=>$start?->utc()->format('Y-m-d H:i:s'),
-            'matchup_mode'=>$mode,'matchup_text'=>trim(($league!==''?$league.' ':'').$matchup),
-            'fixture_id'=>$fixtureId,'league'=>$league?:null,'sport'=>$sport,
-            'home_team'=>$home,'away_team'=>$away,'play_type'=>$playType,
-            'play_value'=>$playVal?:null,
-            'market_type'=>in_array($playType,[1,2,3],true)?(int)$v['market_type']:null,
-            'reviewer_analyst_id'=>!empty($v['reviewer_analyst_id'])?(int)$v['reviewer_analyst_id']:null,
-            'has_long_article'=>$hasLong,'notes'=>$v['notes']??null,
-        ];
-        return [$fields,$slots,$v];
+        return ['play_type' => $playType, 'play_value' => $playVal ?: null,
+            'market_type' => in_array($playType, [1, 2, 3], true) ? (int) $v['market_type'] : null];
     }
+
     public function store(Request $request,ScheduleManager $manager): RedirectResponse {
         [$data,$slots,$v]=$this->validateInputs($request);
         $position=$v['position']??'append';
@@ -420,8 +479,26 @@ class GameController extends Controller
     }
     public function update(Request $request,PpbGame $game,ScheduleManager $manager): RedirectResponse {
         $version=$request->validate(['revision_token'=>['required','regex:/^[a-f0-9]{64}$/D']])['revision_token'];
-        [$data,$slots]=$this->validateInputs($request,$game);
-        $manager->update($game,$data,$slots,$version);
+        if ($game->hasVerifiedWp() || $game->hasUnresolvedWp()) {
+            $analystRule = Rule::exists('ppb_analysts', 'id')->where('status', 'active')->whereIn('user_type', [0, 1]);
+            $fields = $request->validate([
+                'play_type' => ['required', 'integer', 'between:1,5'],
+                'play_value' => ['nullable', 'string', 'max:160'],
+                'market_type' => ['nullable', 'integer', Rule::in([1, 2])],
+                'special_play' => ['nullable', 'string', 'max:160'],
+                'manual_play' => ['nullable', 'string', 'max:160'],
+                'short' => ['nullable', 'array:1,2,3,4,5'],
+                'short.*' => ['nullable', 'integer', $analystRule],
+                'bonus_id' => ['nullable', 'integer', $analystRule],
+                'long_id' => ['nullable', 'integer', $analystRule],
+            ]);
+            $slots = ['short' => array_map('intval', $fields['short'] ?? []), 'bonus' => (int) ($fields['bonus_id'] ?? 0),
+                'long' => (int) ($fields['long_id'] ?? 0)];
+            $manager->update($game, $this->playFields($fields), $slots, $version, wpMetadataOnly: true);
+        } else {
+            [$data,$slots]=$this->validateInputs($request,$game);
+            $manager->update($game,$data,$slots,$version);
+        }
         return redirect()->route('ppb.games.show',$game)->with('status','賽事資訊與分析師指派已更新。');
     }
     public function destroy(Request $request,PpbGame $game,ScheduleManager $manager): RedirectResponse {

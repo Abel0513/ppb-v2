@@ -73,6 +73,13 @@ Route::prefix('admin')->middleware([
             ->whereIn('type', ['legacy', 'v2'])->whereNumber('id')->defaults('kind', 'rating')->name('ppb.rating.summary');
     });
     Route::get('/games/anchors', [GameController::class, 'anchors'])->middleware(PpbCan::class.':schedules.view')->name('ppb.games.anchors');
+    Route::get('/games/{game}/assignments/{assignment}/rating', [\App\Http\Controllers\Ppb\EvaluationController::class, 'scheduleRating'])
+        ->middleware(PpbCan::class.':schedules.view')->name('ppb.games.assignment-rating');
+    Route::get('/schedule/videos/receipt/{type}/{id}', [\App\Http\Controllers\Ppb\EvaluationController::class, 'videoReceipt'])
+        ->whereIn('type', ['legacy', 'v2'])->whereNumber('id')
+        ->middleware([PpbCan::class.':schedules.view', PpbCan::class.':evaluations.view', PpbCan::class.':evaluations.manage'])
+        ->name('ppb.schedule.videos.receipt');
+    Route::get('/games/form-options', [GameController::class, 'formOptions'])->middleware(PpbCan::class.':schedules.manage')->name('ppb.games.form-options');
     Route::get('/games/create', [GameController::class, 'create'])->middleware(PpbCan::class.':schedules.manage')->name('ppb.games.create');
     Route::post('/games', [GameController::class, 'store'])->middleware([PpbCan::class.':schedules.manage','throttle:20,1'])->name('ppb.games.store');
     Route::get('/games/{game}', [GameController::class, 'show'])->middleware(PpbCan::class.':schedules.view')->name('ppb.games.show');

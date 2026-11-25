@@ -17,9 +17,11 @@ class LegacyDisplayLabelsTest extends TestCase
         ));
     }
 
-    public function test_only_the_verified_unmapped_id_has_a_specific_name(): void
+    public function test_only_the_verified_unmapped_ids_have_specific_names(): void
     {
         self::assertSame('哆啦', LegacyDisplayLabels::unmappedAnalyst(4));
+        self::assertSame('黛秋', LegacyDisplayLabels::unmappedAnalyst(6));
+        self::assertSame('洛老師', LegacyDisplayLabels::unmappedAnalyst(7));
         self::assertSame('舊分析師 #5', LegacyDisplayLabels::unmappedAnalyst(5));
     }
 }

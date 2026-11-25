@@ -122,16 +122,26 @@ class ScheduleManager
             return $game;
         },3);
     }
-    public function update(PpbGame $game,array $data,array $slots,?string $expectedVersion=null): PpbGame {
+    public function update(PpbGame $game,array $data,array $slots,?string $expectedVersion=null,bool $wpMetadataOnly=false): PpbGame {
         $expectedVersion ??= ScheduleVersion::game($game);
-        return DB::transaction(function () use ($game,$data,$slots,$expectedVersion) {
+        return DB::transaction(function () use ($game,$data,$slots,$expectedVersion,$wpMetadataOnly) {
             // Scope lock precedes game lock (consistent with insert/delete/cancel).
             $this->scope((string)$game->month_key,(int)$game->game_type);
             $locked=PpbGame::whereKey($game->id)->lockForUpdate()->firstOrFail();
             $children=$locked->assignments()->orderBy('id')->lockForUpdate()->get();
             ScheduleVersion::assert($expectedVersion,ScheduleVersion::game($locked,$children));
             if ($locked->status==='cancelled') $this->reject('已取消的賽事只能查看歷史。');
-            if ($this->verifiedWp($locked) || $this->unresolvedWp($locked)) $this->reject('已有 WP 發布或待查紀錄，先確認 WP 狀態才可編輯。');
+            $verified = $this->verifiedWp($locked);
+            if ($this->unresolvedWp($locked) || ($verified && !$wpMetadataOnly)) {
+                $this->reject('已有 WP 發布或待查紀錄，先確認 WP 狀態才可編輯。');
+            }
+            if ($wpMetadataOnly) {
+                if (!$verified) $this->reject('WP 狀態已變更，請重新讀取賽事。');
+                $locked->update(array_intersect_key($data, array_flip(['play_type', 'play_value', 'market_type'])));
+                $this->fillPublishedSlots($locked, $children, $slots);
+                $this->event($locked->id, 'game.updated', ['number' => $locked->display_code, 'wp_metadata_only' => true]);
+                return $locked;
+            }
             if ($data['month_key']!==$locked->month_key || $data['game_type']!==$locked->game_type) {
                 $this->reject('既有賽事不可直接跨月份或 G/E 類型搬移，請使用取消與重新建立。');
             }
@@ -142,6 +152,35 @@ class ScheduleManager
             return $locked;
         },3);
     }
+    /** Published attribution stays intact. An empty, unarchived slot can still be filled. */
+    private function fillPublishedSlots(PpbGame $game, $existing, array $slots): void
+    {
+        $archived = DB::table('ppb_schedule_events')->where('game_id', $game->id)
+            ->where('event', 'legacy_archived_pick')->orderBy('id')->lockForUpdate()->pluck('detail_json');
+        if ($archived->isNotEmpty() || $this->attachedHistory($game)) {
+            // Submission and archive lineage may refer to slots no longer visible in V2.
+            if (array_filter([...($slots['short'] ?? []), $slots['bonus'] ?? null, $slots['long'] ?? null])) {
+                $this->reject('此賽事有稿件或歷史指派，請保留既有名額。');
+            }
+            return;
+        }
+        $candidates = [];
+        foreach ($slots['short'] ?? [] as $slot => $analyst) $candidates[] = ['pick', $slot, $analyst];
+        $candidates[] = ['bonus', 1, $slots['bonus'] ?? null];
+        if ($game->has_long_article) $candidates[] = ['long', 1, $slots['long'] ?? null];
+        foreach ($candidates as [$kind, $slot, $analyst]) {
+            if (!$analyst || $existing->contains(fn ($row) => $row->kind === $kind && $row->slot_no === $slot)) continue;
+            if ($existing->contains(fn ($row) => $row->kind === $kind
+                && in_array($analyst, [(int) $row->original_analyst_id, (int) $row->current_analyst_id], true))) {
+                $this->reject('同類型既有名額已指派此分析師。');
+            }
+            $existing->push(PpbAssignment::create([
+                'game_id' => $game->id, 'kind' => $kind, 'slot_no' => $slot, 'status' => 'active',
+                'original_analyst_id' => $analyst, 'current_analyst_id' => $analyst,
+            ]));
+        }
+    }
+
     /** Replace only unsubmitted/unsubstituted slots, preserving immutable posted history. */
     private function syncSlots(PpbGame $game,array $slots): void {
         $shortIds=[];

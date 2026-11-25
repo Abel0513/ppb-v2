@@ -8,19 +8,47 @@ use Illuminate\Support\Facades\DB;
 /** V2-owned attendance corrections and video engagements, never old DB writes. */
 class EvaluationInputs
 {
+    public function attendanceRows(iterable $nativeRows, iterable $corrections): array
+    {
+        $attendance = [];
+        foreach ($nativeRows as $pick) {
+            if ($pick['_source_type'] !== 'v2' || !$pick['_absence_key']) continue;
+            [$type, $id] = explode(':', $pick['_absence_key']);
+            $game = $pick['_game_id'] ?? (int) substr($pick['_schedule_key'], 3);
+            $attendance[$pick['_absence_key'].':'.$game] = [
+                'gid' => $game, 'uid' => (int) $id, 'subject_type' => $type, 'subject_id' => (int) $id,
+                'attendance_status' => 2, 'recommended_time' => $pick['recommended_time'], 'source' => 'derived_substitution',
+            ];
+        }
+        foreach ($corrections as $row) {
+            $key = $row->subject_type.':'.$row->subject_id.':'.$row->game_id;
+            if ($row->attendance_status === null) {
+                unset($attendance[$key]);
+                continue;
+            }
+            $attendance[$key] = [
+                'gid' => (int) $row->game_id, 'uid' => (int) $row->subject_id, 'subject_type' => $row->subject_type,
+                'subject_id' => (int) $row->subject_id, 'attendance_status' => (int) $row->attendance_status,
+                'recommended_time' => CarbonImmutable::parse($row->recommended_at, 'UTC')->tz('Asia/Taipei')->toDateTimeString(),
+                'source' => 'v2_correction',
+            ];
+        }
+        usort($attendance, fn ($a, $b) => [$a['recommended_time'], $a['gid']] <=> [$b['recommended_time'], $b['gid']]);
+        return $attendance;
+    }
+
     public function read(array $subject,string $month,array $nativeRows): array
     {
         $date=CarbonImmutable::createFromFormat('!Y-m',$month,'Asia/Taipei');$key=$subject['type'].':'.$subject['id'];
-        $games=$this->games($subject,$date);$attendance=[];
-        foreach($nativeRows as $p)if($p['_absence_key']===$key&&substr($p['recommended_time'],0,7)===$month){
-            $id=(int)substr($p['_schedule_key'],3);$attendance[$id]=['gid'=>$id,'uid'=>$subject['id'],'attendance_status'=>2,'recommended_time'=>$p['recommended_time'],'source'=>'derived_substitution'];
-        }
+        $games=$this->games($subject,$date);
         $overrides=DB::table('ppb_evaluation_attendance')->where('subject_type',$subject['type'])->where('subject_id',$subject['id'])->whereIn('game_id',array_keys($games))->orderBy('game_id')->get();
-        foreach($overrides as $row){
-            if($row->attendance_status===null)unset($attendance[$row->game_id]);
-            else $attendance[$row->game_id]=['gid'=>(int)$row->game_id,'uid'=>$subject['id'],'attendance_status'=>(int)$row->attendance_status,'recommended_time'=>$games[$row->game_id]['recommended_time'],'source'=>'v2_correction'];
-        }
-        usort($attendance,fn($a,$b)=>[$a['recommended_time'],$a['gid']]<=>[$b['recommended_time'],$b['gid']]);
+        $overrides = $overrides->map(fn ($row) => (object) ((array) $row + [
+            'recommended_at' => CarbonImmutable::parse($games[$row->game_id]['recommended_time'], 'Asia/Taipei')->utc()->toDateTimeString(),
+        ]));
+        $attendance = $this->attendanceRows(array_filter($nativeRows, fn ($pick) =>
+            $pick['_absence_key'] === $key && substr($pick['recommended_time'], 0, 7) === $month), $overrides);
+        $attendance = array_map(fn ($row) => array_diff_key($row, array_flip(['subject_type', 'subject_id'])), $attendance);
+        $overrides = $overrides->map(function ($row) { unset($row->recommended_at); return $row; });
         $start=$date->startOfMonth()->utc()->format('Y-m-d H:i:s');$end=$date->endOfMonth()->utc()->format('Y-m-d H:i:s');
         $videos=DB::table('ppb_evaluation_videos')->where(fn($q)=>$q->where('guest_1',$key)->orWhere('guest_2',$key)->orWhere('guest_3',$key))->whereBetween('scheduled_at',[$start,$end])->orderBy('scheduled_at')->orderBy('id')->limit(1001)->get()->map(fn($r)=>(array)$r)->all();
         if(count($videos)>1000)throw new \RuntimeException('V2_VIDEO_COVERAGE_LIMIT');
@@ -40,7 +68,7 @@ class EvaluationInputs
         $out=[];foreach($rows as $r)$out[(int)$r->id]=['id'=>(int)$r->id,'recommended_time'=>CarbonImmutable::parse($r->recommended_at,'UTC')->tz('Asia/Taipei')->format('Y-m-d H:i:s')];return $out;
     }
 
-    public function write(array $subject,string $month,array $payload,array $inputs,int $actor): array
+    public function write(array $subject,string $month,array $payload,array $inputs,int $actor,bool $local=false): array
     {
         abort_unless(in_array($payload['input_kind'],['attendance','video'],true),422);
         if($payload['input_kind']==='attendance'){
@@ -59,17 +87,20 @@ class EvaluationInputs
             return ['before'=>$old?(array)$old:null,'after'=>$values+['game_id'=>$gid]];
         }
         $key=$subject['type'].':'.$subject['id'];$guests=[$payload['guest_1'],$payload['guest_2']??null,$payload['guest_3']??null];
-        abort_unless(in_array($key,$guests,true),422,'此影片必須包含目前分析師。');
+        abort_unless(($local && !empty($payload['video_id'])) || in_array($key,$guests,true),422,'此影片必須包含目前分析師。');
         $when=CarbonImmutable::createFromFormat('!Y-m-d\\TH:i',$payload['scheduled_at'],'Asia/Taipei');
         abort_unless($when&&$when->format('Y-m')===$month,422,'影片日期必須屬於目前月份。');
         $values=['scheduled_at'=>$when->utc()->format('Y-m-d H:i:s'),'guest_1'=>$guests[0],'guest_2'=>$guests[1],'guest_3'=>$guests[2],'cancelled'=>(bool)$payload['cancelled'],'actor_id'=>$actor,'updated_at'=>now()];
+        foreach (['host_name', 'editor_name', 'week_no', 'sport_label'] as $field) {
+            if (array_key_exists($field, $payload)) $values[$field] = $payload[$field];
+        }
         $old=null;
         if(!empty($payload['video_id'])){
             $reference=null;foreach($inputs['videos'] as $v)if((int)$v['id']===(int)$payload['video_id'])$reference=$v;
             abort_unless($reference!==null,422,'影片不屬於目前月份。');
             $old=DB::table('ppb_evaluation_videos')->where('id',(int)$payload['video_id'])->lockForUpdate()->first();
             abort_unless($old&&in_array($key,[$old->guest_1,$old->guest_2,$old->guest_3],true),422);
-            abort_unless((int)$old->revision===(int)$reference['revision'],409,'影片已由其他評鑑更新，請重新讀取。');
+            abort_unless((int)$old->revision===(int)$reference['revision'] && (!isset($payload['video_revision']) || (int) $old->revision === (int) $payload['video_revision']),409,'影片已由其他評鑑更新，請重新讀取。');
             $values['revision']=(int)$old->revision+1;DB::table('ppb_evaluation_videos')->where('id',$old->id)->update($values);$id=(int)$old->id;
         }else{$values['revision']=1;$id=DB::table('ppb_evaluation_videos')->insertGetId($values+['created_at'=>now()]);}
         return ['before'=>$old?(array)$old:null,'after'=>$values+['id'=>$id]];

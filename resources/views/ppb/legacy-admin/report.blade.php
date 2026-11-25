@@ -32,7 +32,7 @@
   @if($isAnalystList || $showRatings)
   <select class="field" name="rating" aria-label="所有評級">
     <option value="">所有評級</option>
-    @foreach($showRatings ? ['S','A','B','C','D','無資料'] : ['S','A','B','C'] as $level)
+    @foreach($showRatings ? ['S','A','B','C','無資料'] : ['S','A','B','C'] as $level)
       <option>{{ $level }}</option>
     @endforeach
   </select>
@@ -73,11 +73,10 @@
       @php
         $profile = $profiles->get($subject['native_id']);
         $fallback = $subject['type'] === 'legacy' ? ($palette[$subject['id']] ?? null) : null;
-        $rating = \App\Services\Ppb\LegacyDisplayLabels::rating($month === now('Asia/Taipei')->format('Y-m') ? ($subject['rating_level'] ?? null) : null);
+        $row = $values->get($subject['type'].':'.$subject['id'], []);
         $key = ['type' => $subject['type'], 'id' => $subject['id'], 'month' => $month];
       @endphp
-      <tr data-report-url="{{ route($isRating ? 'ppb.rating.summary' : 'ppb.performance.summary', $key) }}"
-          data-analyst-name="{{ $subject['label'] }}" @if($isAnalystList) data-initial-rating="{{ $rating }}" @endif>
+      <tr data-report-values="{{ json_encode($row, JSON_THROW_ON_ERROR) }}" data-analyst-name="{{ $subject['label'] }}">
         <td>@include('ppb.legacy-admin.name-pill', ['name' => $subject['label'], 'colors' => $profile ? $profile->scheduleColors($fallback) : $fallback])</td>
         @foreach($headers as $field => $header)
           @if($field === 'type')
@@ -85,7 +84,12 @@
           @elseif($field === 'line')
             <td>{{ $canSeeLineName ? $profile?->line_name : '' }}</td>
           @else
-            <td data-report-field="{{ $field }}" @class(['legacy-salary-total' => $field === 'total'])><span>{{ $field === 'rating' && $isAnalystList ? $rating : '載入中...' }}</span></td>
+            @php
+              $value = $row[$field] ?? null;
+              $isRate = str_ends_with($field, '_rate') && is_numeric($value);
+              $display = $value ?? ($field === 'rating' || str_starts_with($field, 'score_') ? '無資料' : (str_starts_with($field, 'recent_') ? '未達10場' : '未分析'));
+            @endphp
+            <td @class(['legacy-salary-total' => $field === 'total'])><span @class(['legacy-win-rate' => $isRate, 'legacy-negative' => is_numeric($value) && $value < 0])>{{ $display }}{{ $isRate ? '%' : '' }}</span></td>
           @endif
         @endforeach
         @if($isRating && $canSeeWork)<td><a class="link" href="{{ route('ppb.evaluations.show', $key) }}">評鑑・薪酬・稿件</a></td>@endif
@@ -95,7 +99,7 @@
   @if($showSalary)
     <tfoot><tr><th scope="row">總計</th>
       @foreach($headers as $field => $header)
-        <td @if(isset($salaryHeaders[$field])) data-report-total="{{ $field }}" @endif>@if(isset($salaryHeaders[$field]))—@endif</td>
+        <td @if(isset($salaryHeaders[$field])) data-report-total="{{ $field }}" @endif>@if(isset($salaryHeaders[$field])){{ $unavailable ? '—' : number_format($values->sum($field)) }}@endif</td>
       @endforeach
       @if($canSeeWork)<td></td>@endif
     </tr></tfoot>

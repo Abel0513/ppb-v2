@@ -2,5 +2,5 @@
 @section('title', 'CSDA 用戶管理')
 
 @section('legacy-content')
-<p class="notice">V2 尚未接入 CSDA 用戶資料。</p>
+<p class="notice">CSDA 用戶資料目前未匯入 V2，因此此頁沒有用戶可供查詢。</p>
 @endsection

@@ -11,6 +11,12 @@
     </a>
   @endif
   <div class="admin-topbar-right" id="adminProfileWrapper">
+    @if(auth('ppb')->user()?->hasPpbPermission('schedules.view') && request()->query('modal') !== '1')
+      @php
+        $unsettled = app(\App\Services\Ppb\SchedulePickDisplay::class)->unsettledCount();
+      @endphp
+      <a class="link" href="{{ route('ppb.games.index') }}">! 未結算場次 {{ $unsettled ?? '—' }}</a>
+    @endif
     @if(auth('ppb')->check())
       <button class="admin-profile-button" id="adminProfileButton" type="button" aria-haspopup="true" aria-expanded="false">
         <div class="admin-profile-info"><p class="admin-profile-name">{{ auth('ppb')->user()->name }}</p></div>

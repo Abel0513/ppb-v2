@@ -2,6 +2,7 @@
 @extends('ppb.layout')
 @section('title','分析師輪值表')
 @push('styles')
+<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-schedule-dialogs.css') }}">
 <link rel="stylesheet" href="{{ asset('assets/ppb/ppb-shift-ui4.css') }}?v=20261105-op1">
 @endpush
 @section('body')
@@ -10,26 +11,11 @@
     $canManage = !$readOnly && auth('ppb')->user()->hasPpbPermission('schedules.manage');
     $plays = [1=>'推 讓分',2=>'推 不讓分',3=>'推 大小分',4=>'特殊玩法',5=>'手動玩法'];
     $legacyColors = config('ppb_legacy_colors', []);
-    // PPB MG4: show historically imported text, never claim WP publication.
-    $legacyImportByAssignment = \Illuminate\Support\Facades\DB::table('ppb_submissions')
-        ->whereIn('game_id', $games->getCollection()->pluck('id')->all())
-        ->where('status','legacy_imported')
-        ->get(['assignment_id','content_body'])->keyBy('assignment_id');
-    // PPB MG4: historical source exceptions kept in read-only event records.
-    $archivedPickByGameSlot = [];
-    $archivedAnalystIds = [];
-    $archivedRaw = \Illuminate\Support\Facades\DB::table('ppb_schedule_events')
-        ->whereIn('game_id', $games->getCollection()->pluck('id')->all())
-        ->where('event','legacy_archived_pick')
-        ->get(['game_id','detail_json']);
-    foreach($archivedRaw as $record) {
-        $v=json_decode((string)$record->detail_json,true);
-        if(!is_array($v) || ($v['kind']??null)!=='pick' || !($v['historical_only']??false))continue;
-        $slot=(int)($v['slot_no']??0);$aid=(int)($v['analyst_id']??0);
-        if($slot<1 || $slot>5 || $aid<1)continue;
-        $archivedPickByGameSlot[(int)$record->game_id][$slot]=$v;
-        $archivedAnalystIds[$aid]=$aid;
-    }
+    $archivedPickByGameSlot = $pickDisplay['archived'] ?? [];
+    $archivedAnalystIds = collect($archivedPickByGameSlot)->flatMap(fn ($slots) => array_values($slots))->pluck('analyst_id')->unique()->all();
+    $pickColor = static fn ($pick) => match ((int) ($pick['is_win'] ?? 0)) {
+        1 => '#22c55e', 2 => '#ef4444', default => '#2f66c9',
+    };
     $archivedAnalysts = $archivedAnalystIds
         ? \App\Models\PpbAnalyst::query()->whereIn('id',array_values($archivedAnalystIds))
             ->get(['id','name','display_name'])->keyBy('id')
@@ -65,9 +51,6 @@
             $reviewer = $reviewers->get($game->reviewer_analyst_id);
             $reviewerStyle = $reviewer?->scheduleColors($legacyColors[(int)$reviewer->id] ?? null);
             $isCancelled = $game->status === 'cancelled';
-            $legacyGameNotes = is_string($game->notes) ? json_decode($game->notes,true) : null;
-            $legacyLottery = is_array($legacyGameNotes) && ($legacyGameNotes['_ppb_legacy_game_v1'] ?? false)
-                ? ($legacyGameNotes['lottery_no'] ?? null) : null;
             $locked = !$readOnly && ($game->hasVerifiedWp() || $game->hasUnresolvedWp());
             // PPB INS2 | Every visible card boundary has a tiny entry. Controller
             // checks the FULL month/type number scope, including off-page games.
@@ -101,10 +84,10 @@
               @if($recommendAt)
                 <span class="ppb-shift-time {{ $recommendAt->format('H') === '11' ? 'ppb-shift-time-11' : 'ppb-shift-time-16' }}">{{ $recommendAt->format('m/d') }}({{ $weekdays[$recommendAt->dayOfWeek] }}) {{ $recommendAt->format('H') }}點</span>
               @endif
-              <span class="ppb-shift-number" title="台彩賽事編號">{{ $legacyLottery !== null && $legacyLottery !== '' ? $legacyLottery : '彩券號 —' }}</span>
+              <span class="ppb-shift-number" title="台彩賽事編號">{{ $game->lotteryNumber() ?? '—' }}</span>
             </div>
             <strong class="ppb-shift-matchup">{{ $game->matchup_text ?: trim(($game->league ?: '').' '.($game->away_team ?: '').' @ '.($game->home_team ?: '')) }}</strong>
-            <div class="ppb-shift-legends" aria-label="勝敗說明；結算功能尚未接入">
+            <div class="ppb-shift-legends" aria-label="勝敗說明">
               <span class="ppb-shift-legend ppb-shift-win">勝</span>
               <span class="ppb-shift-legend ppb-shift-lose">敗</span>
               <span class="ppb-shift-legend ppb-shift-pending">未結算</span>
@@ -113,14 +96,12 @@
             {{-- PPB OP1 2026-11-05 | Compact actions, preserving original routes and permissions. --}}
             @unless($readOnly)
             <div class="ppb-shift-actions">
-              @if($canManage && !$isCancelled && !$locked)
+              @if($canManage && !$isCancelled)
                 <a class="ppb-shift-action ppb-open-game-modal" href="{{ route('ppb.games.edit',$game) }}"
                   data-create-url="{{ route('ppb.games.edit',[$game,'modal'=>'1']) }}"
                   data-dialog-title="修改賽事" aria-label="修改賽事" title="修改賽事">✏️</a>
-                @if(!$game->submissions_count && !$game->publications_count && !$game->assignments()->whereHas('substitutions')->exists())
                   <a class="ppb-shift-action" href="{{ route('ppb.games.show',$game) }}#delete-game"
-                    aria-label="刪除無投稿賽事" title="刪除無投稿賽事">🗑️</a>
-                @endif
+                    aria-label="刪除賽事" title="刪除賽事">🗑️</a>
               @endif
               <details class="ppb-shift-manage">
                 <summary class="ppb-shift-action ppb-shift-manage-toggle" aria-label="管理 {{ $game->display_code }}" title="管理賽事">⋯</summary>
@@ -148,50 +129,39 @@
             @php
               $assignment=$short->get($slot);
               $nameColor=$assignment?->currentAnalyst?->scheduleColors($legacyColors[(int)$assignment->current_analyst_id] ?? null);
-              $legacyPreviewRow=$assignment ? $legacyImportByAssignment->get($assignment->id) : null;
-              $legacyPreview=$legacyPreviewRow ? json_decode((string)$legacyPreviewRow->content_body,true) : null;
-              if(!is_array($legacyPreview) || !($legacyPreview['_ppb_legacy_pick_v1'] ?? false)) $legacyPreview=null;
-              $legacyPreviewColor=$legacyPreview ? (((string)($legacyPreview['is_win'] ?? ''))==='1' ? '#22c55e' : (((string)($legacyPreview['is_win'] ?? ''))==='2' ? '#ef4444' : '#2f66c9')) : null;
+              $legacyPreview = $pickDisplay['assigned'][$assignment?->id] ?? [];
               $legacyArchived = $assignment ? null : ($archivedPickByGameSlot[(int)$game->id][$slot] ?? null);
               $archiveAnalyst = $legacyArchived ? $archivedAnalysts->get((int)$legacyArchived['analyst_id']) : null;
               $archiveName = $legacyArchived ? ($archiveAnalyst ? ($archiveAnalyst->display_name ?: $archiveAnalyst->name) : '歷史分析師 #'.$legacyArchived['analyst_id']) : null;
               if($legacyArchived) {
-                  $source=$legacyArchived['source_row'] ?? [];
-                  $legacyPreview = is_array($source) ? $source + ['_ppb_legacy_pick_v1'=>true] : null;
-                  $legacyPreviewColor=$legacyPreview ? (((string)($legacyPreview['is_win'] ?? ''))==='1' ? '#22c55e' : (((string)($legacyPreview['is_win'] ?? ''))==='2' ? '#ef4444' : '#2f66c9')) : null;
+                  $legacyPreview = $legacyArchived['preview'];
                   $nameColor=$legacyColors[(int)$legacyArchived['analyst_id']] ?? null;
               }
             @endphp
             <div class="ppb-shift-row">
               <span class="ppb-shift-label">推薦＋短文</span>
-              <span class="ppb-shift-name" @if($nameColor) style="@if($nameColor['background']!==null)background-color:{{ $nameColor['background'] }};@endif color:{{ $nameColor['color'] }}" @endif title="{{ $legacyArchived ? '舊版歷史重複指派（唯讀）' : ($assignment?->currentAnalyst?->display_name ?: ($assignment?->currentAnalyst?->name ?: '尚未指派')) }}">{{ $legacyArchived ? $archiveName : ($assignment?->currentAnalyst?->display_name ?: ($assignment?->currentAnalyst?->name ?: '未指派')) }}</span>
-              <span class="ppb-shift-pick" @if($legacyPreviewColor) style="background-color:{{ $legacyPreviewColor }}" @endif>{{ ($assignment || $legacyArchived) ? ($legacyPreview ? (($legacyPreview['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未串接投稿') : '尚未指派' }}</span>
-              <span class="ppb-shift-note">{{ $legacyPreview ? (($legacyPreview['short_analysis'] ?? null) ?: '—') : ($assignment ? '稿件內容尚未接入新版' : '—') }}</span>
+              @include('ppb.partials.schedule-rating-trigger', ['slotAssignment' => $assignment, 'archivedName' => $archiveName, 'pick' => $legacyPreview, 'colors' => $nameColor])
+              <span class="ppb-shift-pick" style="background-color:{{ $pickColor($legacyPreview) }}">{{ ($assignment || $legacyArchived) ? (($legacyPreview['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未指派' }}</span>
+              <span class="ppb-shift-note">{{ ($legacyPreview['short_analysis'] ?? null) ?: (($assignment || $legacyArchived) ? '分析內容…' : '—') }}</span>
             </div>
           @endfor
           @php
             $bonusColor=$bonus?->currentAnalyst?->scheduleColors($legacyColors[(int)$bonus->current_analyst_id] ?? null);
-            $legacyBonusRow=$bonus ? $legacyImportByAssignment->get($bonus->id) : null;
-            $legacyBonus=$legacyBonusRow ? json_decode((string)$legacyBonusRow->content_body,true) : null;
-            if(!is_array($legacyBonus) || !($legacyBonus['_ppb_legacy_pick_v1'] ?? false)) $legacyBonus=null;
-            $legacyBonusColor=$legacyBonus ? (((string)($legacyBonus['is_win'] ?? ''))==='1' ? '#22c55e' : (((string)($legacyBonus['is_win'] ?? ''))==='2' ? '#ef4444' : '#2f66c9')) : null;
+            $legacyBonus = $pickDisplay['assigned'][$bonus?->id] ?? [];
           @endphp
           <div class="ppb-shift-row">
             <span class="ppb-shift-label ppb-shift-label-bonus">BONUS</span>
-            <span class="ppb-shift-name" @if($bonusColor) style="@if($bonusColor['background']!==null)background-color:{{ $bonusColor['background'] }};@endif color:{{ $bonusColor['color'] }}" @endif>{{ $bonus?->currentAnalyst?->display_name ?: ($bonus?->currentAnalyst?->name ?: '未指派') }}</span>
-            <span class="ppb-shift-pick" @if($legacyBonusColor) style="background-color:{{ $legacyBonusColor }}" @endif>{{ $bonus ? ($legacyBonus ? (($legacyBonus['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未串接投稿') : '尚未指派' }}</span>
-            <span class="ppb-shift-note">{{ $legacyBonus ? (($legacyBonus['short_analysis'] ?? null) ?: '—') : ($bonus ? '稿件內容尚未接入新版' : '—') }}</span>
+            @include('ppb.partials.schedule-rating-trigger', ['slotAssignment' => $bonus, 'archivedName' => null, 'pick' => $legacyBonus, 'colors' => $bonusColor])
+            <span class="ppb-shift-pick" style="background-color:{{ $pickColor($legacyBonus) }}">{{ $bonus ? (($legacyBonus['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未指派' }}</span>
+            <span class="ppb-shift-note">{{ ($legacyBonus['short_analysis'] ?? null) ?: ($bonus ? '分析內容…' : '—') }}</span>
           </div>
           @if($game->has_long_article)
             @php
               $longColor=$long?->currentAnalyst?->scheduleColors($legacyColors[(int)$long->current_analyst_id] ?? null);
-              $legacyLongRow=$long ? $legacyImportByAssignment->get($long->id) : null;
-              $legacyLong=$legacyLongRow ? json_decode((string)$legacyLongRow->content_body,true) : null;
-              if(!is_array($legacyLong) || !($legacyLong['_ppb_legacy_pick_v1'] ?? false)) $legacyLong=null;
             @endphp
             <div class="ppb-shift-row ppb-shift-row-long">
               <span class="ppb-shift-label ppb-shift-label-long">分析文</span>
-              <span class="ppb-shift-name" @if($longColor) style="@if($longColor['background']!==null)background-color:{{ $longColor['background'] }};@endif color:{{ $longColor['color'] }}" @endif>{{ $long?->currentAnalyst?->display_name ?: ($long?->currentAnalyst?->name ?: '未指派') }}</span>
+              @include('ppb.partials.schedule-rating-trigger', ['slotAssignment' => $long, 'archivedName' => null, 'pick' => $pickDisplay['assigned'][$long?->id] ?? [], 'colors' => $longColor])
               {{-- PPB CT6 | Old is_long=1 pick.recommend_pick stores WP URL; short_analysis is the WP post ID. --}}
               @if(isset($longArticleLinks[(int)$game->id]))
                 <a class="ppb-shift-long-note" style="color:#0000ee;text-decoration:underline" href="{{ $longArticleLinks[(int)$game->id] }}" target="_blank" rel="noopener noreferrer" title="開啟原 WordPress 分析文章">{{ $longArticleLinks[(int)$game->id] }}</a>
@@ -327,7 +297,9 @@
       </script>
       @endif
 
+      @include('ppb.partials.schedule-rating')
     </div></main>
   </div>
 </div>
+<script src="{{ asset('assets/ppb/ppb-schedule-dialogs.js') }}" defer></script>
 @endsection

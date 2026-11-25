@@ -34,7 +34,7 @@
 @if(auth('ppb')->user()->hasPpbPermission('schedules.manage'))
 <div class="card" style="margin-bottom:18px"><h2 class="card-title">賽事管理</h2>
 <div class="toolbar" style="margin:12px 0 0">
-@if($game->status!=='cancelled' && !$wpLocked && !$game->hasUnresolvedWp())<a class="action" href="{{ route('ppb.games.edit',$game) }}">編輯／補齊分析師</a>@endif
+@if($game->status!=='cancelled')<a class="action" href="{{ route('ppb.games.edit',$game) }}">編輯／補齊分析師</a>@endif
 <a class="action" href="{{ route('ppb.manuscripts.game',$game) }}">稿件投稿／核稿</a>
 <a class="link" href="{{ route('ppb.games.index',['month'=>$game->month_key,'type'=>$game->game_type]) }}">返回列表</a></div>
 @if($game->status!=='cancelled')
@@ -43,11 +43,11 @@
 <input type="hidden" name="revision_token" value="{{ old('revision_token', \App\Services\Ppb\ScheduleVersion::game($game)) }}">
 <label class="field-label" style="flex:1;min-width:200px">取消原因（必填）<input class="field" name="reason" maxlength="255" required placeholder="請說明取消原因"></label>
 <button class="action" type="submit">取消賽事</button></form>
-@if(!$wpLocked && !$game->submissions()->exists() && !$game->publications()->exists() && !$game->assignments()->whereHas('substitutions')->exists())
+@if(!$wpLocked && !$game->submissions()->exists() && !$game->publications()->exists() && !$game->hasRenumberBlockingHistory())
 <form id="delete-game" method="post" action="{{ route('ppb.games.destroy',$game) }}" style="margin-top:12px" onsubmit="return confirm('永久刪除此場尚無投稿的賽事？操作不可復原，確認後會整理安全可動的 G/E 編號。')">@csrf @method('DELETE')
 <input type="hidden" name="revision_token" value="{{ old('revision_token', \App\Services\Ppb\ScheduleVersion::game($game)) }}">
 <button class="admin-button admin-button-danger" type="submit">刪除無投稿賽事</button>
-</form>@endif
+</form>@else<p id="delete-game" class="notice">這場賽事有發布、投稿或歷史關聯，請使用取消賽事保留紀錄。</p>@endif
 </div>@endif</div>@endif
 {{-- PPB CT2 2026-11-05 | Historical manuscript evidence, never a publishing claim. --}}
 @if($canSeeManuscripts)

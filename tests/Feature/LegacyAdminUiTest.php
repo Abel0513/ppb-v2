@@ -78,12 +78,17 @@ class LegacyAdminUiTest extends TestCase
             $table->text('notes')->nullable();
             $table->unsignedBigInteger('reviewer_analyst_id')->nullable();
             $table->boolean('has_long_article')->default(false);
+            $table->dateTime('wp_locked_at')->nullable();
+            $table->integer('play_type')->nullable();
+            $table->string('play_value')->nullable();
+            $table->integer('market_type')->nullable();
             $table->timestamps();
         });
         Schema::create('ppb_assignments', function (Blueprint $table) {
             $table->increments('id');
             $table->unsignedBigInteger('game_id');
             $table->unsignedBigInteger('current_analyst_id')->nullable();
+            $table->unsignedBigInteger('original_analyst_id')->nullable();
             $table->string('kind')->nullable();
             $table->integer('slot_no')->nullable();
             $table->string('status')->default('active');
@@ -111,6 +116,9 @@ class LegacyAdminUiTest extends TestCase
             $table->string('kind')->nullable();
             $table->string('status')->nullable();
             $table->text('content_body')->nullable();
+            $table->dateTime('submitted_at')->nullable();
+            $table->text('recommend_pick')->nullable();
+            $table->text('analysis_text')->nullable();
         });
         Schema::create('ppb_publications', function (Blueprint $table) {
             $table->increments('id');
@@ -125,6 +133,47 @@ class LegacyAdminUiTest extends TestCase
             $table->unsignedBigInteger('legacy_analyst_id')->nullable();
             $table->string('kind')->nullable();
             $table->text('recommend_pick')->nullable();
+            $table->text('short_analysis')->nullable();
+            $table->tinyInteger('legacy_is_win')->nullable();
+            $table->char('source_sha256', 64)->nullable();
+            $table->integer('legacy_is_substitute')->nullable();
+        });
+        Schema::create('ppb_evaluation_attendance', function (Blueprint $table) {
+            $table->increments('id');
+            $table->string('subject_type', 12);
+            $table->unsignedBigInteger('subject_id');
+            $table->unsignedBigInteger('game_id');
+            $table->tinyInteger('attendance_status')->nullable();
+            $table->unsignedBigInteger('waived_submission_id')->nullable();
+        });
+        Schema::create('ppb_evaluation_videos', function (Blueprint $table) {
+            $table->increments('id');
+            $table->dateTime('scheduled_at');
+            $table->string('guest_1', 32)->nullable();
+            $table->string('guest_2', 32)->nullable();
+            $table->string('guest_3', 32)->nullable();
+            $table->boolean('cancelled')->default(false);
+            $table->unsignedTinyInteger('week_no')->nullable();
+            $table->string('sport_label')->nullable();
+            $table->string('host_name')->nullable();
+            $table->string('editor_name')->nullable();
+        });
+        Schema::create('ppb_evaluations', function (Blueprint $table) {
+            $table->increments('id');
+            $table->string('subject_type', 12);
+            $table->unsignedBigInteger('subject_id');
+            $table->char('month', 7);
+            $table->unsignedTinyInteger('next_rating_level')->nullable();
+            $table->unsignedBigInteger('revision')->default(1);
+            $table->timestamps();
+        });
+        Schema::create('ppb_evaluation_ratings', function (Blueprint $table) {
+            $table->increments('id');
+            $table->string('source_type', 12);
+            $table->unsignedBigInteger('source_id');
+            $table->string('subject_type', 12);
+            $table->unsignedBigInteger('subject_id');
+            $table->char('month', 7);
         });
         Schema::create('ppb_legacy_wp_articles', function (Blueprint $table) {
             $table->increments('id');
@@ -199,7 +248,12 @@ class LegacyAdminUiTest extends TestCase
         $roster->shouldReceive('all')->andReturn([
             ['type' => 'legacy', 'id' => 4, 'label' => '哆啦', 'native_id' => null, 'rating_level' => 2, 'analyst_level' => 1],
         ]);
+        $roster->shouldReceive('mappings')->andReturn([]);
         $this->app->instance(EvaluationSubjects::class, $roster);
+        PpbAnalyst::unguarded(fn () => PpbAnalyst::query()->create([
+            'id' => 4, 'name' => '哆啦', 'display_name' => '哆啦', 'user_type' => 0, 'status' => 'active',
+            'rating_level' => 2, 'analyst_level' => 1,
+        ]));
 
         $this->actor(['schedules.view']);
         foreach (self::PAGES as $path => $label) {
@@ -233,6 +287,7 @@ class LegacyAdminUiTest extends TestCase
         $roster->shouldReceive('all')->andReturn([
             ['type' => 'v2', 'id' => 7, 'label' => 'Fixture name', 'native_id' => 7, 'rating_level' => 0, 'analyst_level' => 0],
         ]);
+        $roster->shouldReceive('mappings')->andReturn([]);
         $this->app->instance(EvaluationSubjects::class, $roster);
 
         $queries = [];
@@ -256,11 +311,12 @@ class LegacyAdminUiTest extends TestCase
     {
         $this->actor(['schedules.view']);
         $subject = ['type' => 'legacy', 'id' => 4, 'rating_level' => 2];
-        $subjects = Mockery::mock(EvaluationSubjects::class);
-        $subjects->shouldReceive('get')->once()->with('legacy', 4)->andReturn($subject);
-        $this->app->instance(EvaluationSubjects::class, $subjects);
+        $data = Mockery::mock(\App\Services\Ppb\Evaluation\LocalEvaluationData::class);
+        $data->shouldReceive('roster')->andReturn(['legacy:4' => $subject]);
+        $data->shouldReceive('ready')->andReturn(true);
+        $this->app->instance(\App\Services\Ppb\Evaluation\LocalEvaluationData::class, $data);
         $service = Mockery::mock(EvaluationService::class);
-        $service->shouldReceive('load')->once()->with($subject, '2026-11')->andReturn([
+        $service->shouldReceive('loadLocal')->once()->with($subject, '2026-11')->andReturn([
             'current' => ['level' => 2, 'view' => ['total_score' => 65],
                 'salary' => ['total' => 100], 'performance' => ['month' => ['wins' => 4, 'losses' => 8, 'rate' => 33]]],
         ]);
@@ -283,6 +339,68 @@ class LegacyAdminUiTest extends TestCase
         self::assertSame('哆啦', $verified['label']);
         self::assertFalse($verified['mapped']);
         self::assertNull($verified['native_id']);
-        self::assertSame('舊分析師 #7', $other['label']);
+        self::assertSame('洛老師', $other['label']);
+    }
+
+
+    public function test_acceptance_fixes_on_shift_and_report_pages(): void
+    {
+        $this->actor(['schedules.view', 'schedules.manage', 'evaluations.view', 'evaluations.manage']);
+        PpbAnalyst::unguarded(fn () => PpbAnalyst::query()->create([
+            'id' => 11, 'name' => '阿圈', 'display_name' => '阿圈', 'user_type' => 0, 'status' => 'active',
+            'rating_level' => 2, 'analyst_level' => 1,
+        ]));
+        $game = PpbGame::unguarded(fn () => PpbGame::query()->create([
+            'id' => 15, 'month_key' => '2026-11', 'recommended_at' => '2026-11-05 08:00:00',
+            'game_type' => 1, 'game_number' => 15, 'status' => 'scheduled', 'matchup_text' => '奧蘭多魔術@鳳凰城太陽',
+            'notes' => json_encode(['_ppb_legacy_game_v1' => true, 'lottery_no' => '1234']),
+            'wp_locked_at' => '2026-11-05 09:00:00', 'play_type' => 1, 'market_type' => 1,
+        ]));
+        $assignmentId = DB::table('ppb_assignments')->insertGetId([
+            'game_id' => 15, 'current_analyst_id' => 11, 'kind' => 'pick', 'slot_no' => 1, 'status' => 'active',
+        ]);
+        DB::table('ppb_legacy_pick_contents')->insert([
+            'game_id' => 15, 'source_pick_id' => 9001, 'legacy_analyst_id' => 6, 'kind' => 'pick',
+            'recommend_pick' => '主隊讓分', 'short_analysis' => '看好前場籃板', 'legacy_is_win' => 1,
+        ]);
+        DB::table('ppb_submissions')->insert([
+            'game_id' => 15, 'assignment_id' => $assignmentId, 'submitted_analyst_id' => 11,
+            'legacy_source_pick_id' => 9001, 'kind' => 'pick', 'status' => 'legacy_imported',
+        ]);
+        DB::table('ppb_publications')->insert(['game_id' => 15, 'status' => 'published', 'verified_at' => '2026-11-05 10:00:00']);
+
+        $shift = $this->get(self::HOST.'/admin/games?p=1')->assertOk()
+            ->assertSee('主隊讓分')->assertSee('看好前場籃板')
+            ->assertDontSee('尚未串接投稿')->assertDontSee('稿件內容尚未接入新版')
+            ->assertSee('1234')->assertDontSee('彩券號 —')
+            ->assertSee('修改賽事')->assertSee('刪除賽事')
+            ->assertSee('! 未結算場次')
+            ->assertSee('分析師評鑑');
+        $shift->assertViewHas('games', fn ($pager) => $pager->getCollection()->pluck('id')->all() === [15]);
+
+        $this->get(self::HOST.'/admin/games/create?modal=1')->assertOk()
+            ->assertSee('盤口類型')->assertSee('手動填寫玩法')->assertSee('BOUNS-分析師');
+
+        $this->get(self::HOST.'/admin/rating/index')->assertOk()
+            ->assertSee('11月評級')->assertSee('10月評級')->assertDontSee('載入中...')
+            ->assertDontSee('12月評級');
+        $this->get(self::HOST.'/admin/performance')->assertOk()->assertDontSee('載入中...');
+        $this->get(self::HOST.'/admin/schedule/videos')->assertOk()
+            ->assertSee('影音班表')->assertSee('新增班表')->assertSee('週次');
+        $this->get(self::HOST.'/admin/csda/users')->assertOk()->assertSee('CSDA 用戶資料目前未匯入 V2');
+    }
+
+    public function test_history_only_shift_starts_with_the_most_recent_past_games(): void
+    {
+        $this->actor(['schedules.view']);
+        foreach (range(1, 15) as $id) {
+            PpbGame::unguarded(fn () => PpbGame::query()->create([
+                'id' => $id, 'month_key' => '2026-10', 'recommended_at' => sprintf('2026-10-%02d 03:00:00', $id),
+                'game_type' => 1, 'game_number' => $id, 'status' => 'scheduled', 'matchup_text' => 'Past '.$id,
+            ]));
+        }
+        $this->get(self::HOST.'/admin/games')->assertOk()->assertViewHas('games',
+            fn ($pager) => $pager->getCollection()->pluck('id')->all() === range(6, 15)
+        );
     }
 }

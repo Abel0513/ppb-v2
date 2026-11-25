@@ -42,6 +42,11 @@ class PpbGame extends Model
             || \Illuminate\Support\Facades\DB::table('ppb_schedule_events')
                 ->where('game_id',$this->id)->where('event','legacy_archived_pick')->exists();
     }
+    public function lotteryNumber(): ?string {
+        $notes = json_decode((string) $this->notes, true);
+        $value = $notes['lottery_no'] ?? null;
+        return (is_int($value) || is_string($value)) && trim((string) $value) !== '' ? (string) $value : null;
+    }
     public function getDisplayCodeAttribute(): string {
         return ($this->game_type === 1 ? 'G' : 'E').($this->game_number ?? '?');
     }
