@@ -1,43 +1,46 @@
 [
   {
-    "operation": "schema",
-    "table": "pay.pay_analyst_profiles",
-    "limit": 50,
-    "offset": 0
-  },
-  {
-    "operation": "search",
-    "query": "analyst_level",
+    "operation": "source",
+    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
+    "offset": 2400,
     "limit": 50
   },
   {
-    "operation": "search",
-    "query": "pay_analyst_profiles",
+    "operation": "source",
+    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
+    "offset": 3140,
+    "limit": 200
+  },
+  {
+    "operation": "source",
+    "path": "Application/Admin/Controller/AnalystRatingController.class.php",
+    "offset": 170,
+    "limit": 80
+  },
+  {
+    "operation": "source",
+    "path": "Application/Line/Controller/TaskController.class.php",
+    "offset": 180,
+    "limit": 80
+  },
+  {
+    "operation": "ui_inventory",
+    "offset": 250,
     "limit": 50
   },
   {
     "operation": "ui_inventory",
-    "offset": 0,
+    "offset": 300,
     "limit": 50
   },
   {
     "operation": "ui_inventory",
-    "offset": 50,
+    "offset": 350,
     "limit": 50
   },
   {
     "operation": "ui_inventory",
-    "offset": 100,
-    "limit": 50
-  },
-  {
-    "operation": "ui_inventory",
-    "offset": 150,
-    "limit": 50
-  },
-  {
-    "operation": "ui_inventory",
-    "offset": 200,
+    "offset": 400,
     "limit": 50
   }
 ]
