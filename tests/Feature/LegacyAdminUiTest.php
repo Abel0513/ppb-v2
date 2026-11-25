@@ -250,6 +250,10 @@ class LegacyAdminUiTest extends TestCase
         ]);
         $roster->shouldReceive('mappings')->andReturn([]);
         $this->app->instance(EvaluationSubjects::class, $roster);
+        PpbAnalyst::unguarded(fn () => PpbAnalyst::query()->create([
+            'id' => 4, 'name' => '哆啦', 'display_name' => '哆啦', 'user_type' => 0, 'status' => 'active',
+            'rating_level' => 2, 'analyst_level' => 1,
+        ]));
 
         $this->actor(['schedules.view']);
         foreach (self::PAGES as $path => $label) {
