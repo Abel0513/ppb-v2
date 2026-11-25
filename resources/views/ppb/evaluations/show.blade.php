@@ -26,7 +26,7 @@
 </div><p>留白不計入平均，0 分會計入；回饋加在各週平均之後。</p><button class="action">儲存人工評分</button></form>
 @else<p>您目前只有檢視權限。</p>@endif</section>
 @if(isset($report['history']))<section class="card eval-section"><h2>三個月評級分數</h2><div class="eval-grid">@foreach($report['history'] as $period=>$history)<p>{{ $period }}：<strong>{{ $history['rating']['total_score'] }}</strong></p>@endforeach</div></section>@endif
-<section class="card eval-section"><h2>評級與升降級</h2><p>本月等級：{{ $current['level']===null?'尚無歷史紀錄（薪酬採原規則等級 2）':$current['level'] }}；前月評級分數：{{ $report['previous']['rating']['total_score'] }}；下月試算：{{ $current['next_rating']['rating_level'] }}；已保存下月等級：{{ $report['saved_next_rating'] ?? '未保存' }}。</p>
+<section class="card eval-section"><h2>評級與升降級</h2><p>本月等級：{{ \App\Services\Ppb\LegacyDisplayLabels::rating($current['level']) }}；前月評級分數：{{ $report['previous']['rating']['total_score'] }}；下月試算：{{ \App\Services\Ppb\LegacyDisplayLabels::rating($current['next_rating']['rating_level']) }}；已保存下月等級：{{ \App\Services\Ppb\LegacyDisplayLabels::rating($report['saved_next_rating']) }}。</p>
 @if($current['next_rating']['is_terminate'])<p class="notice">已達原規則終止條件，請管理者審核處理；本頁不自動停用分析師。</p>@endif
 @if($manage)<form method="post" action="{{ route('ppb.evaluations.save',[$report['subject']['type'],$report['subject']['id']]) }}">@include('ppb.evaluations.request')<input type="hidden" name="operation" value="rebuild"><button class="action">確認並保存下月評級</button></form>@endif</section>
 <section class="card eval-section"><h2>薪酬與缺勤</h2><div class="eval-grid">@foreach(['short'=>'短稿','long'=>'長稿','video'=>'影片','late'=>'遲到扣款','absent'=>'缺勤扣款','total'=>'合計'] as $field=>$label)<p>{{ $label }}：<strong>{{ $current['salary'][$field] }}</strong></p>@endforeach</div>
@@ -47,7 +47,7 @@
 @foreach($report['inputs']['attendance'] as $a)<p>#{{ $a['gid'] }}・{{ $a['recommended_time'] }}・{{ $a['attendance_status']===1?'遲到':'缺勤' }}</p>@endforeach</section>
 <section class="card eval-section"><h2>V2 影片參與</h2><p>每個排程每位來賓計 400，同一人佔多個來賓欄仍只計一次。此處不修改舊影片排程，也不傳送 LINE 訊息。</p>
 @foreach(array_merge([null],$report['inputs']['videos']) as $video)
-<details><summary>{{ $video?'影片 #'.$video['id'].'・'.Carbon\CarbonImmutable::parse($video['scheduled_at'],'UTC')->tz('Asia/Taipei')->format('m/d H:i'): '新增 V2 影片' }}</summary>
+<details id="evaluation-video-{{ $video['id'] ?? 'new' }}"><summary>{{ $video?'影片 #'.$video['id'].'・'.Carbon\CarbonImmutable::parse($video['scheduled_at'],'UTC')->tz('Asia/Taipei')->format('m/d H:i'): '新增 V2 影片' }}</summary>
 <form method="post" action="{{ route('ppb.evaluations.save',[$report['subject']['type'],$report['subject']['id']]) }}">@include('ppb.evaluations.request')<input type="hidden" name="operation" value="input"><input type="hidden" name="input_kind" value="video">@if($video)<input type="hidden" name="video_id" value="{{ $video['id'] }}">@endif
 <div class="eval-grid"><label>日期時間（台北）<input class="field" type="datetime-local" name="scheduled_at" value="{{ $video?Carbon\CarbonImmutable::parse($video['scheduled_at'],'UTC')->tz('Asia/Taipei')->format('Y-m-d\TH:i'):$report['month'].'-01T12:00' }}" required></label>
 @foreach(range(1,3) as $slot)<label>來賓 {{ $slot }}<select class="field" name="guest_{{ $slot }}" @required($slot===1)><option value="">無</option>@foreach($subjects as $guest)@php($guestKey=$guest['type'].':'.$guest['id'])<option value="{{ $guestKey }}" @selected(($video['guest_'.$slot]??($slot===1?$report['subject']['type'].':'.$report['subject']['id']:null))===$guestKey)>{{ $guest['label'] }}</option>@endforeach</select></label>@endforeach</div>
@@ -61,4 +61,8 @@
 </div><button class="action">儲存本稿 V2 評分</button></form>@else<p>評分：@foreach(App\Services\Ppb\Evaluation\LegacyScheduleCalculator::RATING_FIELDS as $field) {{ $pick[$field]??0 }} @endforeach</p>@endif</details>
 @empty<p>本月份沒有稿件。</p>@endforelse</section>
 </div></main></div></div>
+<script>
+  const videoEditor = /^#evaluation-video-[1-9]\d*$/.test(location.hash) && document.querySelector(location.hash);
+  if (videoEditor) videoEditor.open = true;
+</script>
 @endsection

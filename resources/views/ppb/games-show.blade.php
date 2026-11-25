@@ -44,7 +44,7 @@
 <label class="field-label" style="flex:1;min-width:200px">取消原因（必填）<input class="field" name="reason" maxlength="255" required placeholder="請說明取消原因"></label>
 <button class="action" type="submit">取消賽事</button></form>
 @if(!$wpLocked && !$game->submissions()->exists() && !$game->publications()->exists() && !$game->assignments()->whereHas('substitutions')->exists())
-<form method="post" action="{{ route('ppb.games.destroy',$game) }}" style="margin-top:12px" onsubmit="return confirm('永久刪除此場尚無投稿的賽事？操作不可復原，確認後會整理安全可動的 G/E 編號。')">@csrf @method('DELETE')
+<form id="delete-game" method="post" action="{{ route('ppb.games.destroy',$game) }}" style="margin-top:12px" onsubmit="return confirm('永久刪除此場尚無投稿的賽事？操作不可復原，確認後會整理安全可動的 G/E 編號。')">@csrf @method('DELETE')
 <input type="hidden" name="revision_token" value="{{ old('revision_token', \App\Services\Ppb\ScheduleVersion::game($game)) }}">
 <button class="admin-button admin-button-danger" type="submit">刪除無投稿賽事</button>
 </form>@endif

@@ -7,6 +7,47 @@
     $ppbIsOwner = $ppbUser && $ppbUser->is_active
         && $ppbUser->roles()->where('ppb_roles.code', 'owner')->exists();
     $ppbHome = route('ppb.games.index');
+    $groups = [];
+    if ($ppbCanSchedules) {
+        $groups['schedules'] = ['排班管理', '▦', [
+            ['ppb.schedule.overview', '賽事排班總覽'],
+            ['ppb.schedule.articles', '分析文排班總覽'],
+            ['ppb.schedule.videos', '影音排班'],
+            ['ppb.schedule.attendance', '出缺勤紀錄表'],
+            ['ppb.analyst-list', '分析師列表'],
+            ['ppb.performance', '戰績排行榜'],
+        ]];
+        $groups['analyst-pages'] = ['分析師頁面', '◆', [
+            ['ppb.games.readonly', '分析師輪值表'],
+            ['ppb.performance', '戰績排行榜'],
+        ]];
+    }
+    $rating = [];
+    if ($ppbUser?->hasPpbPermission('evaluations.view')) {
+        $rating = [
+            ['ppb.rating.index', '薪資/評級異動'],
+            ['ppb.rating.salary', '分析師薪資'],
+            ['ppb.rating.change', '分析師評級異動'],
+        ];
+    }
+    if ($ppbIsOwner && $ppbUser->hasPpbPermission('accounts.manage')) {
+        $rating[] = ['ppb.evalpreview.index', '月評鑑預覽（唯讀）', 'ppb.evalpreview.*'];
+    }
+    if ($rating) $groups['rating'] = ['薪資評級', '＄', $rating];
+    if ($ppbCanSchedules) {
+        $groups['csda'] = ['運彩小虎爺', '♕', [
+            ['ppb.csda.users', '用戶管理'],
+            ['ppb.csda.users', '定時廣播'],
+        ]];
+    }
+    if ($ppbIsOwner || $ppbCanSchedules) {
+        $settings = $ppbCanSchedules ? [['ppb.analysts.index', '分析師資料', 'ppb.analysts.*']] : [];
+        if ($ppbIsOwner) {
+            $settings[] = ['ppb.accounts.index', '帳號管理', 'ppb.accounts.*'];
+            $settings[] = ['ppb.roles.index', '角色與權限', 'ppb.roles.*'];
+        }
+        $groups['system'] = ['系統設定', '⚙', $settings];
+    }
 @endphp
 <aside class="admin-sidebar" id="adminSidebar" aria-label="後台主選單">
   <div class="admin-sidebar-brand">
@@ -19,40 +60,23 @@
     <button class="admin-sidebar-collapse-button" id="adminSidebarCollapseButton" type="button" aria-label="隱藏側欄">‹</button>
   </div>
   <nav class="admin-sidebar-menu" aria-label="主選單">
-    <p class="admin-sidebar-label">MAIN</p>
     @if($ppbCanSchedules)
-    <div class="admin-menu-group" data-admin-menu-group="operations">
-      <button class="admin-menu-group-title" type="button" data-admin-menu-group-toggle="1" aria-expanded="true">
-        <span class="admin-menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 10h16M9 3v5M15 3v5M8 15h3M14 15h3"/></svg></span><span>作業管理</span><span class="admin-menu-group-arrow">›</span>
-      </button>
-      <div class="admin-submenu">
-        <a class="admin-submenu-item {{ request()->routeIs('ppb.games.*') || request()->routeIs('ppb.dashboard') ? 'active' : '' }}" href="{{ route('ppb.games.index') }}">排班管理</a>
-        <a class="admin-submenu-item {{ request()->routeIs('ppb.analysts.*') ? 'active' : '' }}" href="{{ route('ppb.analysts.index') }}">分析師資料</a>
+      <a class="admin-menu-item {{ request()->routeIs('ppb.games.index', 'ppb.dashboard') ? 'active' : '' }}" href="{{ $ppbHome }}">
+        <span class="admin-menu-icon" aria-hidden="true">⌂</span><span>首页</span>
+      </a>
+    @endif
+    @foreach($groups as $key => [$title, $icon, $items])
+      <div class="admin-menu-group" data-admin-menu-group="{{ $key }}">
+        <button class="admin-menu-group-title" type="button" data-admin-menu-group-toggle="1" aria-expanded="true">
+          <span class="admin-menu-icon" aria-hidden="true">{{ $icon }}</span><span>{{ $title }}</span><span class="admin-menu-group-arrow">›</span>
+        </button>
+        <div class="admin-submenu">
+          @foreach($items as $item)
+            <a class="admin-submenu-item {{ request()->routeIs($item[2] ?? $item[0]) ? 'active' : '' }}" href="{{ route($item[0]) }}">{{ $item[1] }}</a>
+          @endforeach
+        </div>
       </div>
-    </div>
-    @endif
-    <a class="admin-menu-item" aria-disabled="true"><span class="admin-menu-icon" aria-hidden="true">✧</span><span>投稿與出勤（未建置）</span></a>
-    @if(auth('ppb')->user()?->hasPpbPermission('evaluations.view'))
-    <a class="admin-menu-item" href="{{ route('ppb.evaluations.index') }}"><span class="admin-menu-icon" aria-hidden="true">▤</span><span>月評鑑與薪酬</span></a>
-    @endif
-    {{-- PPB EVALPREVIEW | Owner-only GET preview, not the unpublished assessment writer. --}}
-    @if($ppbIsOwner && $ppbUser->hasPpbPermission('accounts.manage'))
-    <a class="admin-menu-item {{ request()->routeIs('ppb.evalpreview.*') ? 'active' : '' }}" href="{{ route('ppb.evalpreview.index') }}">
-      <span class="admin-menu-icon" aria-hidden="true">▤</span><span>月評鑑預覽（唯讀）</span>
-    </a>
-    @endif
-    {{-- PPB_UI3_20261104 | Owner-only menu; AccountController/RoleController also enforce owner server-side. --}}
-    @if($ppbIsOwner)
-    <div class="admin-menu-group" data-admin-menu-group="system">
-      <button class="admin-menu-group-title" type="button" data-admin-menu-group-toggle="1" aria-expanded="true">
-        <span class="admin-menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg></span><span>系統設定</span><span class="admin-menu-group-arrow">›</span>
-      </button>
-      <div class="admin-submenu">
-        <a class="admin-submenu-item {{ request()->routeIs('ppb.accounts.*') ? 'active' : '' }}" href="{{ route('ppb.accounts.index') }}">帳號管理</a>
-        <a class="admin-submenu-item {{ request()->routeIs('ppb.roles.*') ? 'active' : '' }}" href="{{ route('ppb.roles.index') }}">角色與權限</a>
-      </div>
-    </div>
-    @endif
+    @endforeach
   </nav>
 </aside>
 <button class="admin-sidebar-reopen-button" id="adminSidebarReopenButton" type="button" aria-label="顯示側欄">☰</button>

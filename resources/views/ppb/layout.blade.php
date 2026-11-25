@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <meta name="color-scheme" content="light">
 <title>@yield('title', '管理後台')｜皮皮寶</title>
-<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-admin-csda-source.css') }}?v=pg10-20261105">
+<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-admin-csda-source.css') }}?v=ui-restore">
 @stack('styles')
 </head>
 <body>

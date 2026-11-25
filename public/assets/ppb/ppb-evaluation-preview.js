@@ -7,8 +7,8 @@
       const response = await fetch(url,{credentials:'same-origin',redirect:'error',cache:'no-store',headers:{Accept:'application/json'}});
       if (!response.ok) throw Error('unavailable');
       const data = await response.json();
-      const values = {score:data.score,previous_score:data.previous_score,level:data.level,
-        next_level:data.next_level,salary:data.salary.total};
+      const values = {score:data.score,previous_score:data.previous_score,level:data.level_label,
+        next_level:data.next_level_label,salary:data.salary.total};
       for (const cell of row.querySelectorAll('[data-preview-field]')) {
         if (!Object.hasOwn(values,cell.dataset.previewField)) throw Error('missing');
         const v = values[cell.dataset.previewField];

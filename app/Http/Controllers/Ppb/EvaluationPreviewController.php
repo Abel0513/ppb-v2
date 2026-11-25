@@ -8,6 +8,7 @@ use App\Services\Ppb\Evaluation\EvaluationSubjects;
 use App\Services\Ppb\Evaluation\LegacyReader;
 use App\Models\PpbAnalyst;
 use Illuminate\Http\Request;
+use App\Services\Ppb\LegacyDisplayLabels;
 use Illuminate\Support\Facades\Auth;
 
 /** GET-only preview for active owners; no write/POST routes or live migration. */
@@ -24,7 +25,7 @@ class EvaluationPreviewController extends Controller
     private function month(Request $r):string
     {
         $v=$r->validate(['month'=>['nullable','date_format:Y-m','after_or_equal:2000-01','before_or_equal:2099-12']]);
-        return $v['month']??now('Asia/Taipei')->subMonthNoOverflow()->format('Y-m');
+        return $v['month']??now('Asia/Taipei')->format('Y-m');
     }
 
     private function protect($response)
@@ -109,6 +110,8 @@ class EvaluationPreviewController extends Controller
                 'score'=>$now['rating']['total_score'],
                 'previous_score'=>$report['previous']['rating']['total_score'],
                 'level'=>$report['level'],'next_level'=>$now['next_rating']['rating_level'],
+                'level_label'=>LegacyDisplayLabels::rating($report['level'] ?? null),
+                'next_level_label'=>LegacyDisplayLabels::rating($now['next_rating']['rating_level']),
                 'salary'=>$now['salary'],'performance'=>$now['performance']
             ]));
         }
