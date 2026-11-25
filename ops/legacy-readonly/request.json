@@ -1,42 +1,7 @@
 [
   {
     "operation": "ui_inventory",
-    "offset": 1250,
-    "limit": 50
-  },
-  {
-    "operation": "ui_inventory",
-    "offset": 1300,
-    "limit": 50
-  },
-  {
-    "operation": "ui_inventory",
-    "offset": 1350,
-    "limit": 50
-  },
-  {
-    "operation": "ui_inventory",
-    "offset": 1400,
-    "limit": 50
-  },
-  {
-    "operation": "ui_inventory",
-    "offset": 1450,
-    "limit": 50
-  },
-  {
-    "operation": "ui_inventory",
-    "offset": 1500,
-    "limit": 50
-  },
-  {
-    "operation": "ui_inventory",
-    "offset": 1550,
-    "limit": 50
-  },
-  {
-    "operation": "ui_inventory",
-    "offset": 1600,
+    "offset": 1650,
     "limit": 50
   }
 ]
