@@ -58,10 +58,22 @@
     const submit = form.querySelector('[type=submit]');
     let active;
     let receipt;
-    const total = () => {
-      const scores = [...fields.querySelectorAll('input')].filter(input => input.type !== 'radio' || input.checked);
-      rating.querySelector('[data-rating-total]').textContent = scores.reduce((sum, input) => sum + Number(input.value), 0);
-    };
+    function renderScores(saved, average) {
+      const score = name => Number(form.elements.namedItem(name).value);
+      const professional = fields.querySelector('[data-score-section="professional"]');
+      const sections = saved ?? {
+        delivery: score('score_delivery_time'),
+        compliance: (score('score_word_count') + score('score_format')) / 2,
+        professional: [...professional.querySelectorAll('input:checked')]
+          .reduce((sum, input) => sum + Number(input.value), score('score_professional_bonus')),
+      };
+      for (const [section, value] of Object.entries(sections)) {
+        fields.querySelector(`[data-score-section="${section}"] [data-section-score]`).textContent = value;
+      }
+      const values = Object.values(sections);
+      const mean = average ?? values.reduce((sum, value) => sum + value, 0) / values.length;
+      rating.querySelector('[data-rating-total]').textContent = Math.round(mean);
+    }
     const status = bindDialog(rating, form, body => {
       if (!receipt?.save_url) return null;
       body.set('source_type', receipt.pick._source_type);
@@ -82,7 +94,9 @@
       for (const key of ['game', 'matchup', 'time', 'analyst', 'recommendation']) {
         rating.querySelector(`[data-rating-${key}]`).textContent = trigger.dataset[key];
       }
-      total();
+      for (const output of rating.querySelectorAll('[data-rating-total], [data-section-score]')) {
+        output.textContent = '';
+      }
       status.textContent = trigger.dataset.ratingUrl ? '讀取評鑑資料…' : '這個歷史名額沒有可評鑑的稿件。';
       rating.showModal();
       if (!trigger.dataset.ratingUrl) return;
@@ -109,17 +123,17 @@
         fields.disabled = !result.save_url;
         submit.hidden = !result.save_url;
         status.textContent = result.save_url ? '' : '此評鑑供唯讀查閱。';
-        total();
+        renderScores(result.sections, result.average);
       } catch (error) {
         if (!controller.signal.aborted) status.textContent = error.message;
       }
     }
 
-    form.addEventListener('change', total);
+    form.addEventListener('change', () => renderScores());
     rating.querySelectorAll('[data-rating-step]').forEach(button => button.addEventListener('click', () => {
       const bonus = form.elements.score_professional_bonus;
       bonus.value = Math.min(10, Math.max(0, Number(bonus.value) + Number(button.dataset.ratingStep)));
-      total();
+      renderScores();
     }));
     document.querySelectorAll('[data-open-rating]').forEach(button => button.addEventListener('click', () => open(button)));
     rating.addEventListener('close', () => {

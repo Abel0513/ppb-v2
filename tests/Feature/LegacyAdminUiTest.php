@@ -173,6 +173,9 @@ class LegacyAdminUiTest extends TestCase
             $table->char('month', 7);
             $table->unsignedTinyInteger('next_rating_level')->nullable();
             $table->unsignedBigInteger('revision')->default(1);
+            $table->char('source_sha256', 64)->nullable();
+            $table->unsignedBigInteger('actor_id')->nullable();
+            $table->unique(['subject_type', 'subject_id', 'month']);
             $table->timestamps();
         });
         Schema::create('ppb_evaluation_ratings', function (Blueprint $table) {
@@ -182,12 +185,22 @@ class LegacyAdminUiTest extends TestCase
             $table->string('subject_type', 12);
             $table->unsignedBigInteger('subject_id');
             $table->char('month', 7);
+            foreach (LegacyScheduleCalculator::RATING_FIELDS as $field) $table->smallInteger($field);
+            $table->tinyInteger('result_state')->nullable();
+            $table->unsignedBigInteger('revision');
+            $table->unsignedBigInteger('actor_id');
+            $table->char('source_sha256', 64);
+            $table->unique(['source_type', 'source_id']);
+            $table->timestamps();
         });
         Schema::create('ppb_evaluation_events', function (Blueprint $table) {
             $table->increments('id');
             $table->unsignedBigInteger('evaluation_id');
             $table->string('operation');
-            $table->string('request_id');
+            $table->string('request_id')->unique();
+            $table->char('payload_sha256', 64);
+            $table->unsignedBigInteger('actor_id');
+            $table->text('before_json');
             $table->text('after_json');
             $table->timestamps();
         });
@@ -473,8 +486,8 @@ class LegacyAdminUiTest extends TestCase
         $this->get(self::HOST.'/admin/rating/index')->assertOk()
             ->assertSeeInOrder(['>850<', '>S<', '>A<', '>升級<', '>68<', '>67<', '>66<', '總計'], false)
             ->assertSee('<option>D</option>', false)->assertDontSee('載入中...');
-        $this->get(self::HOST.'/admin/rating/salary')->assertOk()
-            ->assertSee('data-report-total="total">850</td>', false)->assertDontSee('載入中...');
+        $salary = $this->get(self::HOST.'/admin/rating/salary')->assertOk()->assertDontSee('載入中...');
+        self::assertMatchesRegularExpression('~data-report-total="total"\s*>850</td>~', $salary->getContent());
         $this->get(self::HOST.'/admin/rating/change')->assertOk()
             ->assertSeeInOrder(['>S<', '>A<', '>升級<', '>68<', '>67<', '>66<'], false)->assertDontSee('載入中...');
 
@@ -524,8 +537,8 @@ class LegacyAdminUiTest extends TestCase
         $this->actor(['evaluations.view']);
         $reader = $this->bindReportReader();
         $reader->shouldReceive('snapshot')->once()->with(4, '2026-10')->andThrow(new \RuntimeException('LEGACY_READER_UNAVAILABLE'));
-        $this->get(self::HOST.'/admin/rating/salary')->assertOk()
-            ->assertSee('載入中...')->assertSee('data-report-total="total">—</td>', false);
+        $salary = $this->get(self::HOST.'/admin/rating/salary')->assertOk()->assertSee('載入中...');
+        self::assertMatchesRegularExpression('~data-report-total="total"\s*>—</td>~u', $salary->getContent());
         $this->getJson(self::HOST.'/admin/rating/summary/legacy/4')->assertStatus(503)
             ->assertExactJson(['message' => '讀取失敗']);
         $this->get(self::HOST.'/admin/rating/salary')->assertOk()->assertSee('載入中...');
@@ -640,6 +653,161 @@ class LegacyAdminUiTest extends TestCase
         $this->get(self::HOST.'/admin/schedule/videos')->assertOk()
             ->assertSee('影音班表')->assertSee('新增班表')->assertSee('週次');
         $this->get(self::HOST.'/admin/csda/users')->assertOk()->assertSee('CSDA 用戶資料目前未匯入 V2');
+    }
+
+    private function seedArchive(array $scores = []): int
+    {
+        DB::table('ppb_analysts')->insert(['id' => 11, 'name' => '運彩ABC']);
+        DB::table('ppb_games')->insert([
+            'id' => 15, 'month_key' => '2026-11', 'recommended_at' => '2026-11-05 08:00:00',
+            'game_type' => 1, 'game_number' => 15, 'status' => 'scheduled', 'matchup_text' => 'Fixture',
+            'notes' => json_encode(['_ppb_legacy_game_v1' => true, 'lottery_no' => '0123']),
+        ]);
+        DB::table('ppb_legacy_pick_contents')->insert([
+            'game_id' => 15, 'source_pick_id' => 9001, 'legacy_analyst_id' => 4, 'kind' => 'pick', 'legacy_is_win' => 1,
+        ]);
+        DB::table('ppb_submissions')->insert([
+            'game_id' => 15, 'legacy_source_pick_id' => 9001, 'submitted_analyst_id' => 11,
+            'kind' => 'pick', 'status' => 'legacy_imported', 'content_body' => json_encode(['_ppb_legacy_pick_v1' => true] + $scores),
+        ]);
+
+        return DB::table('ppb_assignments')->insertGetId([
+            'game_id' => 15, 'kind' => 'pick', 'slot_no' => 1, 'original_analyst_id' => 11, 'current_analyst_id' => 11,
+        ]);
+    }
+
+    public function test_archive_rating_saves_v2_override_with_revision_and_receipt(): void
+    {
+        $this->actor(['schedules.view', 'evaluations.view', 'evaluations.manage']);
+        // Emulate MySQL session lock calls on this test's one SQLite connection.
+        $held = false;
+        $pdo = DB::connection()->getPdo();
+        $pdo->sqliteCreateFunction('CONNECTION_ID', fn () => 1, 0);
+        $pdo->sqliteCreateFunction('IS_USED_LOCK', function () use (&$held) {
+            return $held ? 1 : null;
+        }, 1);
+        $pdo->sqliteCreateFunction('GET_LOCK', function () use (&$held) {
+            $held = true;
+
+            return 1;
+        }, 2);
+        $pdo->sqliteCreateFunction('RELEASE_LOCK', function () use (&$held) {
+            $held = false;
+
+            return 1;
+        }, 1);
+        $scores = array_combine(LegacyScheduleCalculator::RATING_FIELDS, [60, 60, 60, 20, 20, 20, 20, 10, 0]);
+        $assignment = $this->seedArchive($scores);
+        $archive = DB::table('ppb_legacy_pick_contents')->get()->all();
+        $submissions = DB::table('ppb_submissions')->get()->all();
+        $url = self::HOST.'/admin/games/15/assignments/'.$assignment.'/rating';
+        $rating = $this->getJson($url)->assertOk()->assertJsonPath('pick._source_type', 'legacy')
+            ->assertJsonPath('pick._source_id', 9001)->assertJsonPath('sections.delivery', 60)
+            ->assertJsonPath('sections.compliance', 60)->assertJsonPath('sections.professional', 90)
+            ->assertJsonPath('average', 70)->assertJsonPath('revision', 0)->json();
+        $request = array_replace($scores, [
+            'score_word_count' => 40, 'schedule_scope' => 'rating', 'operation' => 'rate',
+            'source_type' => 'legacy', 'source_id' => 9001, 'month' => '2026-11', 'revision' => 0,
+            'source_sha256' => $rating['source_sha256'], 'request_id' => '99b1e56d-7db5-4524-b567-8f028610079a',
+        ]);
+        $save = self::HOST.$rating['save_url'];
+        $this->postJson($save, $request)->assertOk()->assertJsonPath('revision', 1)
+            ->assertJsonPath('replayed', false)->assertJsonPath('request_id', $request['request_id']);
+        $this->postJson($save, $request)->assertOk()->assertJsonPath('replayed', true);
+        $this->postJson($save, array_replace($request, ['request_id' => '99b1e56d-7db5-4524-b567-8f028610079b']))
+            ->assertStatus(409);
+        $this->assertDatabaseCount('ppb_evaluation_events', 1);
+        $this->assertDatabaseHas('ppb_evaluation_events', ['operation' => 'rate', 'request_id' => $request['request_id']]);
+        $this->assertDatabaseCount('ppb_evaluation_ratings', 1);
+        $this->assertDatabaseHas('ppb_evaluation_ratings', [
+            'source_type' => 'legacy', 'source_id' => 9001, 'subject_type' => 'legacy', 'subject_id' => 4,
+            'score_word_count' => 40, 'result_state' => null,
+        ]);
+        self::assertEquals($archive, DB::table('ppb_legacy_pick_contents')->get()->all());
+        self::assertEquals($submissions, DB::table('ppb_submissions')->get()->all());
+        $this->getJson($url)->assertOk()->assertJsonPath('pick.score_word_count', 40)
+            ->assertJsonPath('sections.compliance', 50)->assertJsonPath('revision', 1);
+
+        $source = $this->reportSnapshot('2026-11');
+        $source['picks'][] = array_values(array_replace(array_fill_keys($source['pick_columns'], null), $scores, [
+            'id' => 9001, 'gid' => 15, 'analyst_name' => 4, 'is_substitute' => 0,
+            'recommended_time' => '2026-11-05 16:00:00', 'is_bonus' => 0, 'is_long' => 0, 'is_win' => 1,
+        ]));
+        $reader = $this->bindReportReader();
+        $reader->shouldReceive('snapshot')->once()->with(4, '2026-11')->andReturn($source);
+        $reader->shouldReceive('snapshot')->once()->with(4, '2026-10')->andReturn($this->reportSnapshot('2026-10'));
+        $report = app(\App\Services\Ppb\Evaluation\EvaluationService::class)
+            ->load(['type' => 'legacy', 'id' => 4, 'native_id' => null], '2026-11');
+        $pick = collect($report['current']['selected']['records'])->firstWhere('_source_id', 9001);
+        self::assertSame(40, $pick['score_word_count']);
+        self::assertSame(1, $pick['is_win']);
+    }
+
+    public function test_game_modals_show_current_taipei_absences_and_lottery_field(): void
+    {
+        $this->actor(['schedules.view', 'schedules.manage']);
+        $this->seedArchive();
+        DB::table('ppb_analysts')->insert(['id' => 12, 'name' => '零場分析師']);
+        DB::table('ppb_evaluation_attendance')->insert([
+            'game_id' => 15, 'subject_type' => 'legacy', 'subject_id' => 4, 'attendance_status' => 2,
+        ]);
+        $reader = Mockery::mock(LegacyReader::class);
+        $reader->shouldReceive('query')->twice()->andReturnUsing(function (array $query) {
+            self::assertSame('select', $query['operation']);
+            if ($query['table'] === 'pay.pay_attendance_record') {
+                return ['rows' => [
+                    ['id' => 1, 'gid' => 15, 'uid' => 4, 'attendance_status' => 2],
+                    ['id' => 2, 'gid' => 16, 'uid' => 4, 'attendance_status' => 2],
+                    ['id' => 3, 'gid' => 17, 'uid' => 4, 'attendance_status' => 1],
+                ]];
+            }
+            self::assertSame('pay.pay_schedule', $query['table']);
+
+            return ['rows' => array_map(fn ($id) => [
+                'id' => $id, 'game_id' => $id, 'game_type' => 1, 'recommended_time' => '2026-11-05 16:00:00',
+            ], [15, 16, 17])];
+        });
+        $this->app->instance(LegacyReader::class, $reader);
+        $this->get(self::HOST.'/admin/games/15/edit?modal=1')->assertOk()
+            ->assertSeeInOrder(['台彩賽事編號', 'placeholder="請輸入台彩賽事編號"', 'value="0123"'], false)
+            ->assertSee('運彩ABC ( 當月曠職2場 )')->assertSee('零場分析師</option>', false);
+        $this->get(self::HOST.'/admin/games/create?modal=1&match_date=2026-10-31')->assertOk()
+            ->assertSee('運彩ABC ( 當月曠職2場 )');
+        $options = self::HOST.'/admin/games/form-options?date=2026-12-01';
+        $this->getJson($options)->assertOk()->assertJsonPath('absences.11', 2);
+
+        \Illuminate\Support\Facades\Cache::forget('ppb:legacy-attendance:v1');
+        $reader = Mockery::mock(LegacyReader::class);
+        $reader->shouldReceive('query')->once()->andThrow(new \RuntimeException('LEGACY_READER_UNAVAILABLE'));
+        $this->app->instance(LegacyReader::class, $reader);
+        $this->getJson($options)->assertOk()->assertJsonPath('absences.11', 1);
+    }
+
+    public function test_edit_submits_lottery_number_as_notes_metadata_without_changing_display_number(): void
+    {
+        $this->actor(['schedules.view', 'schedules.manage']);
+        $this->seedArchive();
+        $game = PpbGame::findOrFail(15);
+        $revision = \App\Services\Ppb\ScheduleVersion::game($game);
+        $manager = Mockery::mock(\App\Services\Ppb\ScheduleManager::class);
+        $manager->shouldReceive('update')->once()->withArgs(function ($target, $data, $slots, $token) use ($revision) {
+            self::assertSame(15, $target->id);
+            self::assertSame($revision, $token);
+            self::assertArrayNotHasKey('game_number', $data);
+            self::assertSame([
+                '_ppb_legacy_game_v1' => true, 'lottery_no' => '0042', 'notes' => '賽事備註',
+            ], json_decode($data['notes'], true));
+
+            return true;
+        })->andReturn($game);
+        $this->app->instance(\App\Services\Ppb\ScheduleManager::class, $manager);
+
+        $this->put(self::HOST.'/admin/games/15?modal=1', [
+            'revision_token' => $revision, 'lottery_no' => '0042', 'notes' => '賽事備註',
+            'game_type' => 1, 'match_date' => '2026-11-05', 'match_time' => '16:00',
+            'matchup_mode' => 'manual', 'manual_matchup' => 'Away@Home', 'play_type' => 2, 'market_type' => 1,
+            'short' => [1 => 11],
+        ])->assertRedirect(self::HOST.'/admin/games/15')->assertSessionHasNoErrors();
     }
 
     public function test_history_only_shift_starts_with_the_most_recent_past_games(): void

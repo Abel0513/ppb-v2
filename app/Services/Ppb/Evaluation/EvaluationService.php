@@ -85,12 +85,12 @@ class EvaluationService
         [$native,$nativeSchedules]=$this->nativeRows($date,$subject);
         $rows=array_merge($rows,$native);$schedules+=$nativeSchedules;
         foreach($rows as &$p)$p['_game_code']=$schedules[$p['_schedule_key']]['_display_code']??'來源排程缺失';unset($p);
-        $overrides=DB::table('ppb_evaluation_ratings')->where('subject_type',$subject['type'])->where('subject_id',$subject['id'])->whereIn('month',[$earlier,$prior,$month])->get();
+        $overrides=DB::table('ppb_evaluation_ratings')->where('subject_type',$subject['type'])->where('subject_id',$subject['id'])->whereIntegerInRaw('source_id', array_unique(array_column($rows, '_source_id')))->get();
         $bySource=[];foreach($overrides as $r)$bySource[$r->source_type.':'.$r->source_id]=(array)$r;
         foreach($rows as &$row){
             if($row['_author_key']!==$key)continue;
             $override=$bySource[$row['_source_type'].':'.$row['_source_id']]??null;
-            if($override){foreach(LegacyScheduleCalculator::RATING_FIELDS as $f)$row[$f]=$override[$f];if($row['_source_type']==='v2'&&$override['result_state']!==null)$row['is_win']=(int)$override['result_state'];}
+            if($override){foreach(LegacyScheduleCalculator::RATING_FIELDS as $f)$row[$f]=(int)$override[$f];if($row['_source_type']==='v2'&&$override['result_state']!==null)$row['is_win']=(int)$override['result_state'];}
         }unset($row);
         $local=PpbEvaluation::where('subject_type',$subject['type'])->where('subject_id',$subject['id'])->whereIn('month',[$date->subMonths(3)->format('Y-m'),$earlier,$prior,$month])->get()->keyBy('month');
         $sourceHash=hash('sha256',json_encode([$snapshot['source_sha256'],$native,$nativeSchedules],JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION));

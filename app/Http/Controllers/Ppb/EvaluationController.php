@@ -43,7 +43,7 @@ class EvaluationController extends Controller
         }
         return response()->view('ppb.evaluations.show',['report'=>$report,'subjects'=>$this->subjects->all()])->header('Cache-Control','private,no-store');
     }
-    public function scheduleRating(Request $request, PpbGame $game, PpbAssignment $assignment, LocalEvaluationData $data)
+    public function scheduleRating(Request $request, PpbGame $game, PpbAssignment $assignment, LocalEvaluationData $data, LegacyScheduleCalculator $calculator)
     {
         abort_unless((int) $assignment->game_id === (int) $game->id && $assignment->status === 'active', 404);
         $month = $game->recommended_at?->timezone('Asia/Taipei')->format('Y-m');
@@ -54,10 +54,14 @@ class EvaluationController extends Controller
         $report = $this->service->loadLocal($subject, $month);
         $records = collect($report['current']['selected']['records'])
             ->filter(fn ($pick) => $pick['_game_id'] === (int) $game->id && $pick['_assignment_id'] === (int) $assignment->id);
+        $legacy = $records->where('_source_type', 'legacy');
         $pick = $records->where('_source_type', 'v2')->sortByDesc('_source_id')->first()
-            ?? $records->where('_source_type', 'legacy')->first();
+            ?? ($legacy->count() === 1 ? $legacy->first() : null);
         $canSave = $game->status !== 'cancelled' && $request->user('ppb')->hasPpbPermission('evaluations.manage');
+        $sections = $pick && $calculator->hasLegacyRating($pick) ? $calculator->recordSections($pick) : null;
         return response()->json([
+            'sections' => $sections,
+            'average' => $sections ? array_sum($sections) / count($sections) : null,
             'pick' => $pick ? array_intersect_key($pick, array_flip(['_source_type', '_source_id', ...LegacyScheduleCalculator::RATING_FIELDS])) : null,
             'save_url' => $canSave && $pick ? route('ppb.evaluations.save', [$subject['type'], $subject['id']], false) : null,
             'month' => $month, 'revision' => $report['revision'], 'source_sha256' => $report['source_sha256'],

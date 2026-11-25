@@ -51,11 +51,18 @@ final class LegacyScheduleCalculator
     }
     public function monthlyRecordTotal(array $pick): ?float
     {
-        $total = $this->score($pick, 'score_delivery_time')
-            + ($this->score($pick, 'score_word_count') + $this->score($pick, 'score_format')) / 2
-            + $this->professional($pick);
+        $total = array_sum($this->recordSections($pick));
         return $total > 0 ? $total : null;
     }
+    public function recordSections(array $pick): array
+    {
+        return [
+            'delivery' => $this->score($pick, 'score_delivery_time'),
+            'compliance' => ($this->score($pick, 'score_word_count') + $this->score($pick, 'score_format')) / 2,
+            'professional' => $this->professional($pick),
+        ];
+    }
+
     public function winrateBonus(int $settled, int $wins, int $absences): int
     {
         if ($settled < 0 || $wins < 0 || $wins > $settled || $absences < 0) throw new \InvalidArgumentException('Invalid result counts.');

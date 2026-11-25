@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Ppb\Evaluation;
 
+use App\Models\PpbGame;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 
@@ -16,6 +18,16 @@ class LegacyAttendanceSource
     public function rows(): array
     {
         return Cache::remember('ppb:legacy-attendance:v1', 600, fn () => $this->load());
+    }
+
+    public function matchesImportedGame(array $row, ?PpbGame $game): bool
+    {
+        $notes = json_decode((string) $game?->notes, true);
+
+        return $game && ($notes['_ppb_legacy_game_v1'] ?? false)
+            && $game->display_code === $row['code'] && $game->recommended_at
+            && CarbonImmutable::parse($game->getRawOriginal('recommended_at'), 'UTC')
+                ->tz('Asia/Taipei')->toDateTimeString() === $row['recommended_time'];
     }
 
     private function load(): array

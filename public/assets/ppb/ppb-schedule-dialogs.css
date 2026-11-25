@@ -28,5 +28,7 @@
 .ppb-rating-options input:checked + span { background: #315eca; color: white; }
 .ppb-rating-options input:focus-visible + span { outline: 2px solid #1e293b; }
 .ppb-rating-bonus { background: #fff6d8; }
-.ppb-rating-bonus input, [name="score_delivery_time"] { width: 4em; text-align: center; }
+.ppb-rating-bonus input { width: 4em; text-align: center; }
+.ppb-rating-section h3 { display: flex; justify-content: space-between; align-items: center; }
+.ppb-rating-score { background: #315eca; color: white; border-radius: 999px; padding: 2px 10px; }
 button.ppb-shift-name { cursor: pointer; }

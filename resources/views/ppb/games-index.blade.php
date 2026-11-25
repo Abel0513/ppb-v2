@@ -2,7 +2,7 @@
 @extends('ppb.layout')
 @section('title','分析師輪值表')
 @push('styles')
-<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-schedule-dialogs.css') }}">
+<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-schedule-dialogs.css') }}?v=rating-dialog">
 <link rel="stylesheet" href="{{ asset('assets/ppb/ppb-shift-ui4.css') }}?v=20261105-op1">
 @endpush
 @section('body')
@@ -301,5 +301,5 @@
     </div></main>
   </div>
 </div>
-<script src="{{ asset('assets/ppb/ppb-schedule-dialogs.js') }}" defer></script>
+<script src="{{ asset('assets/ppb/ppb-schedule-dialogs.js') }}?v=rating-dialog" defer></script>
 @endsection

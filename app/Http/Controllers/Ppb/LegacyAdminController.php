@@ -94,15 +94,10 @@ class LegacyAdminController extends Controller
         $games = PpbGame::whereIntegerInRaw('id', $native->concat($legacy)->pluck('gid')->unique()->all())->get()->keyBy('id');
         $key = fn ($row) => $row['gid'].':'.$row['subject_type'].':'.$row['subject_id'];
         $nativeKeys = $native->keyBy($key);
-        $legacy = $legacy->unique($key)->map(function ($row) use ($games) {
+        $legacy = $legacy->unique($key)->map(function ($row) use ($games, $source) {
             $game = $games->get($row['gid']);
-            $notes = json_decode((string) $game?->notes, true);
-            $linked = $game && ($notes['_ppb_legacy_game_v1'] ?? false)
-                && $game->display_code === $row['code'] && $game->recommended_at
-                && CarbonImmutable::parse($game->getRawOriginal('recommended_at'), 'UTC')
-                    ->tz('Asia/Taipei')->toDateTimeString() === $row['recommended_time'];
 
-            return $row + ['game' => $linked ? $game : null];
+            return $row + ['game' => $source->matchesImportedGame($row, $game) ? $game : null];
         })->reject(fn ($row) => $row['game'] && $nativeKeys->has($key($row)));
 
         $byMonth = $legacy->concat($native->map(function ($row) use ($games) {
