@@ -36,6 +36,13 @@ jobs:
           name: reviewed-v2-isolated-tools
           path: ${{ runner.temp }}/v2-fixed-tools.tar.gz
           retention-days: 14
+      - name: Build source-only UI management handoff (never execute it)
+        run: python3 ops/deploy/package-ui-management.py "$RUNNER_TEMP/ui-phase-a-management.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-ui-phase-a-management
+          path: ${{ runner.temp }}/ui-phase-a-management.zip
+          retention-days: 14
       - name: Install locked dependencies without application scripts or plugins
         run: composer install --prefer-dist --no-interaction --no-progress --no-scripts --no-plugins
       - name: Laravel routes and feature regressions without a database
