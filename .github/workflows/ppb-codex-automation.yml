@@ -89,7 +89,7 @@ jobs:
           set -euo pipefail
           # Force ChatGPT auth even if someone previously logged in with an API key.
           test -z "${OPENAI_API_KEY:-}${CODEX_API_KEY:-}" || { echo 'STOP=API_KEY_AUTH_DISALLOWED'; exit 1; }
-          codex -c forced_login_method=chatgpt exec --sandbox workspace-write --ask-for-approval never "$(cat .task/prompt.txt)" > agent-summary.txt
+          codex -c forced_login_method=chatgpt --ask-for-approval never exec --sandbox workspace-write "$(cat .task/prompt.txt)" > agent-summary.txt
       - name: Export candidate patch (no GitHub write token)
         env:
           BASE: ${{ needs.prepare.outputs.base }}
