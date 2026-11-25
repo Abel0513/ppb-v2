@@ -1,7 +1,34 @@
 [
   {
-    "operation": "ui_inventory",
-    "offset": 1650,
-    "limit": 50
+    "operation": "ui_source",
+    "path": "Application/Admin/View/AdminSchedule/add.tpl"
+  },
+  {
+    "operation": "ui_source",
+    "path": "Application/Admin/View/AdminSchedule/analysisScheduleOverview.tpl"
+  },
+  {
+    "operation": "ui_source",
+    "path": "Application/Admin/View/AdminSchedule/analystRatingChange.tpl"
+  },
+  {
+    "operation": "ui_source",
+    "path": "Application/Admin/View/AdminSchedule/analystlist.tpl"
+  },
+  {
+    "operation": "ui_source",
+    "path": "Application/Admin/View/AdminSchedule/analystperformance.tpl"
+  },
+  {
+    "operation": "ui_source",
+    "path": "Application/Admin/View/AdminSchedule/analyststats.tpl"
+  },
+  {
+    "operation": "ui_source",
+    "path": "Application/Admin/View/AdminSchedule/attendanceRecord.tpl"
+  },
+  {
+    "operation": "ui_source",
+    "path": "Application/Admin/View/AdminSchedule/csdaBroadcast.tpl"
   }
 ]
