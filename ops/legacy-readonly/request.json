@@ -1,22 +1,52 @@
 [
   {
-    "operation": "ui_source",
-    "path": "Application/Admin/View/AnalystRating/index.tpl"
+    "operation": "select",
+    "table": "pay.pay_analyst_profiles",
+    "columns": [
+      "id",
+      "sort_id",
+      "user_type",
+      "rating_level",
+      "analyst_level"
+    ],
+    "limit": 50,
+    "offset": 0
   },
   {
-    "operation": "ui_source",
-    "path": "Application/Admin/View/AnalystRating/rating.tpl"
+    "operation": "search",
+    "query": "function getRatingLevelLabel",
+    "limit": 50
   },
   {
-    "operation": "ui_source",
-    "path": "Application/Admin/View/AnalystRating/salary.tpl"
+    "operation": "search",
+    "query": "function getMonthStats",
+    "limit": 50
   },
   {
-    "operation": "ui_source",
-    "path": "Public/Admin/css/shift.css"
+    "operation": "search",
+    "query": "function getRankImageByLevel",
+    "limit": 20
   },
   {
-    "operation": "ui_source",
-    "path": "Public/ui/dist/css/shift.css"
+    "operation": "source",
+    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
+    "offset": 3475,
+    "limit": 200
+  },
+  {
+    "operation": "source",
+    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
+    "offset": 2580,
+    "limit": 80
+  },
+  {
+    "operation": "evaluation_summary",
+    "analyst_id": 4,
+    "month": "2026-11"
+  },
+  {
+    "operation": "evaluation_summary",
+    "analyst_id": 4,
+    "month": "2026-10"
   }
 ]
