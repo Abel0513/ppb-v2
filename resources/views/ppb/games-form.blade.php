@@ -13,7 +13,6 @@
   .admin-content-inner{max-width:none!important;padding:15px 18px 25px!important;margin:0!important}
   .admin-content-inner > .eyebrow,.admin-content-inner > .heading,.admin-content-inner > .sub{display:none!important}
   .admin-content-inner > .card.form-panel{max-width:none!important;margin:0!important;border:0!important;box-shadow:none!important;padding:0!important}
-  .ppb-sched-grid{grid-template-columns:1fr!important}
   .ppb-fieldset{margin:10px 0 20px!important}
   .admin-profile-dropdown{display:none!important}
   @media(max-width:640px){.admin-content-inner{padding:12px 14px 22px!important}}
@@ -54,24 +53,28 @@
 <p class="sub">建立時可以先不選分析師；補齊 5 位短文、1 位 BONUS、核稿人及選用的長文人員後，才符合 WP 上傳條件。</p>
 <div class="card form-panel" style="max-width:1000px">
 @if($errors->any())<div class="error" style="margin-bottom:16px"><strong>請修正以下資料：</strong><ul style="margin:5px 0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
-@if($game && ($game->hasVerifiedWp() || $game->hasUnresolvedWp()))<div class="error">此賽事已有 WP 發布或待查紀錄，暫停一般編輯，以免破壞發布與歷史關聯。<a class="link" href="{{ route('ppb.games.show',$game) }}">返回詳情</a></div>@else
+@php
+  $wpHeld = $game && ($game->hasVerifiedWp() || $game->hasUnresolvedWp());
+  $holdSlots = $wpHeld && ($game->hasUnresolvedWp() || $game->hasRenumberBlockingHistory());
+@endphp
+@if($wpHeld)<p class="notice">此賽事的 WP 發布已鎖定或待核對。賽事編號、對戰組合、推薦時段和既有名額為唯讀。送出時會重新檢查發布與歷史關聯。</p>@endif
 <form method="post" action="{{ $isEdit ? route('ppb.games.update',[$game,'modal'=>request()->query('modal')==='1' ? '1' : null]) : route('ppb.games.store') }}" id="ppbScheduleForm">@csrf @if($isEdit)@method('PUT')@endif
 @if($isEdit)<input type="hidden" name="revision_token" value="{{ old('revision_token', \App\Services\Ppb\ScheduleVersion::game($game)) }}">@endif
 <h2 class="card-title" style="margin:0 0 16px">1. 排班資料</h2>
 <div class="ppb-sched-grid">
 @if($isEdit)
-    @php $legacyNotes = json_decode((string) $game->notes, true); @endphp
-    @if(($legacyNotes['_ppb_legacy_game_v1'] ?? false) && isset($legacyNotes['lottery_no']))
-        <label class="field-label">台彩賽事編號<input class="field" value="{{ $legacyNotes['lottery_no'] }}" readonly></label>
+    @if($game->lotteryNumber() !== null)
+        <label class="field-label">台彩賽事編號<input class="field" value="{{ $game->lotteryNumber() }}" readonly></label>
     @endif
+    @if($wpHeld)<label class="field-label">賽事編號<input class="field" value="{{ $game->display_code }}" readonly></label>@endif
 @endif
 <label class="field-label">賽事類型
 @if($isEdit || $isInsert)<input type="hidden" name="game_type" value="{{ $isEdit ? $game->game_type : $insertType }}">@endif
 <select class="field" name="game_type" id="gameType" @disabled($isEdit || $isInsert)><option value="1" @selected((string)old('game_type',$game?->game_type ?? ($isInsert ? $insertType : '1'))==='1')>日常賽事</option><option value="2" @selected((string)old('game_type',$game?->game_type ?? ($isInsert ? $insertType : '1'))==='2')>額外加場</option></select></label>
-<label class="field-label">賽事日期 <input class="field" type="date" name="match_date" id="matchDate" value="{{ $dateValue }}" required></label>
-<label class="field-label">推薦時段 <select class="field" name="match_time" required><option value="">請選擇時段</option><option value="11:00" @selected($timeValue==='11:00')>11 點</option><option value="16:00" @selected($timeValue==='16:00')>16 點</option></select></label>
-<label class="field-label">核稿人員<select class="field" name="reviewer_analyst_id"><option value="">請選擇核稿人員</option>@foreach($reviewers as $reviewer)<option value="{{ $reviewer->id }}" @selected((string)old('reviewer_analyst_id',$game?->reviewer_analyst_id)===(string)$reviewer->id)>{{ $reviewer->display_name ?: $reviewer->name }}</option>@endforeach</select></label>
-<label class="field-label">實際開賽時間（選填，不等於推薦時段）<input class="field" type="datetime-local" name="starts_local" value="{{ old('starts_local',$game?->starts_at?->timezone('Asia/Taipei')->format('Y-m-d\TH:i')) }}"></label>
+<label class="field-label">賽事日期 <input class="field" type="date" name="match_date" id="matchDate" value="{{ $dateValue }}" @readonly($wpHeld) required></label>
+<label class="field-label">推薦時段 @if($wpHeld)<input type="hidden" name="match_time" value="{{ $timeValue }}">@endif<select class="field" name="match_time" @disabled($wpHeld) required><option value="">請選擇時段</option><option value="11:00" @selected($timeValue==='11:00')>11 點</option><option value="16:00" @selected($timeValue==='16:00')>16 點</option></select></label>
+<label class="field-label">核稿人員<select class="field" name="reviewer_analyst_id" @disabled($wpHeld)><option value="">請選擇核稿人員</option>@foreach($reviewers as $reviewer)<option value="{{ $reviewer->id }}" @selected((string)old('reviewer_analyst_id',$game?->reviewer_analyst_id)===(string)$reviewer->id)>{{ $reviewer->display_name ?: $reviewer->name }}</option>@endforeach</select></label>
+
 </div>
 @if(!$isEdit)
 {{-- PPB UI6: ordinary add is append. A gap entry carries an explicit anchor;
@@ -89,6 +92,9 @@
   $fixtureSportValue = $isManual ? 'manual' : (string)($fixtures->firstWhere('id',old('fixture_id',$game?->fixture_id))?->sport ?? '');
   $sportChoice = old('sport_choice', $game ? $fixtureSportValue : '');
 @endphp
+@if($wpHeld)
+<label class="field-label">對戰組合<input class="field" value="{{ $game->matchup_text }}" readonly></label>
+@else
 <div class="ppb-sched-grid">
   <label class="field-label">對戰組合
     <select class="field" name="sport_choice" id="fixtureSport" required>
@@ -111,15 +117,16 @@
     </select>
   </label>
 </div>
-@if($fixtures->isEmpty())<p class="small-note">目前尚無可選賽程。可使用「手動填寫」；賽程同步狀態應由管理端確認。</p>@endif
+<p class="small-note" id="fixtureEmpty" @if($fixtures->isNotEmpty()) hidden @endif>所選日期附近沒有 V2 賽程，可使用「手動填寫」。</p><p class="error" id="fixtureError" hidden>無法更新賽程與出勤資料。</p>
 <div id="manualSection" class="ppb-sched-grid">
 <label class="field-label">聯賽<input class="field" type="text" name="manual_league" maxlength="50" value="{{ old('manual_league',$isManual?$game?->league:'') }}" placeholder="例如：美國職籃"></label>
 <label class="field-label">對戰組合<input class="field" type="text" name="manual_matchup" maxlength="255" value="{{ old('manual_matchup',$isManual && $game ? (($game->away_team==='—'?'':$game->away_team).'@'.($game->home_team==='—'?'':$game->home_team)) : '') }}" placeholder="例如：湖人@勇士"></label>
 </div>
+@endif
 <hr class="ppb-hr"><h2 class="card-title" style="margin:0 0 16px">3. 玩法與盤口</h2>
 <div class="ppb-sched-grid">
 <label class="field-label">玩法類型<select class="field" id="playType" name="play_type" required><option value="">請選擇玩法類型</option>@foreach([5=>'手動填寫',1=>'讓分',2=>'不讓分',3=>'大小分',4=>'特殊玩法'] as $id=>$label)<option value="{{ $id }}" @selected($playType===(string)$id)>{{ $label }}</option>@endforeach</select></label>
-<label class="field-label ppb-play" data-play="1,3">讓分數值／大小分基準<input class="field" name="play_value" maxlength="160" value="{{ $playValue }}" placeholder="例如 +1.5 / 215.5"></label>
+<label class="field-label ppb-play" data-play="1,3">讓分比數<input class="field" name="play_value" maxlength="160" value="{{ $playValue }}" placeholder="例如: +1.5 或 -2"></label>
 <label class="field-label ppb-play" data-play="1,2,3">盤口類型<select class="field" name="market_type"><option value="">請選擇盤口類型</option><option value="1" @selected((string)old('market_type',$game?->market_type)==='1')>兩路盤</option><option value="2" @selected((string)old('market_type',$game?->market_type)==='2')>三路盤</option></select></label>
 <label class="field-label ppb-play" data-play="4">賽事玩法<input class="field" name="special_play" maxlength="160" value="{{ $special }}" placeholder="例如角球數、第一節勝負"></label>
 <label class="field-label ppb-play" data-play="5">手動填寫玩法<input class="field" name="manual_play" maxlength="160" value="{{ $manualPlay }}" placeholder="例如看盤決定"></label>
@@ -128,15 +135,20 @@
 <p class="small-note">可留空稍後補齊；短文 5 位互不重複。BONUS、長文可以與短文兼任。</p>
 <div class="ppb-sched-grid">
 @for($n=1;$n<=5;$n++)
-<label class="field-label">短文-分析師{{ $n }}<select class="field" name="short[{{ $n }}]" data-short-slot><option value="">請選擇分析師</option>@foreach($analysts as $analyst)<option value="{{ $analyst->id }}" @selected((string)old('short.'.$n,$selected['short'][$n]??'')===(string)$analyst->id)>{{ $analyst->display_name ?: $analyst->name }}</option>@endforeach</select></label>
+<label class="field-label">短文-分析師{{ $n }}<select class="field" name="short[{{ $n }}]" data-short-slot @disabled($holdSlots || ($wpHeld && isset($selected['short'][$n])))><option value="">請選擇分析師</option>@foreach($analysts as $analyst)<option data-analyst-label="{{ $analyst->display_name ?: $analyst->name }}" value="{{ $analyst->id }}" @selected((string)old('short.'.$n,$selected['short'][$n]??'')===(string)$analyst->id)>{{ $analyst->display_name ?: $analyst->name }}{{ isset($absences[$analyst->id]) ? ' ( 當月曠職'.$absences[$analyst->id].'場 )' : '' }}</option>@endforeach</select></label>
 @endfor
-<label class="field-label">BOUNS-分析師<select class="field" name="bonus_id"><option value="">請選擇分析師</option>@foreach($analysts as $analyst)<option value="{{ $analyst->id }}" @selected((string)old('bonus_id',$selected['bonus']??'')===(string)$analyst->id)>{{ $analyst->display_name ?: $analyst->name }}</option>@endforeach</select></label>
+<label class="field-label">BOUNS-分析師<select class="field" name="bonus_id" @disabled($holdSlots || ($wpHeld && isset($selected['bonus'])))><option value="">請選擇分析師</option>@foreach($analysts as $analyst)<option data-analyst-label="{{ $analyst->display_name ?: $analyst->name }}" value="{{ $analyst->id }}" @selected((string)old('bonus_id',$selected['bonus']??'')===(string)$analyst->id)>{{ $analyst->display_name ?: $analyst->name }}{{ isset($absences[$analyst->id]) ? ' ( 當月曠職'.$absences[$analyst->id].'場 )' : '' }}</option>@endforeach</select></label>
 </div>
-<label class="field-label" style="display:flex;gap:8px;align-items:center;margin-top:18px"><input type="checkbox" name="has_long_article" id="hasLong" value="1" @checked((bool)old('has_long_article',$game?->has_long_article ?? false))> 有長文</label>
-<label class="field-label" id="longField">長文-分析師<select class="field" name="long_id"><option value="">請選擇</option>@foreach($analysts as $analyst)<option value="{{ $analyst->id }}" @selected((string)old('long_id',$selected['long']??'')===(string)$analyst->id)>{{ $analyst->display_name ?: $analyst->name }}</option>@endforeach</select></label>
+<label class="field-label" style="display:flex;gap:8px;align-items:center;margin-top:18px"><input type="checkbox" name="has_long_article" id="hasLong" @disabled($wpHeld) value="1" @checked((bool)old('has_long_article',$game?->has_long_article ?? false))> 有長文</label>
+<label class="field-label" id="longField">長文-分析師<select class="field" name="long_id" @disabled($holdSlots || ($wpHeld && isset($selected['long'])))><option value="">請選擇</option>@foreach($analysts as $analyst)<option data-analyst-label="{{ $analyst->display_name ?: $analyst->name }}" value="{{ $analyst->id }}" @selected((string)old('long_id',$selected['long']??'')===(string)$analyst->id)>{{ $analyst->display_name ?: $analyst->name }}{{ isset($absences[$analyst->id]) ? ' ( 當月曠職'.$absences[$analyst->id].'場 )' : '' }}</option>@endforeach</select></label>
+@unless($wpHeld)
+<details><summary>進階設定</summary>
+<label class="field-label">實際開賽時間（選填）<input class="field" type="datetime-local" name="starts_local" value="{{ old('starts_local',$game?->starts_at?->timezone('Asia/Taipei')->format('Y-m-d\TH:i')) }}"></label>
+</details>
 <label class="field-label">備註<textarea class="field" name="notes" maxlength="3000" style="min-height:90px">{{ old('notes',$game?->notes) }}</textarea></label>
+@endunless
 <div class="toolbar" style="margin-top:24px"><button class="action" type="submit">{{ $isEdit?'確定修改':'確定新增' }}</button><a class="link" data-close-schedule-form href="{{ $isEdit?route('ppb.games.show',$game):route('ppb.games.index') }}">取消</a></div>
-</form>@endif
+</form>
 </div></div></main></div></div>
 <style>.ppb-sched-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px;margin-bottom:16px}.ppb-sched-grid .field-label{min-width:0}.ppb-sched-grid .field{width:100%}.ppb-fieldset{border:1px solid #dce3ed;border-radius:12px;margin:12px 0 24px;padding:16px}.ppb-fieldset legend{padding:0 8px;font-weight:700}.ppb-hr{border:0;border-top:1px solid #e6ebf2;margin:26px 0 20px}.ppb-insert-context{font-size:12px;padding:8px 10px;margin:8px 0 15px;color:#48576c;background:#f6f8fc;border-left:2px solid #7183ab;border-radius:4px}[hidden]{display:none!important}@media(max-width:680px){.ppb-sched-grid{grid-template-columns:1fr}}</style>
 <script>
@@ -152,6 +164,44 @@ if(q('#hasLong'))q('#hasLong').addEventListener('change',longMode);
 
 if(fixture?.selectedOptions[0]?.dataset.sport && sport?.value!=='manual')sport.value=fixture.selectedOptions[0].dataset.sport;
 fixtureFilter();matchupMode();playMode();longMode();
+let optionsRequest;
+q('#matchDate')?.addEventListener('change', async (event) => {
+  optionsRequest?.abort();
+  if (!event.target.value) return;
+  const controller = new AbortController();
+  optionsRequest = controller;
+  const url = new URL(@json(route('ppb.games.form-options', [], false)), location.origin);
+  url.searchParams.set('date', event.target.value);
+  const selected = fixture.value;
+  if (selected) url.searchParams.set('fixture_id', selected);
+  q('#fixtureError').hidden = true;
+  try {
+    const response = await fetch(url, {signal: controller.signal, headers: {Accept: 'application/json'}});
+    if (!response.ok) throw new Error();
+    const data = await response.json();
+    if (controller.signal.aborted) return;
+    const previousSport = sport.value;
+    sport.length = 2;
+    fixture.length = 1;
+    for (const name of new Set(data.fixtures.map(item => item.sport))) sport.add(new Option(name, name));
+    for (const item of data.fixtures) {
+      const option = new Option(item.label, item.id);
+      option.dataset.sport = item.sport;
+      fixture.add(option);
+    }
+    sport.value = [...sport.options].some(option => option.value === previousSport) ? previousSport : '';
+    fixture.value = selected;
+    q('#fixtureEmpty').hidden = data.fixtures.length > 0;
+    for (const option of document.querySelectorAll('[data-analyst-label]')) {
+      const count = data.absences[option.value];
+      option.textContent = option.dataset.analystLabel + (count ? ` ( 當月曠職${count}場 )` : '');
+    }
+    fixtureFilter();
+    matchupMode();
+  } catch {
+    if (!controller.signal.aborted) q('#fixtureError').hidden = false;
+  }
+});
 q('#ppbScheduleForm')?.addEventListener('submit',function(e){
  const vals=Array.from(document.querySelectorAll('[data-short-slot]')).map(s=>s.value).filter(Boolean);
  if(new Set(vals).size!==vals.length){e.preventDefault();alert('短文五個位置不可指派同一位分析師。');return;}

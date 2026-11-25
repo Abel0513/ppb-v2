@@ -6,7 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\PpbAnalyst;
 use App\Models\PpbGame;
 use App\Services\Ppb\Evaluation\EvaluationService;
-use App\Services\Ppb\Evaluation\EvaluationSubjects;
+use App\Services\Ppb\Evaluation\EvaluationInputs;
+use App\Services\Ppb\Evaluation\LocalEvaluationData;
 use App\Services\Ppb\LegacyDisplayLabels;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -24,10 +25,10 @@ class LegacyAdminController extends Controller
         'rating' => '分析師評級異動',
     ];
 
-    private function month(Request $request): string
+    private function month(Request $request, bool $previous = false): string
     {
         return $request->validate(['month' => ['nullable', 'date_format:Y-m', 'after_or_equal:2000-01', 'before_or_equal:2099-12']])['month']
-            ?? now('Asia/Taipei')->format('Y-m');
+            ?? now('Asia/Taipei')->startOfMonth()->subMonths((int) $previous)->format('Y-m');
     }
 
     public function articles(Request $request)
@@ -51,7 +52,7 @@ class LegacyAdminController extends Controller
         ]);
     }
 
-    public function videos(Request $request, EvaluationSubjects $subjects)
+    public function videos(Request $request, LocalEvaluationData $data)
     {
         $month = $this->month($request);
         $ready = Schema::hasTable('ppb_evaluation_videos');
@@ -60,48 +61,67 @@ class LegacyAdminController extends Controller
             ->where('scheduled_at', '>=', $date->utc()->toDateTimeString())
             ->where('scheduled_at', '<', $date->addMonth()->utc()->toDateTimeString())
             ->orderBy('scheduled_at')->orderBy('id')->get() : collect();
-        [$roster, $unavailable] = $videos->isNotEmpty() ? $this->roster($subjects) : [collect(), false];
+        $roster = collect($data->roster());
 
-        $canManageVideos = $ready && $request->user('ppb')->hasPpbPermission('evaluations.view')
+        $canManageVideos = $data->ready() && Schema::hasColumn('ppb_evaluation_videos', 'week_no') && $request->user('ppb')->hasPpbPermission('evaluations.view')
             && $request->user('ppb')->hasPpbPermission('evaluations.manage');
 
-        return view('ppb.legacy-admin.videos', compact('month', 'ready', 'videos', 'roster', 'unavailable', 'canManageVideos'));
+        return view('ppb.legacy-admin.videos', compact('month', 'ready', 'videos', 'roster', 'canManageVideos'));
     }
 
-    public function attendance(Request $request, EvaluationSubjects $subjects)
+    public function attendance(Request $request, LocalEvaluationData $data, EvaluationInputs $inputs)
     {
         $ready = Schema::hasTable('ppb_evaluation_attendance');
-        $query = DB::table('ppb_evaluation_attendance as a')->join('ppb_games as g', 'a.game_id', '=', 'g.id')
-            ->whereIn('a.attendance_status', [1, 2]);
-        $months = $ready ? (clone $query)->distinct()->orderByDesc('g.month_key')->pluck('g.month_key') : collect();
-        $months = $months->prepend(now('Asia/Taipei')->format('Y-m'))->unique()->values();
+        $roster = collect($data->roster());
+        $rows = $ready ? collect($inputs->attendanceRows($data->records(attendanceOnly: true), $data->corrections()))
+            ->filter(fn ($row) => $roster->has($row['subject_type'].':'.$row['subject_id'])) : collect();
+        $byMonth = $rows->groupBy(fn ($row) => substr($row['recommended_time'], 0, 7));
+        $current = now('Asia/Taipei')->format('Y-m');
+        $months = $byMonth->keys()->push($current)->unique()->sortDesc()->values();
         $pager = $this->monthPager($request, $months);
-        $month = $pager->getCollection()->first() ?? now('Asia/Taipei')->format('Y-m');
-        $attendance = $ready ? (clone $query)->where('g.month_key', $month)
-            ->orderBy('g.recommended_at')->orderBy('a.id')
-            ->get(['a.subject_type', 'a.subject_id', 'a.attendance_status', 'g.game_type', 'g.game_number',
-                'g.matchup_text', 'g.league', 'g.away_team', 'g.home_team']) : collect();
-        [$roster, $unavailable] = $attendance->isNotEmpty() ? $this->roster($subjects) : [collect(), false];
+        $month = $request->has('month') ? $this->month($request) : ($pager->getCollection()->first() ?? $current);
+        $selected = $byMonth->get($month, collect());
+        $games = PpbGame::whereIn('id', $selected->pluck('gid'))->get()->keyBy('id');
+        $attendance = $selected->map(fn ($row) => (object) ($row + (($game = $games->get($row['gid'])) ? $game->getAttributes() : [])));
+        $unavailable = false;
 
-        return view('ppb.legacy-admin.attendance', compact('month', 'ready', 'attendance', 'pager', 'roster', 'unavailable'));
+        return view('ppb.legacy-admin.attendance', compact('month', 'ready', 'attendance', 'pager', 'roster', 'unavailable', 'months'));
     }
 
-    private function roster(EvaluationSubjects $subjects): array
-    {
-        try {
-            return [collect($subjects->all())->keyBy(fn ($row) => $row['type'].':'.$row['id']), false];
-        } catch (\RuntimeException $error) {
-            report($error);
-            return [collect(), true];
-        }
-    }
-
-    public function report(Request $request, EvaluationSubjects $subjects)
+    public function report(Request $request, LocalEvaluationData $data, EvaluationService $service)
     {
         $kind = $request->route()->defaults['kind'];
         $title = self::REPORT_TITLES[$kind];
-        $month = $this->month($request);
-        [$roster, $unavailable] = $this->roster($subjects);
+        $isPay = in_array($kind, ['rating-salary', 'salary', 'rating'], true);
+        $month = $this->month($request, $isPay);
+        $roster = collect($data->roster());
+        $unavailable = !$data->ready();
+        $context = $unavailable ? null : $data->context(CarbonImmutable::createFromFormat('!Y-m', $month, 'Asia/Taipei'));
+        $values = $roster->map(function ($subject) use ($service, $context, $month, $isPay) {
+            if ($context === null) return [];
+            $report = $service->loadLocal($subject, $month, $context);
+            $current = $report['current'];
+            $level = $current['level'] === null ? null : (int) $current['level'];
+            if ($isPay) {
+                $next = $report['recorded_next_level'] ?? ($level !== null ? ($current['next_rating']['rating_level'] ?? null) : null);
+                return $current['salary'] + [
+                    'rating' => LegacyDisplayLabels::rating($level),
+                    'next_rating' => LegacyDisplayLabels::rating($next),
+                    'change' => $level === null || $next === null ? '無資料' : ['降級', '維持', '升級'][($next <=> $level) + 1],
+                    ...array_combine(['score_0', 'score_1', 'score_2'], array_reverse(array_column(array_column($report['history'], 'rating'), 'total_score'))),
+                ];
+            }
+            if ($level === null && $month === now('Asia/Taipei')->format('Y-m') && isset($subject['rating_level'])) {
+                $level = (int) $subject['rating_level'];
+            }
+            $row = ['rating' => LegacyDisplayLabels::rating($level), 'score' => $current['view']['total_score']];
+            foreach (['month' => 'month', 'recent' => 'recent10', 'bonus' => 'bonus'] as $prefix => $period) {
+                $stats = $current['performance'][$period];
+                $row[$prefix.'_rate'] = $stats['rate'];
+                $row[$prefix.'_record'] = $stats['wins'] === null ? null : $stats['wins'].' - '.$stats['losses'];
+            }
+            return $row;
+        });
         $canSeeLineName = $kind === 'analyst-list'
             && $request->user('ppb')->hasPpbPermission('schedules.manage')
             && $request->user('ppb')->hasPpbPermission('accounts.manage');
@@ -117,17 +137,18 @@ class LegacyAdminController extends Controller
         $canSeeWork = $request->user('ppb')->hasPpbPermission('evaluations.view');
 
         return response()->view('ppb.legacy-admin.report', compact(
-            'kind', 'title', 'month', 'roster', 'profiles', 'canSeeLineName', 'canSeeWork', 'unavailable'
+            'kind', 'title', 'month', 'roster', 'profiles', 'canSeeLineName', 'canSeeWork', 'unavailable', 'values'
         ))->header('Cache-Control', 'private, no-store');
     }
 
-    public function summary(Request $request, string $type, int $id, EvaluationSubjects $subjects, EvaluationService $service)
+    public function summary(Request $request, string $type, int $id, LocalEvaluationData $data, EvaluationService $service)
     {
-        $month = $this->month($request);
-        $subject = $subjects->get($type, $id);
-        $report = $service->load($subject, $month);
-        $current = $report['current'];
         $kind = $request->route()->defaults['kind'];
+        $month = $this->month($request, $kind !== 'schedule');
+        $subject = $data->roster()[$type.':'.$id] ?? abort(404);
+        abort_unless($data->ready(), 503);
+        $report = $service->loadLocal($subject, $month);
+        $current = $report['current'];
 
         if ($kind === 'schedule') {
             $values = [
@@ -137,7 +158,7 @@ class LegacyAdminController extends Controller
             ];
         } else {
             $level = $current['level'];
-            $next = $report['recorded_next_level'] ?? null;
+            $next = $report['recorded_next_level'] ?? ($level !== null ? ($current['next_rating']['rating_level'] ?? null) : null);
             $values = [
                 'salary' => $current['salary'],
                 'rating' => LegacyDisplayLabels::rating($level),

@@ -2,6 +2,11 @@
 @section('title', '出缺勤紀錄表')
 
 @section('legacy-content')
+<nav class="legacy-month-tabs" aria-label="月份">
+  @foreach($months as $tab)
+    <a class="link" href="{{ route('ppb.schedule.attendance', ['month' => $tab]) }}" @if($month === $tab) aria-current="page" @endif>{{ $tab }}</a>
+  @endforeach
+</nav>
 <h2>{{ $month }} 出缺勤紀錄</h2>
 @if(!$ready || $unavailable)<p class="notice">唯讀資料暫時無法取得。</p>@endif
 <div class="card table-scroll">
@@ -25,5 +30,5 @@
     </tbody>
   </table>
 </div>
-@include('ppb.legacy-admin.pager', ['games' => $pager, 'unit' => '個月'])
+@include('ppb.legacy-admin.pager', ['games' => $pager, 'unit' => '個月', 'resultCount' => $months->count()])
 @endsection

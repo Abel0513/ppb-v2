@@ -11,6 +11,64 @@ class EvaluationService
 {
     public function __construct(private LegacyReader $reader,private EvaluationSubjects $subjects,private LegacyMonthSelector $selector,private EvaluationReport $report,private LegacyRatingCalculator $rating) {}
 
+    public function loadLocal(array $subject, string $month, ?array $context = null): array
+    {
+        $date = CarbonImmutable::createFromFormat('!Y-m', $month, 'Asia/Taipei');
+        $context ??= app(LocalEvaluationData::class)->context($date);
+        $key = $subject['type'].':'.$subject['id'];
+        $ratings = $context['ratings']->get($key, collect())->keyBy(fn ($row) => $row->source_type.':'.$row->source_id);
+        $local = $context['evaluations']->get($key, collect())->keyBy('month');
+        $records = $context['records']->get($key, collect())->map(function ($pick) use ($ratings, $context) {
+            $type = $pick['_source_type'];
+            $id = $pick['_source_id'];
+            $rating = $ratings->get($type.':'.$id);
+            if ($rating) {
+                foreach (LegacyScheduleCalculator::RATING_FIELDS as $field) $pick[$field] = (int) $rating->$field;
+                if ($type === 'v2' && $rating->result_state !== null) $pick['is_win'] = (int) $rating->result_state;
+            }
+            if ($type === 'v2' && $context['waived']->has($pick['_absence_key'].':'.$id)) {
+                $pick['_is_substitution'] = false;
+                $pick['_absence_key'] = null;
+            }
+            return $pick;
+        });
+        $schedules = $records->keyBy('_schedule_key')->all();
+        $videos = $context['videos']->filter(fn ($v) => in_array($key, [$v->guest_1, $v->guest_2, $v->guest_3], true));
+        $attendance = $context['attendance']->get($key, collect());
+        $level = fn ($period) => $this->level(['ratings' => []], $local, $period);
+        $history = $manuals = $inputs = [];
+        foreach ([$date->subMonths(2), $date->subMonth(), $date] as $period) {
+            $name = $period->format('Y-m');
+            $manual = $this->report->defaults($name);
+            $manuals[$name] = array_replace($manual, array_intersect_key($local->get($name)?->getAttributes() ?? [], $manual));
+            $selected = $this->selector->select($records->all(), $key, $name, $schedules);
+            $absences = $attendance->filter(fn ($row) => str_starts_with($row['recommended_time'], $name))->values()->all();
+            $monthVideos = $videos->filter(fn ($v) => $v->scheduled_at >= $period->utc()->toDateTimeString()
+                && $v->scheduled_at < $period->addMonth()->utc()->toDateTimeString());
+            $inputs[$name] = ['attendance' => $absences, 'videos' => $monthVideos->map(fn ($v) => (array) $v)->values()->all()];
+            $grade = $level($name);
+            $history[$name] = $this->report->calculate($selected, $manuals[$name], $schedules, $absences,
+                $monthVideos->where('cancelled', false)->count(), $grade) + ['level' => $grade, 'selected' => $selected];
+        }
+        $current = $history[$month];
+        $previous = $history[$date->subMonth()->format('Y-m')];
+        $recent = $records->filter(fn ($row) => !$row['is_long'] && !$row['is_bonus'] && !$row['_is_substitution']
+            && in_array($row['is_win'], [1, 2], true))
+            ->sortByDesc(fn ($row) => [$row['recommended_time'], $row['_source_type'], $row['_source_id']])->take(20)->values()->all();
+        $current['performance'] = (new EvaluationPerformance)->summarize($current['selected'], $recent);
+        $base = $current['level'] ?? $subject['rating_level'] ?? null;
+        if ($base !== null && in_array((int) $base, [0, 1, 2, 3], true)) {
+            $current['next_rating'] = $this->rating->rating((int) $base, $previous['level'],
+                (int) $current['rating']['total_score'], (int) $previous['rating']['total_score']);
+        }
+        return [
+            'current' => $current, 'history' => $history, 'manual' => $manuals[$month], 'inputs' => $inputs[$month],
+            'recorded_next_level' => $level($date->addMonth()->format('Y-m')), 'revision' => $local->get($month)?->revision ?? 0,
+            'source_sha256' => hash('sha256', json_encode([$key, $month, $records->all(), $inputs, $history],
+                JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION)),
+        ];
+    }
+
     public function load(array $subject,string $month): array
     {
         $date=CarbonImmutable::createFromFormat('!Y-m',$month,'Asia/Taipei');
