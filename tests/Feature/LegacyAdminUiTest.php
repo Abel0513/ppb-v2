@@ -35,7 +35,15 @@ class LegacyAdminUiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['app.url' => self::HOST]);
+        // This CI job points the default connection at an unavailable MySQL
+        // port. Force an isolated sqlite memory database for these HTTP tests.
+        config([
+            'app.url' => self::HOST,
+            'database.default' => 'sqlite',
+            'database.connections.sqlite.database' => ':memory:',
+        ]);
+        DB::purge();
+        DB::setDefaultConnection('sqlite');
         // Midnight in Taipei, still the prior day and month in UTC.
         $this->travelTo(CarbonImmutable::parse('2026-10-31 16:00:00', 'UTC'));
         $this->installSchema();
