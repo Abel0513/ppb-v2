@@ -19,7 +19,7 @@ class AnalystController extends Controller
     public function index(Request $request): View
     {
         $keyword = trim((string) $request->query('q', ''));
-        $analysts = PpbAnalyst::query()->select(['id','account_id','name','display_name','status','user_type','color','rating_level'])->with('account:id,username')
+        $analysts = PpbAnalyst::query()->select(['id','account_id','name','display_name','status','user_type','color','background','rating_level','analyst_level'])->with('account:id,username')
             ->when($keyword !== '', fn ($q) => $q->where(function ($s) use ($keyword) {
                 $like = '%'.addcslashes($keyword, '%_\\').'%';
                 $s->where('name', 'like', $like)->orWhere('display_name', 'like', $like);
@@ -79,11 +79,13 @@ class AnalystController extends Controller
             if(!is_int($value)&&!(is_string($value)&&preg_match('/^[0-9]+$/D',$value)))$fail($attribute.' 必須是整數，不接受布林或小數。');
         };
         $data = $request->validate([
-            'id'=>['missing'],'background'=>['missing'],'analyst_level'=>['missing'],
+            'id'=>['missing'],
             'color'=>['sometimes','nullable','string','regex:/^#[0-9a-fA-F]{6}$/D'],
+            'background'=>['sometimes','nullable','string','regex:/^#[0-9a-fA-F]{6}$/D'],
             'wp_photo'=>['sometimes','nullable',$strictInteger,'integer','min:1','max:'.PHP_INT_MAX],
             'author_id'=>['sometimes','nullable',$strictInteger,'integer','min:0','max:'.PHP_INT_MAX],
             'rating_level'=>['sometimes','nullable',$strictInteger,'integer',Rule::in([0,1,2,3])],
+            'analyst_level'=>['sometimes','nullable',$strictInteger,'integer',Rule::in([0,1])],
             'line_id'=>['sometimes','nullable','string','max:255','not_regex:/[\x00-\x1F\x7F]/'],
             'line_name'=>['sometimes','nullable','string','max:255','not_regex:/[\x00-\x1F\x7F]/'],
             'name' => ['required', 'string', 'max:100'],

@@ -14,6 +14,8 @@ release manifest 維持 migrate=false。原 PR58/102/103/104/105 全部保持 Dr
 | line_id | 已核實舊 LiffController::getAnalystData 的 LINE ID→分析師關聯（docs/LEGACY_EVALUATION_MAP.md）；不等於 account_id | nullable opaque string，V2 儲存界線255字元；禁止控制字元；不推定提供者格式或唯一性，不構成身分驗證 |
 | line_name | 已保存安全來源 AnalystRatingController 193／247、AdminScheduleController 3158／3297 等選取 line_name，與 analyst_name 並存 | nullable VARCHAR(255)，與 name/display_name 分離；同為私人欄位 |
 | rating_level | 已核實 LegacyRatingCalculator 的 0..3 值域、AnalystRatingController 1167–1439 及 profile rating_level 讀取 | nullable unsigned TINYINT、整數0..3；只保存主檔資料，不覆蓋月份評級、計算公式或快照 |
+| background | 2026-11-25 schema：pay.pay_analyst_profiles.background varchar NOT NULL，與 color 並列；來源當 CSS 背景色 | nullable VARCHAR(7)，僅 #RRGGBB，不是履歷或任意 CSS；現有列可空因未搬舊資料 |
+| analyst_level | 同批 schema tinyint NOT NULL；顯示 `==0`／`==1` 兩路互補，LINE 只組 level_0／level_1，缺值當 0 | nullable unsigned TINYINT，只接受 0 或 1；不與 rating_level／user_type 合併；標籤仍遮蔽不杜撰 |
 | account_id | 現有 V2 migration 的 nullable unique FK／原 Controller 的角色檢查 | 維持選用；不以此欄登入或委派分析師身分 |
 | name/display_name/user_type/status/internal_notes | 原 V2 Migration、Controller、表單及已驗收身份0/1/2/3規則 | 保留，未改名、未合併，不更動分析師 ID |
 
@@ -22,16 +24,22 @@ release manifest 維持 migrate=false。原 PR58/102/103/104/105 全部保持 Dr
 拒絕而非截斷。失敗測試也重現Laravel一般integer規則會接受true為1；
 本批整數識別／評級明確拒絕布林、小數，仍接受正常HTML整數字串。沒有搬入舊資料，也沒有遠端驗證 WP ID／LINE 關聯是否有效。
 
-### 必須維持未完成的兩個欄位
+### 已依舊系統唯讀來源補上的兩個欄位（2026-11-25）
 
-- background：目前安全來源及調色盤實際將它當作 CSS 背景色，而本次需求描述為
-  「分析師背景資訊」。沒有取得背景文字欄位的確切來源，不能把舊顏色改存履歷。
-- analyst_level：安全來源有與0／1比較的顯示分支，但確切值域、SQL型別及標籤未
-  完整證實（部分字串經遮蔽）。不能與 rating_level、user_type 合併或猜枚舉。
+正式來源：legacy-readonly run 45555720132（schema `pay.pay_analyst_profiles`）
+與 45556811527（sanitized source）。兩欄都在同一張主檔表，不是另一張表。
 
-兩者未加 Migration、未宣稱完成；請求若帶這兩欄會422，避免靜默丟棄造成假成功。
-下一批可直接接續的主檔工作是依正式來源或使用者明確決策補這兩個欄位，
-不重做已完成六欄。只阻擋這兩部分，不阻擋本批其他功能。
+- background：live schema 為 varchar、NOT NULL，與 color 並列。來源與既有調色盤
+  將它當 CSS 背景色，不是履歷文字。V2 以可空 VARCHAR(7) 保存，僅接受 #RRGGBB；
+  現有 V2 列可空是因為尚未搬移舊資料。schema API 未回傳字元長度。
+- analyst_level：live schema 為 tinyint、NOT NULL，與 rating_level、user_type
+  分開。顯示分支為 `== 0 ? label : label` 與 `== 1 ? label : label`；LINE
+  TaskController 缺值當 0，且只組 `level_0`／`level_1` 通知。V2 以可空
+  unsigned TINYINT 保存，只接受整數 0 或 1，拒絕布林、小數與 2+。
+  兩個顯示文案仍被 tokenizer 遮蔽，表單只標 0／1，不杜撰名稱。
+
+候選 Migration 為 `2026_11_25_000013_add_ppb_analyst_background_and_level.php`。
+正式執行仍須既有備份／migrate 關卡；本批不部署、不跑正式 migration。
 
 ## 權限、資料最小化及資料保持
 

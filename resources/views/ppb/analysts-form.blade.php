@@ -17,9 +17,11 @@
 @foreach($accounts as $account)<option value="{{ $account->id }}" @selected((string)old('account_id',$analyst?->account_id)===(string)$account->id)>{{ $account->name }} · {{ $account->email }}</option>@endforeach
 </select><p class="small-note">僅可綁定具有「分析師」角色、未綁定其他分析師的帳號；沒有綁定不影響名冊身分。</p>
 <label class="field-label" for="color">排班文字色（選填，#RRGGBB）</label><input class="field" id="color" name="color" maxlength="7" pattern="#[0-9a-fA-F]{6}" value="{{ old('color',$analyst?->color) }}">
+<label class="field-label" for="background">排班背景色（選填，#RRGGBB；舊欄位 background，不是履歷）</label><input class="field" id="background" name="background" maxlength="7" pattern="#[0-9a-fA-F]{6}" value="{{ old('background',$analyst?->background) }}">
 <label class="field-label" for="wp_photo">WordPress 照片附件 ID（選填）</label><input class="field" id="wp_photo" name="wp_photo" type="number" min="1" max="{{ PHP_INT_MAX }}" step="1" value="{{ old('wp_photo',$analyst?->wp_photo) }}">
 <label class="field-label" for="author_id">WordPress 作者來源 ID（選填）</label><input class="field" id="author_id" name="author_id" type="number" min="0" max="{{ PHP_INT_MAX }}" step="1" value="{{ old('author_id',$analyst?->author_id) }}">
 <label class="field-label" for="rating_level">主檔評級（不取代月份評級）</label><select class="field" id="rating_level" name="rating_level"><option value="">未提供</option>@foreach([0,1,2,3] as $level)<option value="{{ $level }}" @selected((string)old('rating_level',$analyst?->rating_level)===(string)$level)>{{ $level }}</option>@endforeach</select>
+<label class="field-label" for="analyst_level">主檔層級（舊欄位 analyst_level，僅 0 或 1；文案尚未從舊來源解遮蔽）</label><select class="field" id="analyst_level" name="analyst_level"><option value="">未提供</option>@foreach([0,1] as $level)<option value="{{ $level }}" @selected((string)old('analyst_level',$analyst?->analyst_level)===(string)$level)>{{ $level }}</option>@endforeach</select>
 @if($canPrivate)
 <label class="field-label" for="line_id">LINE 身分來源關聯（選填）</label><input class="field" id="line_id" name="line_id" maxlength="255" autocomplete="off" value="{{ $analyst?->line_id }}">
 <label class="field-label" for="line_name">LINE 顯示名稱（選填）</label><input class="field" id="line_name" name="line_name" maxlength="255" autocomplete="off" value="{{ $analyst?->line_name }}">
