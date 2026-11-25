@@ -1,52 +1,10 @@
 [
-  {
-    "operation": "select",
-    "table": "pay.pay_analyst_profiles",
-    "columns": [
-      "id",
-      "sort_id",
-      "user_type",
-      "rating_level",
-      "analyst_level"
-    ],
-    "limit": 50,
-    "offset": 0
-  },
-  {
-    "operation": "search",
-    "query": "function getRatingLevelLabel",
-    "limit": 50
-  },
-  {
-    "operation": "search",
-    "query": "function getMonthStats",
-    "limit": 50
-  },
-  {
-    "operation": "search",
-    "query": "function getRankImageByLevel",
-    "limit": 20
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 3475,
-    "limit": 200
-  },
-  {
-    "operation": "source",
-    "path": "Application/Admin/Controller/AdminScheduleController.class.php",
-    "offset": 2580,
-    "limit": 80
-  },
-  {
-    "operation": "evaluation_summary",
-    "analyst_id": 4,
-    "month": "2026-11"
-  },
-  {
-    "operation": "evaluation_summary",
-    "analyst_id": 4,
-    "month": "2026-10"
-  }
+  {"operation": "schema", "table": "pay.pay_schedule", "limit": 50, "offset": 0},
+  {"operation": "schema", "table": "pay.pay_attendance_record", "limit": 50, "offset": 0},
+  {"operation": "schema", "table": "pay.pay_video_schedule", "limit": 50, "offset": 0},
+  {"operation": "schema", "table": "pay.pay_analyst_monthly_rating", "limit": 50, "offset": 0},
+  {"operation": "search", "query": "function attendanceRecord", "limit": 20},
+  {"operation": "search", "query": "function videoschedule", "limit": 20},
+  {"operation": "search", "query": "function analystlist", "limit": 20},
+  {"operation": "search", "query": "function updateRating", "limit": 20}
 ]
