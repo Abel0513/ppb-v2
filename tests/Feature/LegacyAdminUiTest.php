@@ -100,6 +100,7 @@ class LegacyAdminUiTest extends TestCase
             $table->string('line_id')->nullable();
             $table->unsignedTinyInteger('rating_level')->nullable();
             $table->unsignedTinyInteger('analyst_level')->nullable();
+            $table->timestamps();
         });
         Schema::create('ppb_submissions', function (Blueprint $table) {
             $table->increments('id');
