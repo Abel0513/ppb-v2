@@ -10,6 +10,7 @@ import tarfile
 ROOT=Path(__file__).resolve().parent
 FILES={
     **{'scripts/legacy-readonly/'+n:ROOT.parents[1]/'legacy-readonly'/n for n in ['prepare.py','dispatch.py','worker.py','source-tokens.php','db-worker.php','dba-once.py','management-probe.py','dba-authenticated-once.py','evaluation-domains.py','bridge.py','bridge-health.py','bridge-install.py','evaluation-snapshot.php']},
+    **{'scripts/legacy-readonly/offline-ui/'+n:ROOT.parents[1]/'legacy-readonly'/'offline-ui'/n for n in ['structure.py','php-inline.php']},
     'units/metadata-delegation.sql':ROOT.parents[1]/'db-audit/DBA_ONCE.mysql57.sql',
     **{'units/'+n:ROOT/'units'/n for n in ['ppb-v2-php.service','php-fpm.conf','ppb-v2-queue.service','ppb-v2-scheduler.service','ppb-v2-scheduler.timer']},
     **{'scripts/isolation/'+n:ROOT/n for n in ['boundary.py','nginx_lex.py','socket-acl.py','provision.py','global-metadata.php','prepare-os.py','inventory-db.php','db-probe.php','lifecycle.py','release.py']},

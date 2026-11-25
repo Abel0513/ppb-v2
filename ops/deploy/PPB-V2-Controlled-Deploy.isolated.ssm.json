@@ -160,12 +160,14 @@
         "runCommand": [
           "set -eu",
           "umask 077",
-          "printf '%s  %s\\n' 672b561c5b40214fc75783b934563d35889847736940fafe14fafe51a4a971bb /www/ppb-v2-deploy/scripts/legacy-readonly/prepare.py | sha256sum -c - >/dev/null",
-          "printf '%s  %s\\n' e42f3044286a98f7aa923ac65af019915a7179eb0165ff2db5ee9e5f17a937eb /www/ppb-v2-deploy/scripts/legacy-readonly/dispatch.py | sha256sum -c - >/dev/null",
-          "printf '%s  %s\\n' f411209169e412d67fc695af060aef50af481c1c53d6ffde7b1beb5f2fde6e36 /www/ppb-v2-deploy/scripts/legacy-readonly/worker.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' f9aa0c22081a79fb5fbd5e994ec0df535be895cb11b6cb24a4a9096c4426b46b /www/ppb-v2-deploy/scripts/legacy-readonly/prepare.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' 6e3789365bd3391b99787ad21aa5480d70a4183f06162a977b60f00d2265cef0 /www/ppb-v2-deploy/scripts/legacy-readonly/dispatch.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' ecb7909bb4fd10715296ce41769f87a229120125f7423f122b80f66f7e377e81 /www/ppb-v2-deploy/scripts/legacy-readonly/worker.py | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' 41b8dd36a01241d7e2526487461b431225a01fc2323826601ce227fcdce700e9 /www/ppb-v2-deploy/scripts/legacy-readonly/source-tokens.php | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' b1d1cffd6a30302a44a383e5100f3ca4937c2ff52a6b955e0d35d2c459ad4c7a /www/ppb-v2-deploy/scripts/legacy-readonly/db-worker.php | sha256sum -c - >/dev/null",
           "printf '%s  %s\\n' 60df3cabe2f4f57f1b92f3ad7ea52b8361baeed7d4ee3d115ea80a89761903a3 /www/ppb-v2-deploy/scripts/legacy-readonly/dba-once.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' 62c3bbaf86798e6c95ed7ba9d761d60a1a2c85d80f11b8946084f45235ff9a56 /www/ppb-v2-deploy/scripts/legacy-readonly/offline-ui/structure.py | sha256sum -c - >/dev/null",
+          "printf '%s  %s\\n' d3805d30b91198d0c4f6d2ccd5cca5009ca0b67cc895c8eb5189f421e71474d8 /www/ppb-v2-deploy/scripts/legacy-readonly/offline-ui/php-inline.php | sha256sum -c - >/dev/null",
           "exec python3 -I /www/ppb-v2-deploy/scripts/legacy-readonly/dispatch.py"
         ]
       }

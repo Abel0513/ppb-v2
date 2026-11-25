@@ -7,13 +7,25 @@ class OfflineUiStructure(unittest.TestCase):
  def review(self,kind):
   return m.Review(kind,labels=frozenset({'月評鑑','分析師','評分','儲存','短稿'}),dom_tokens=frozenset({'rating','modal','open','rating-open','rating-modal'}),controls=frozenset({'score'}),selectors=frozenset({'#rating-open','#rating-modal','.rating','.rating th'}),assets=frozenset({'Public/js/fixture.js','Public/css/fixture.css'}))
  def parse(self,source,kind='html',**kwargs):return m.parse_reviewed('fixtures/fragment',source,{'fixtures/fragment':self.review(kind)},**kwargs)
- def test_production_catalog_empty_unknown_paths_denied_and_no_remote_operation(self):
-  self.assertEqual(m.PRODUCTION_CATALOG,{})
-  with self.assertRaisesRegex(m.ReviewRequired,'NOT_REVIEWED'):m.parse_reviewed('unknown.tpl','<div/>')
+ def test_production_catalog_is_the_reviewed_primary_set_and_first_pass_does_not_invent_labels(self):
+  self.assertEqual(len(m.PRODUCTION_CATALOG),21)
+  self.assertTrue(all(review.kind in {'html','css'} and not (review.labels|review.dom_tokens|review.controls|review.selectors|review.assets) for review in m.PRODUCTION_CATALOG.values()))
+  self.assertTrue(all('Liff' not in path and 'Tiger' not in path for path in m.PRODUCTION_CATALOG))
+  with self.assertRaisesRegex(m.ReviewRequired,'NOT_REVIEWED'):m.parse_reviewed('unknown.tpl','<div>SECRET_LABEL</div>')
+  # Empty literals: first pass is REVIEW_REQUIRED structural extraction, never the raw text.
+  path=next(p for p,r in m.PRODUCTION_CATALOG.items() if r.kind=='html')
+  result=m.parse_reviewed(path,'<div>SECRET_LABEL</div>')
+  self.assertEqual(result['status'],'REVIEW_REQUIRED');self.assertEqual(result['structure'],[])
+  self.assertNotIn('SECRET_LABEL',json.dumps(result))
   spec=importlib.util.spec_from_file_location('ui_worker_guard',ROOT/'worker.py');w=importlib.util.module_from_spec(spec);spec.loader.exec_module(w)
-  with self.assertRaisesRegex(RuntimeError,'OPERATION_DENIED'):w.operate({'operation':'ui_source','path':'fixtures/fragment'})
+  with self.assertRaisesRegex(RuntimeError,'UI_SOURCE_NOT_REVIEWED'):w.operate({'operation':'ui_source','path':'fixtures/fragment'})
+  with tempfile.TemporaryDirectory() as tmp:
+   root=Path(tmp);target=root/path;target.parent.mkdir(parents=True);target.write_text('<div>SECRET_LABEL</div>\n',encoding='utf-8')
+   extracted=w.operate({'operation':'ui_source','path':path},root)
+   self.assertEqual(extracted['status'],'REVIEW_REQUIRED');self.assertEqual(extracted['structure'],[])
+   self.assertNotIn('SECRET_LABEL',json.dumps(extracted))
   spec=importlib.util.spec_from_file_location('ui_bundle_guard',ROOT.parent/'deploy/isolation/build-bootstrap.py');b=importlib.util.module_from_spec(spec);spec.loader.exec_module(b)
-  self.assertNotIn(ROOT/'offline-ui/structure.py',b.FILES.values());self.assertNotIn(ROOT/'offline-ui/php-inline.php',b.FILES.values())
+  self.assertIn(ROOT/'offline-ui/structure.py',b.FILES.values());self.assertIn(ROOT/'offline-ui/php-inline.php',b.FILES.values())
  def test_dom_order_controls_and_dynamic_values_without_business_data(self):
   source='<div class="rating"><table><tr><th>分析師</th><td>{$analyst.name}</td></tr></table><label for="score">評分</label><input id="score" name="score" type="number" value="PRIVATE_DEFAULT"><button type="submit">儲存</button></div>'
   # Static identifiers must also be explicitly reviewed, independently of control names.
