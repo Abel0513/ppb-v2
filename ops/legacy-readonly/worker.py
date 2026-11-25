@@ -6,6 +6,9 @@ ROOT=Path('/www/wwwroot/3.231.229.26')
 DENY=re.compile(r'(^|/)(?:\.[^/]*|conf|config|runtime|vendor|node_modules|uploads?|backups?|logs?|cache|storage|certs?|keys?|\.git)(/|$)|(?:db|line|database|password|secret|credential|token|auth|backup|dump|certificate|private)[^/]*\.(?:php|json|ini|cnf|sql|pem|key|zip|gz)$',re.I)
 PHP='/www/server/php/84/bin/php'
 EXT={'.php','.html','.htm','.js','.css'}
+import importlib.util
+_spec=importlib.util.spec_from_file_location('offline_ui_structure',Path(__file__).resolve().parent/'offline-ui'/'structure.py')
+structure=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(structure)
 # Separate path-only UI operation. Does not widen source() or its tokenizer.
 UI_TEMPLATES={'.tpl','.html','.htm','.php'}
 UI_ASSETS={'.css','.js','.svg','.png','.jpg','.jpeg','.gif','.webp','.ico','.woff','.woff2','.ttf'}
@@ -29,6 +32,37 @@ def ui_stat(path,root):
         need(stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<=500000,'UI_FILE_UNSAFE')
         return s
     finally:os.close(fd)
+def ui_read(path,root):
+    need(ui_valid(path),'UI_PATH_DENIED')
+    fd=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+    try:
+        parts=PurePosixPath(path).parts
+        for i,part in enumerate(parts):
+            child=os.open(part,os.O_RDONLY|os.O_NOFOLLOW|(os.O_DIRECTORY if i<len(parts)-1 else 0),dir_fd=fd)
+            os.close(fd);fd=child
+        s=os.fstat(fd)
+        need(stat.S_ISREG(s.st_mode) and s.st_nlink==1 and s.st_size<=500000,'UI_FILE_UNSAFE')
+        return os.read(fd,500001)
+    finally:os.close(fd)
+def php_inline(source):
+    helper=Path(__file__).resolve().parent/'offline-ui'/'php-inline.php'
+    need(helper.is_file() and not helper.is_symlink(),'PHP_INLINE_UNAVAILABLE')
+    payload=source if isinstance(source,(bytes,bytearray)) else source.encode()
+    p=subprocess.run(tokenizer_argv()+[str(helper)],input=payload,capture_output=True,timeout=8)
+    need(p.returncode==0,'PHP_INLINE_FAILED')
+    data=json.loads(p.stdout)
+    need(isinstance(data,dict) and set(data)<= {'inline_html'} and isinstance(data.get('inline_html'),str),'PHP_INLINE_OUTPUT_INVALID')
+    return data['inline_html']
+def ui_source(q,root):
+    need(set(q)<= {'operation','path'},'UI_SOURCE_SCHEMA')
+    path=q.get('path','')
+    need(path in structure.PRODUCTION_CATALOG,'UI_SOURCE_NOT_REVIEWED')
+    need(ui_valid(path),'UI_PATH_DENIED')
+    raw=ui_read(path,root)
+    try:source=raw.decode('utf-8')
+    except UnicodeDecodeError:raise RuntimeError('UI_SOURCE_ENCODING')
+    # Intermediate php-inline stdout is consumed here and never returned.
+    return structure.parse_reviewed(path,source,php_strip=php_inline)
 def ui_inventory(q,root):
     need(set(q)<={'operation','offset','limit'},'UI_INVENTORY_SCHEMA')
     offset=q.get('offset',0);limit=q.get('limit',50)
@@ -94,8 +128,9 @@ def inventory(root=ROOT):
     return sorted(rows)
 def operate(q,root=ROOT):
     need(isinstance(q,dict) and set(q)<= {'operation','path','query','offset','limit','table','columns','filters','analyst_id','start','end','month'},'REQUEST_SCHEMA')
-    op=q.get('operation');need(op in {'inventory','source','search','permissions','db_permissions','schema','select','video_count','evaluation_summary','ui_inventory'},'OPERATION_DENIED')
+    op=q.get('operation');need(op in {'inventory','source','search','permissions','db_permissions','schema','select','video_count','evaluation_summary','ui_inventory','ui_source'},'OPERATION_DENIED')
     if op=='ui_inventory':return ui_inventory(q,root)
+    if op=='ui_source':return ui_source(q,root)
     if op in {'db_permissions','schema','select','video_count','evaluation_summary'}:
         need(Path('/etc/ppb-legacy-ro/credentials.json').exists(),'READONLY_DBA_PROVISIONING_REQUIRED')
         if op=='evaluation_summary':q=dict(q,operation='evaluation_snapshot',summary_only=True)

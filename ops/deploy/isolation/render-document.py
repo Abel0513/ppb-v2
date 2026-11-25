@@ -31,7 +31,7 @@ def document():
     for step in steps:step['precondition']={'StringEquals':['{{ Mode }}','release']}
     legacy=ROOT.parents[1]/'legacy-readonly'
     guarded=['set -eu','umask 077']
-    for name in ['prepare.py','dispatch.py','worker.py','source-tokens.php','db-worker.php','dba-once.py']:
+    for name in ['prepare.py','dispatch.py','worker.py','source-tokens.php','db-worker.php','dba-once.py','offline-ui/structure.py','offline-ui/php-inline.php']:
         sha=hashlib.sha256((legacy/name).read_bytes()).hexdigest()
         guarded += [f"printf '%s  %s\\n' {sha} /www/ppb-v2-deploy/scripts/legacy-readonly/{name} | sha256sum -c - >/dev/null"]
     guarded += ['exec python3 -I /www/ppb-v2-deploy/scripts/legacy-readonly/dispatch.py']

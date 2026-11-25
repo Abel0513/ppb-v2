@@ -16,7 +16,7 @@ def run(q):
     need(LEGACY.is_dir() and not LEGACY.is_symlink(),'LEGACY_ROOT_UNSAFE')
     manifest=Path('/etc/ppb-legacy-ro/runtime.json');st=manifest.lstat();need(st.st_uid==0 and not manifest.is_symlink() and st.st_mode&0o022==0,'RUNTIME_MANIFEST_UNSAFE')
     hashes=json.loads(manifest.read_text())
-    for name in ['worker.py','source-tokens.php','db-worker.php','dba-once.py','evaluation-snapshot.php']:
+    for name in ['worker.py','source-tokens.php','db-worker.php','dba-once.py','evaluation-snapshot.php','offline-ui/structure.py','offline-ui/php-inline.php']:
         p=PUBLIC/name;s=p.lstat();need(stat.S_ISREG(s.st_mode) and s.st_uid==0 and s.st_nlink==1 and s.st_mode&0o022==0 and hashlib.sha256(p.read_bytes()).hexdigest()==hashes[name],'READER_CODE_CHANGED')
     # Filename-only inventory creates OS-level deny mounts; no secret file opened.
     denied=[]

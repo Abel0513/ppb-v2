@@ -27,7 +27,33 @@ class Review:
   for selector in self.selectors:
    need(bool(re.fullmatch(r'[A-Za-z0-9_#.* >:+,\[\]=-]{1,160}',selector)) and not re.search('[a-f0-9]{24}|password|secret|token|line_id',selector,re.I),'REVIEW_SELECTOR_INVALID')
 
-PRODUCTION_CATALOG={} # Deliberately empty until actual paths and per-file review.
+# 21 primary evaluation paths from the completed ui_inventory / #115 proposal.
+# Kind is reviewed; labels/dom_tokens/controls/selectors/assets stay empty so the
+# first ui_source pass is the tooling's REVIEW_REQUIRED structural extraction.
+# Do not invent literals. LIFF and keyword-only paths are excluded.
+PRODUCTION_CATALOG={
+ 'Application/Admin/View/AdminSchedule/add.tpl':Review('html'),
+ 'Application/Admin/View/AdminSchedule/analysisScheduleOverview.tpl':Review('html'),
+ 'Application/Admin/View/AdminSchedule/analystRatingChange.tpl':Review('html'),
+ 'Application/Admin/View/AdminSchedule/analystlist.tpl':Review('html'),
+ 'Application/Admin/View/AdminSchedule/analystperformance.tpl':Review('html'),
+ 'Application/Admin/View/AdminSchedule/analyststats.tpl':Review('html'),
+ 'Application/Admin/View/AdminSchedule/attendanceRecord.tpl':Review('html'),
+ 'Application/Admin/View/AdminSchedule/csdaBroadcast.tpl':Review('html'),
+ 'Application/Admin/View/AdminSchedule/csdaUser.tpl':Review('html'),
+ 'Application/Admin/View/AdminSchedule/scheduleOverview.tpl':Review('html'),
+ 'Application/Admin/View/AdminSchedule/shift.tpl':Review('html'),
+ 'Application/Admin/View/AdminSchedule/shift1.tpl':Review('html'),
+ 'Application/Admin/View/AdminSchedule/shift_add_modal.tpl':Review('html'),
+ 'Application/Admin/View/AdminSchedule/shift_edit_modal.tpl':Review('html'),
+ 'Application/Admin/View/AdminSchedule/shift_rating_modal.tpl':Review('html'),
+ 'Application/Admin/View/AdminSchedule/videoschedule.tpl':Review('html'),
+ 'Application/Admin/View/AnalystRating/index.tpl':Review('html'),
+ 'Application/Admin/View/AnalystRating/rating.tpl':Review('html'),
+ 'Application/Admin/View/AnalystRating/salary.tpl':Review('html'),
+ 'Public/Admin/css/shift.css':Review('css'),
+ 'Public/ui/dist/css/shift.css':Review('css'),
+}
 MAX_SOURCE=500000
 MAX_NODES=2000
 MAX_OUTPUT=65536
