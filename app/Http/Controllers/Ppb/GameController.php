@@ -245,7 +245,7 @@ class GameController extends Controller
             : ($game?->recommended_at?->toImmutable()->tz('Asia/Taipei')->startOfDay() ?? CarbonImmutable::today('Asia/Taipei'));
         $fixtureId = (int) old('fixture_id', $game?->fixture_id);
         $fixtures = $this->fixturesForDate($date, $fixtureId);
-        $absences = $this->absenceCounts($date);
+        $absences = $this->absenceCounts();
         $selected=[];
         if($game) {
             $game->loadMissing('assignments');
@@ -277,21 +277,56 @@ class GameController extends Controller
         return $fixtures;
     }
 
-    private function absenceCounts(CarbonImmutable $date): array
+    private function absenceCounts(): array
     {
-        if (!\Illuminate\Support\Facades\Schema::hasTable('ppb_evaluation_attendance')) return [];
-        $data = app(\App\Services\Ppb\Evaluation\LocalEvaluationData::class);
-        $inputs = app(\App\Services\Ppb\Evaluation\EvaluationInputs::class);
-        $start = $date->startOfMonth();
-        $end = $start->addMonth();
-        $rows = $inputs->attendanceRows($data->records($start, $end, true), $data->corrections($start, $end));
-        $maps = app(\App\Services\Ppb\Evaluation\EvaluationSubjects::class)->mappings();
-        $counts = [];
-        foreach ($rows as $row) {
-            if ($row['attendance_status'] !== 2) continue;
-            $id = $row['subject_type'] === 'v2' ? $row['subject_id'] : ($maps[$row['subject_id']] ?? null);
-            if ($id !== null) $counts[$id] = ($counts[$id] ?? 0) + 1;
+        try {
+            return $this->computeAbsenceCounts();
+        } catch (\Throwable $error) {
+            // The absence suffix is advisory; never break the schedule form over it.
+            report($error);
+
+            return [];
         }
+    }
+
+    private function computeAbsenceCounts(): array
+    {
+        $start = CarbonImmutable::now('Asia/Taipei')->startOfMonth();
+        $end = $start->addMonth();
+        $native = [];
+        if (\Illuminate\Support\Facades\Schema::hasTable('ppb_evaluation_attendance')) {
+            $data = app(\App\Services\Ppb\Evaluation\LocalEvaluationData::class);
+            $inputs = app(\App\Services\Ppb\Evaluation\EvaluationInputs::class);
+            $native = $inputs->attendanceRows($data->records($start, $end, true), $data->corrections($start, $end));
+        }
+        $maps = app(\App\Services\Ppb\Evaluation\EvaluationSubjects::class)->mappings();
+        $normalize = fn ($row) => $row['subject_type'] === 'v2' ? $row['subject_id'] : ($maps[$row['subject_id']] ?? null);
+        $nativeByGame = collect($native)->filter(fn ($row) => $normalize($row) !== null)
+            ->keyBy(fn ($row) => $row['gid'].':'.$normalize($row));
+        $counts = $nativeByGame->filter(fn ($row) => $row['attendance_status'] === 2)
+            ->countBy($normalize)->all();
+
+        $source = app(\App\Services\Ppb\Evaluation\LegacyAttendanceSource::class);
+        try {
+            $legacy = collect($source->rows());
+        } catch (\Exception $error) {
+            report($error);
+
+            return $counts;
+        }
+
+        $absences = $legacy->filter(fn ($row) => $row['attendance_status'] === 2
+            && str_starts_with($row['recommended_time'], $start->format('Y-m').'-')
+            && $normalize($row) !== null)->unique(fn ($row) => $row['gid'].':'.$normalize($row));
+        $games = PpbGame::whereIntegerInRaw('id', $absences->pluck('gid')->unique()->all())->get()->keyBy('id');
+        foreach ($absences as $row) {
+            $id = $normalize($row);
+            if ($nativeByGame->has($row['gid'].':'.$id) && $source->matchesImportedGame($row, $games->get($row['gid']))) {
+                continue;
+            }
+            $counts[$id] = ($counts[$id] ?? 0) + 1;
+        }
+
         return $counts;
     }
 
@@ -304,7 +339,7 @@ class GameController extends Controller
             'label' => ($fixture->starts_at ? CarbonImmutable::parse($fixture->starts_at, 'UTC')->tz('Asia/Taipei')->format('m/d').'｜' : '')
                 .$fixture->league.' '.$fixture->away_team.'@'.$fixture->home_team,
         ]);
-        return response()->json(['fixtures' => $fixtures, 'absences' => (object) $this->absenceCounts($date)],
+        return response()->json(['fixtures' => $fixtures, 'absences' => (object) $this->absenceCounts()],
             200, ['Cache-Control' => 'private, no-store']);
     }
 
@@ -380,6 +415,7 @@ class GameController extends Controller
             'position'=>['nullable',Rule::in(['append','before','after'])],
             'anchor_id'=>['nullable','integer','exists:ppb_games,id'],
             'notes'=>['nullable','string','max:3000'],
+            'lottery_no'=>['nullable','string','max:255'],
         ]);
         $dt=CarbonImmutable::createFromFormat('!Y-m-d H:i', $v['match_date'].' '.$v['match_time'],'Asia/Taipei');
         if (!$dt || $dt->format('Y-m-d')!==$v['match_date'] || $dt->format('H:i')!==$v['match_time']) {
@@ -438,10 +474,31 @@ class GameController extends Controller
             'home_team'=>$home,'away_team'=>$away,
             ...$play,
             'reviewer_analyst_id'=>!empty($v['reviewer_analyst_id'])?(int)$v['reviewer_analyst_id']:null,
-            'has_long_article'=>$hasLong,'notes'=>$v['notes']??null,
+            'has_long_article'=>$hasLong,'notes'=>$this->scheduleNotes($v, $game),
         ];
         return [$fields,$slots,$v];
     }
+    private function scheduleNotes(array $data, ?PpbGame $game): ?string
+    {
+        $stored = json_decode((string) $game?->notes, true);
+        $notes = $data['notes'] ?? null;
+        $lottery = array_key_exists('lottery_no', $data) ? $data['lottery_no'] : $game?->lotteryNumber();
+        if (!is_array($stored) && $lottery === null) return array_key_exists('notes', $data) ? $notes : $game?->notes;
+
+        $metadata = is_array($stored) ? $stored : [];
+        if (!is_array($stored) && !array_key_exists('notes', $data)) {
+            $notes = $game?->notes;
+        }
+        if (array_key_exists('notes', $data) || $notes !== null) {
+            if ($notes === null) unset($metadata['notes']);
+            else $metadata['notes'] = $notes;
+        }
+        if ($lottery === null) unset($metadata['lottery_no']);
+        else $metadata['lottery_no'] = $lottery;
+
+        return $metadata ? json_encode($metadata, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE) : null;
+    }
+
     private function playFields(array $v): array {
         $playType=(int)$v['play_type'];
         if(in_array($playType,[1,3],true) && trim((string)($v['play_value']??''))==='') {

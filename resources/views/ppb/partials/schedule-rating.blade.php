@@ -14,26 +14,28 @@
     <input type="hidden" name="operation" value="rate">
     <input type="hidden" name="schedule_scope" value="rating">
     <fieldset data-rating-fields disabled>
-      <section class="ppb-rating-section"><h3>⏰ 交稿時間</h3>
-        <input type="number" name="score_delivery_time" value="60" readonly aria-label="交稿時間">
+      <section class="ppb-rating-section" data-score-section="delivery">
+        <h3>⏰ 交稿時間 <output class="ppb-rating-score" data-section-score></output></h3>
+        <input type="hidden" name="score_delivery_time" value="60">
       </section>
       @php
         $sections = [
-            '📏 規範遵照程度' => [
+            'compliance' => ['📏 規範遵照程度', [
                 'score_word_count' => ['是否符合文章字數規定', [60 => '是', 40 => '否']],
                 'score_format' => ['是否符合文章格式規定', [60 => '是', 40 => '否']],
-            ],
-            '🎯 分析師專業' => [
+            ]],
+            'professional' => ['🎯 分析師專業', [
                 'score_typos' => ['是否有錯別字', [20 => '無', 10 => '少', 0 => '多']],
                 'score_semantic_clarity' => ['語意是否表達不清', [20 => '清楚', 10 => '尚可', 0 => '不清']],
                 'score_reference_accuracy' => ['引用資料是否有誤', [20 => '正確', 10 => '小誤', 0 => '有誤']],
                 'score_logic_consistency' => ['邏輯是否互相牴觸', [20 => '無', 10 => '輕微', 0 => '有']],
                 'score_language_appropriateness' => ['用字是否過於激進、偏激或語帶髒字', [10 => '無', 5 => '輕微', 0 => '有']],
-            ],
+            ]],
         ];
       @endphp
-      @foreach($sections as $title => $fields)
-        <section class="ppb-rating-section"><h3>{{ $title }}</h3>
+      @foreach($sections as $section => [$title, $fields])
+        <section class="ppb-rating-section" data-score-section="{{ $section }}">
+          <h3>{{ $title }} <output class="ppb-rating-score" data-section-score></output></h3>
           @foreach($fields as $name => [$label, $choices])
             <fieldset class="ppb-rating-options">
               <legend>{{ $label }}</legend>

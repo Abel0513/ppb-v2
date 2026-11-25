@@ -47,7 +47,7 @@ class EvaluationWriter
                     if ($local) {
                         $game = DB::table('ppb_games')->where('id', $pick['_game_id'])->lockForUpdate()->first(['status']);
                         $assignment = DB::table('ppb_assignments')->where('id', $pick['_assignment_id'])
-                            ->where('game_id', $pick['_game_id'])->lockForUpdate()->first();
+                            ->where('game_id', $pick['_game_id'])->where('kind', $pick['_kind'])->lockForUpdate()->first();
                         abort_unless($game && $game->status !== 'cancelled' && $assignment && $assignment->status === 'active'
                             && (int) $assignment->current_analyst_id === $subject['native_id'], 409,
                             '賽事或分析師指派已變更，請重新讀取。');

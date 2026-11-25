@@ -5,6 +5,7 @@ namespace App\Services\Ppb\Evaluation;
 use App\Models\PpbAnalyst;
 use App\Services\Ppb\LegacyDisplayLabels;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /** Legacy IDs, V2 analyst IDs and login-account IDs are never interchangeable. */
 class EvaluationSubjects
@@ -30,7 +31,11 @@ class EvaluationSubjects
     public function all(): array
     {
         $source=$this->reader->profiles();
-        $maps=$this->mappings();$native=PpbAnalyst::query()->orderBy('id')->get()->keyBy('id');$out=[];
+        $maps=$this->mappings();
+        $optional=array_intersect(['rating_level','analyst_level'],Schema::getColumnListing('ppb_analysts'));
+        $native=PpbAnalyst::query()->orderBy('id')
+            ->get(['id','name','display_name','status','user_type',...$optional])->keyBy('id');
+        $out=[];
         foreach($source as $profile){
             if(!in_array((int)$profile['user_type'],[0,1],true))continue;
             $id=(int)$profile['id'];$local=isset($maps[$id])?$native->get($maps[$id]):null;

@@ -63,9 +63,11 @@
 <h2 class="card-title" style="margin:0 0 16px">1. 排班資料</h2>
 <div class="ppb-sched-grid">
 @if($isEdit)
-    @if($game->lotteryNumber() !== null)
-        <label class="field-label">台彩賽事編號<input class="field" value="{{ $game->lotteryNumber() }}" readonly></label>
-    @endif
+    @php
+      $lotteryNumber = $game->lotteryNumber();
+      $lotteryValue = $wpHeld ? $lotteryNumber : old('lottery_no', $lotteryNumber);
+    @endphp
+    <label class="field-label" style="grid-column:1/-1">台彩賽事編號<input class="field" name="lottery_no" placeholder="請輸入台彩賽事編號" maxlength="255" value="{{ $lotteryValue }}" @readonly($wpHeld)></label>
     @if($wpHeld)<label class="field-label">賽事編號<input class="field" value="{{ $game->display_code }}" readonly></label>@endif
 @endif
 <label class="field-label">賽事類型
@@ -145,7 +147,12 @@
 <details><summary>進階設定</summary>
 <label class="field-label">實際開賽時間（選填）<input class="field" type="datetime-local" name="starts_local" value="{{ old('starts_local',$game?->starts_at?->timezone('Asia/Taipei')->format('Y-m-d\TH:i')) }}"></label>
 </details>
-<label class="field-label">備註<textarea class="field" name="notes" maxlength="3000" style="min-height:90px">{{ old('notes',$game?->notes) }}</textarea></label>
+@php
+  $storedNotes = json_decode((string) $game?->notes, true);
+  $notesText = is_array($storedNotes) ? ($storedNotes['notes'] ?? null) : $game?->notes;
+  $notesValue = old('notes', is_string($notesText) ? $notesText : null);
+@endphp
+<label class="field-label">備註<textarea class="field" name="notes" maxlength="3000" style="min-height:90px">{{ $notesValue }}</textarea></label>
 @endunless
 <div class="toolbar" style="margin-top:24px"><button class="action" type="submit">{{ $isEdit?'確定修改':'確定新增' }}</button><a class="link" data-close-schedule-form href="{{ $isEdit?route('ppb.games.show',$game):route('ppb.games.index') }}">取消</a></div>
 </form>

@@ -41,7 +41,7 @@
 @if($manage)<form method="post" action="{{ route('ppb.evaluations.save',[$report['subject']['type'],$report['subject']['id']]) }}">@include('ppb.evaluations.request')<input type="hidden" name="operation" value="salary_snapshot"><button class="action">保存本月薪酬快照</button></form>@endif
 </section>
 @if($manage && isset($report['inputs']))
-<section class="card eval-section"><h2>V2 出勤登錄與更正</h2><p>實際代班投稿按賽事與原分析師計一次缺勤。更正只保存於 V2；舊系統出勤不可在此刪除。</p>
+<section id="evaluation-attendance" class="card eval-section"><h2>V2 出勤登錄與更正</h2><p>實際代班投稿按賽事與原分析師計一次缺勤。更正只保存於 V2；舊系統出勤不可在此刪除。</p>
 <form method="post" action="{{ route('ppb.evaluations.save',[$report['subject']['type'],$report['subject']['id']]) }}">@include('ppb.evaluations.request')<input type="hidden" name="operation" value="input"><input type="hidden" name="input_kind" value="attendance"><label>本月 V2 原生賽事<select class="field" name="game_id" required><option value="">請選擇</option>@foreach($report['inputs']['games'] as $game)<option value="{{ $game['id'] }}">#{{ $game['id'] }}・{{ $game['recommended_time'] }}</option>@endforeach</select></label>
 <label>狀態<select class="field" name="attendance_status"><option value="1">遲到（扣 50）</option><option value="2">缺勤（首次扣 100，其後扣 200）</option><option value="">撤銷此筆 V2 缺勤／扣款，保留更正紀錄</option></select></label><button class="action">保存出勤更正</button></form>
 @foreach($report['inputs']['attendance'] as $a)<p>#{{ $a['gid'] }}・{{ $a['recommended_time'] }}・{{ $a['attendance_status']===1?'遲到':'缺勤' }}</p>@endforeach</section>

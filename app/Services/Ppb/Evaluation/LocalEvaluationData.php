@@ -64,12 +64,24 @@ class LocalEvaluationData
                 'g.game_type', 'g.game_number', 'g.market_type']);
         $reverse = array_flip($this->subjects->mappings());
         $key = fn ($id) => isset($reverse[$id]) ? 'legacy:'.$reverse[$id] : 'v2:'.$id;
+        // Some archives have no imported submission linked to the current slot.
+        // Resolve those through the same verified analyst mapping used on the card.
+        $legacyBySlot = $legacy->groupBy(fn ($row) => $row->game_id.':'.$row->kind.':'.$row->legacy_analyst_id);
+        $activeBySlot = $legacy->isEmpty() ? collect() : DB::table('ppb_assignments')
+            ->whereIntegerInRaw('game_id', $legacy->pluck('game_id')->unique()->all())
+            ->where('status', 'active')->get(['id', 'game_id', 'kind', 'current_analyst_id'])
+            ->groupBy(fn ($row) => $row->game_id.':'.$row->kind.':'.($reverse[$row->current_analyst_id] ?? ''));
         return $native->map(function ($row) use ($key, $attendanceOnly) {
             $substitute = $row->original_analyst_id != $row->submitted_analyst_id;
             return $this->record($row, 'v2', $row->id, $key($row->submitted_analyst_id),
                 $substitute ? $key($row->original_analyst_id) : null, $substitute, 0,
                 $attendanceOnly ? null : hash('sha256', json_encode($row, JSON_THROW_ON_ERROR)));
-        })->concat($legacy->map(function ($row) {
+        })->concat($legacy->map(function ($row) use ($legacyBySlot, $activeBySlot) {
+            $slot = $row->game_id.':'.$row->kind.':'.$row->legacy_analyst_id;
+            $active = $activeBySlot->get($slot, collect());
+            if (!$active->contains('id', $row->assignment_id) && $active->count() === 1 && $legacyBySlot[$slot]->count() === 1) {
+                $row->assignment_id = $active->first()->id;
+            }
             $json = json_decode((string) $row->content_body, true);
             if (!($json['_ppb_legacy_pick_v1'] ?? false)) $json = [];
             return array_replace($this->record($row, 'legacy', $row->source_pick_id, 'legacy:'.$row->legacy_analyst_id,
@@ -84,7 +96,7 @@ class LocalEvaluationData
         return array_fill_keys(LegacyScheduleCalculator::RATING_FIELDS, 0) + [
             '_source_type' => $type, '_source_id' => $id, '_author_key' => $author, '_absence_key' => $absent,
             '_is_substitution' => $substitute, '_schedule_key' => 'v2:'.$row->game_id, '_game_id' => (int) $row->game_id,
-            '_assignment_id' => (int) $row->assignment_id,
+            '_assignment_id' => (int) $row->assignment_id, '_kind' => $row->kind,
             '_game_code' => ((int) $row->game_type === 1 ? 'G' : 'E').$row->game_number,
             '_manuscript_sha256' => $hash, 'market_type' => (int) $row->market_type,
             'recommended_time' => CarbonImmutable::parse($row->recommended_at, 'UTC')->tz('Asia/Taipei')->toDateTimeString(),
