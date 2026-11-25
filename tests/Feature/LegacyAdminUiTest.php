@@ -57,12 +57,11 @@ class LegacyAdminUiTest extends TestCase
             return new class($config + ['name' => $name], $select) extends SQLiteConnection {
                 public function __construct(array $config, private $selectHook)
                 {
-                    parent::__construct(
-                        static fn () => throw new \LogicException('Fixture must not connect'),
-                        ':memory:',
-                        '',
-                        $config
-                    );
+                    $this->database = ':memory:';
+                    $this->tablePrefix = $config['prefix'] ?? '';
+                    $this->config = $config;
+                    $this->useDefaultQueryGrammar();
+                    $this->useDefaultPostProcessor();
                 }
 
                 public function select($query, $bindings = [], $useReadPdo = true)
@@ -73,6 +72,16 @@ class LegacyAdminUiTest extends TestCase
                 public function selectFromWriteConnection($query, $bindings = [])
                 {
                     return $this->select($query, $bindings, false);
+                }
+
+                public function getPdo()
+                {
+                    throw new \LogicException('Fixture must not connect');
+                }
+
+                public function getReadPdo()
+                {
+                    return $this->getPdo();
                 }
             };
         });
