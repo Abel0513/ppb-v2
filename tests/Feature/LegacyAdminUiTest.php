@@ -51,6 +51,9 @@ class LegacyAdminUiTest extends TestCase
         $this->installSchema();
         $reader = Mockery::mock(LegacyReader::class);
         $reader->shouldReceive('profiles')->andReturn([]);
+        $reader->shouldReceive('query')->with(Mockery::on(fn ($query) =>
+            $query['operation'] === 'select' && $query['table'] === 'pay.pay_attendance_record'))
+            ->andReturn(['rows' => []]);
         $this->app->instance(LegacyReader::class, $reader);
     }
 
@@ -281,6 +284,123 @@ class LegacyAdminUiTest extends TestCase
         $this->get(self::HOST.'/admin/rating/index')->assertOk()->assertSee('更新當月評級')->assertSee('評鑑・薪酬・稿件');
         $this->get(self::HOST.'/admin/rating/salary')->assertOk()->assertSee('總計');
         $this->get(self::HOST.'/admin/rating/change')->assertOk()->assertSee('評級異動');
+    }
+
+    public function test_attendance_merges_taipei_months_and_caches_the_paged_legacy_source(): void
+    {
+        $this->actor(['schedules.view', 'evaluations.view', 'evaluations.manage']);
+        DB::table('ppb_analysts')->insert([
+            'id' => 9, 'name' => 'Local analyst', 'display_name' => 'Mapped analyst',
+            'color' => '#142536', 'background' => '#ABCDEF',
+        ]);
+        DB::table('ppb_legacy_pick_contents')->insert([
+            'game_id' => 800, 'source_pick_id' => 20, 'legacy_analyst_id' => 42, 'kind' => 'pick',
+        ]);
+        DB::table('ppb_submissions')->insert([
+            'game_id' => 800, 'legacy_source_pick_id' => 20, 'submitted_analyst_id' => 9,
+            'kind' => 'pick', 'status' => 'legacy_imported',
+        ]);
+        DB::table('ppb_games')->insert([
+            ['id' => 800, 'game_type' => 1, 'game_number' => 15, 'recommended_at' => '2026-10-31 16:00:00',
+                'matchup_text' => 'Imported matchup', 'notes' => '{"_ppb_legacy_game_v1":true}'],
+            ['id' => 851, 'game_type' => 2, 'game_number' => 8, 'recommended_at' => '2026-11-03 05:00:00',
+                'matchup_text' => 'Unrelated local matchup', 'notes' => null],
+            ['id' => 900, 'game_type' => 1, 'game_number' => 40, 'recommended_at' => '2026-08-31 16:00:00',
+                'matchup_text' => 'Native matchup', 'notes' => null],
+        ]);
+        DB::table('ppb_evaluation_attendance')->insert([
+            ['game_id' => 800, 'subject_type' => 'legacy', 'subject_id' => 42, 'attendance_status' => 1],
+            ['game_id' => 900, 'subject_type' => 'legacy', 'subject_id' => 42, 'attendance_status' => 2],
+        ]);
+
+        $records = [];
+        for ($id = 1; $id <= 50; $id++) {
+            $records[] = ['id' => $id, 'gid' => 800, 'uid' => 42, 'attendance_status' => 2];
+        }
+        $records[] = ['id' => 51, 'gid' => 851, 'uid' => 77, 'attendance_status' => 2];
+        $records[] = ['id' => 52, 'gid' => 740, 'uid' => 77, 'attendance_status' => 1];
+        $records[] = ['id' => 53, 'gid' => 800, 'uid' => 78, 'attendance_status' => 2];
+
+        $schedules = [
+            ['id' => 740, 'game_id' => 30, 'game_type' => 1, 'recommended_time' => '2026-10-31 23:59:59'],
+            ['id' => 800, 'game_id' => 15, 'game_type' => 1, 'recommended_time' => '2026-11-01 00:00:00'],
+        ];
+        for ($id = 801; $id < 851; $id++) {
+            $schedules[] = ['id' => $id, 'game_id' => $id, 'game_type' => 1, 'recommended_time' => '2026-11-02 12:00:00'];
+        }
+        $schedules[] = ['id' => 851, 'game_id' => 8, 'game_type' => 2, 'recommended_time' => '2026-11-03 13:00:00'];
+        $reader = Mockery::mock(LegacyReader::class);
+        $reader->shouldReceive('query')->times(5)->andReturnUsing(function (array $query) use ($records, $schedules) {
+            self::assertSame('select', $query['operation']);
+            self::assertSame(50, $query['limit']);
+            if ($query['table'] === 'pay.pay_attendance_record') {
+                self::assertSame(['id', 'gid', 'uid', 'attendance_status'], $query['columns']);
+
+                return ['rows' => array_slice($records, $query['offset'], $query['limit'])];
+            }
+
+            self::assertSame('pay.pay_schedule', $query['table']);
+            self::assertSame(['id', 'game_id', 'game_type', 'recommended_time', 'reviewer', 'market_type'], $query['columns']);
+            self::assertContains('recommended_time', array_column($query['filters'], 'column'));
+            $rows = array_filter($schedules, function ($row) use ($query) {
+                foreach ($query['filters'] as $filter) {
+                    $value = $row[$filter['column']];
+                    $matches = match ($filter['op']) {
+                        '>=' => $value >= $filter['value'],
+                        '<=' => $value <= $filter['value'],
+                        '<' => $value < $filter['value'],
+                    };
+                    if (!$matches) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+
+            return ['rows' => array_slice($rows, $query['offset'], $query['limit'])];
+        });
+        $this->app->instance(LegacyReader::class, $reader);
+
+        $url = self::HOST.'/admin/schedule/attendance';
+        $first = $this->get($url)->assertOk()
+            ->assertSee('2026-11 出缺勤紀錄')->assertSee('共 3 個月 / 第 1 頁')
+            ->assertSee('G15')->assertSee('E8')->assertSee('Mapped analyst')->assertSee('background-color:#ABCDEF')
+            ->assertSee('舊分析師 #77')->assertSee('Imported matchup')->assertSee('<td>—</td>', false)
+            ->assertSee('class="legacy-absent">曠職', false)->assertSee('class="legacy-late">遲到', false)
+            ->assertDontSee('Unrelated local matchup')->assertDontSee('G30');
+        self::assertSame(1, substr_count($first->getContent(), '#evaluation-attendance'));
+        self::assertSame(1, substr_count($first->getContent(), 'Mapped analyst'));
+        $this->get($url.'?p=2')->assertOk()->assertSee('2026-10 出缺勤紀錄')
+            ->assertSee('共 3 個月 / 第 2 頁')->assertSee('G30')->assertDontSee('E8')->assertDontSee('#evaluation-attendance');
+        $this->get($url.'?month=2026-09')->assertOk()->assertSee('2026-09 出缺勤紀錄')
+            ->assertSee('共 3 個月 / 第 3 頁')->assertSee('Native matchup');
+    }
+
+    public function test_attendance_reader_failure_preserves_v2_rows_and_is_retried(): void
+    {
+        $this->actor(['schedules.view']);
+        DB::table('ppb_analysts')->insert(['id' => 9, 'name' => 'Native analyst']);
+        DB::table('ppb_games')->insert([
+            'id' => 7, 'game_type' => 1, 'game_number' => 66, 'recommended_at' => '2026-11-01 00:00:00',
+            'matchup_text' => 'Fallback matchup',
+        ]);
+        DB::table('ppb_evaluation_attendance')->insert([
+            'game_id' => 7, 'subject_type' => 'v2', 'subject_id' => 9, 'attendance_status' => 2,
+        ]);
+        $reader = Mockery::mock(LegacyReader::class);
+        $reader->shouldReceive('query')->once()->with(Mockery::on(fn ($query) =>
+            $query['operation'] === 'select' && $query['table'] === 'pay.pay_attendance_record'))
+            ->andThrow(new \RuntimeException('LEGACY_READER_UNAVAILABLE'));
+        $reader->shouldReceive('query')->once()->with(Mockery::on(fn ($query) =>
+            $query['operation'] === 'select' && $query['table'] === 'pay.pay_attendance_record'))
+            ->andReturn(['rows' => []]);
+        $this->app->instance(LegacyReader::class, $reader);
+
+        $url = self::HOST.'/admin/schedule/attendance';
+        $this->get($url)->assertOk()->assertSee('舊系統出缺勤暫時無法讀取')
+            ->assertSee('Native analyst')->assertSee('Fallback matchup')->assertSee('曠職')->assertDontSee('#evaluation-attendance');
+        $this->get($url)->assertOk()->assertDontSee('舊系統出缺勤暫時無法讀取')->assertSee('Fallback matchup');
     }
 
     public function test_analyst_list_only_reads_line_name_with_both_master_permissions(): void

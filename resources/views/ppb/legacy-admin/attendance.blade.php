@@ -2,33 +2,30 @@
 @section('title', '出缺勤紀錄表')
 
 @section('legacy-content')
-<nav class="legacy-month-tabs" aria-label="月份">
-  @foreach($months as $tab)
-    <a class="link" href="{{ route('ppb.schedule.attendance', ['month' => $tab]) }}" @if($month === $tab) aria-current="page" @endif>{{ $tab }}</a>
-  @endforeach
-</nav>
 <h2>{{ $month }} 出缺勤紀錄</h2>
-@if(!$ready || $unavailable)<p class="notice">唯讀資料暫時無法取得。</p>@endif
+@if($unavailable)<p class="notice">舊系統出缺勤暫時無法讀取</p>@endif
+@if(!$ready)<p class="notice">唯讀資料暫時無法取得。</p>@endif
 <div class="card table-scroll">
   <table class="data-table">
-    <thead><tr><th>賽事</th><th>分析師</th><th>對戰組合</th><th>狀態</th></tr></thead>
+    <thead><tr><th></th><th>賽事</th><th>分析師</th><th>對戰組合</th><th>狀態</th></tr></thead>
     <tbody>
-    @forelse($attendance as $game)
-      @php $analyst = $roster->get($game->subject_type.':'.$game->subject_id); @endphp
+    @forelse($attendance as $row)
+      @php
+        $game = $row['game'];
+        $absent = $row['attendance_status'] === 2;
+      @endphp
       <tr>
-        <td>@include('ppb.legacy-admin.game-pill', ['code' => ((int) $game->game_type === 1 ? 'G' : 'E').$game->game_number])</td>
-        <td>@include('ppb.legacy-admin.name-pill', [
-            'name' => $analyst['label'] ?? '—',
-            'colors' => $game->subject_type === 'legacy' ? config('ppb_legacy_colors.'.$game->subject_id) : null,
-        ])</td>
-        <td>@include('ppb.legacy-admin.matchup')</td>
-        <td><span class="{{ (int) $game->attendance_status === 2 ? 'legacy-absent' : 'legacy-late' }}">{{ (int) $game->attendance_status === 2 ? '曠職' : '遲到' }}</span></td>
+        <td>@if($row['correctionUrl'])<a class="link" href="{{ $row['correctionUrl'] }}" aria-label="V2 出勤登錄與更正">🗑️</a>@endif</td>
+        <td>@include('ppb.legacy-admin.game-pill', ['code' => $row['code']])</td>
+        <td>@include('ppb.legacy-admin.name-pill', ['name' => $row['name'], 'colors' => $row['colors']])</td>
+        <td>@if($game)@include('ppb.legacy-admin.matchup')@else—@endif</td>
+        <td><span class="{{ $absent ? 'legacy-absent' : 'legacy-late' }}">{{ $absent ? '曠職' : '遲到' }}</span></td>
       </tr>
     @empty
-      @if($ready)<tr><td colspan="4">無資料</td></tr>@endif
+      @if($ready)<tr><td colspan="5">無資料</td></tr>@endif
     @endforelse
     </tbody>
   </table>
 </div>
-@include('ppb.legacy-admin.pager', ['games' => $pager, 'unit' => '個月', 'resultCount' => $months->count()])
+@include('ppb.legacy-admin.pager', ['games' => $pager, 'unit' => '個月'])
 @endsection

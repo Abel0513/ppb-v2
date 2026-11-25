@@ -8,6 +8,7 @@ use App\Models\PpbGame;
 use App\Services\Ppb\Evaluation\EvaluationInputs;
 use App\Services\Ppb\Evaluation\EvaluationService;
 use App\Services\Ppb\Evaluation\EvaluationSubjects;
+use App\Services\Ppb\Evaluation\LegacyAttendanceSource;
 use App\Services\Ppb\Evaluation\LegacyReader;
 use App\Services\Ppb\Evaluation\LocalEvaluationData;
 use App\Services\Ppb\LegacyDisplayLabels;
@@ -73,23 +74,77 @@ class LegacyAdminController extends Controller
         return view('ppb.legacy-admin.videos', compact('month', 'ready', 'videos', 'roster', 'canManageVideos'));
     }
 
-    public function attendance(Request $request, LocalEvaluationData $data, EvaluationInputs $inputs)
+    public function attendance(Request $request, LocalEvaluationData $data, EvaluationInputs $inputs, LegacyAttendanceSource $source)
     {
+        $requestedMonth = $request->has('month') ? $this->month($request) : null;
         $ready = Schema::hasTable('ppb_evaluation_attendance');
         $roster = collect($data->roster());
-        $rows = $ready ? collect($inputs->attendanceRows($data->records(attendanceOnly: true), $data->corrections()))
+        $native = $ready ? collect($inputs->attendanceRows($data->records(attendanceOnly: true), $data->corrections()))
             ->filter(fn ($row) => $roster->has($row['subject_type'].':'.$row['subject_id'])) : collect();
-        $byMonth = $rows->groupBy(fn ($row) => substr($row['recommended_time'], 0, 7));
-        $current = now('Asia/Taipei')->format('Y-m');
-        $months = $byMonth->keys()->push($current)->unique()->sortDesc()->values();
-        $pager = $this->monthPager($request, $months);
-        $month = $request->has('month') ? $this->month($request) : ($pager->getCollection()->first() ?? $current);
-        $selected = $byMonth->get($month, collect());
-        $games = PpbGame::whereIn('id', $selected->pluck('gid'))->get()->keyBy('id');
-        $attendance = $selected->map(fn ($row) => (object) ($row + (($game = $games->get($row['gid'])) ? $game->getAttributes() : [])));
-        $unavailable = false;
 
-        return view('ppb.legacy-admin.attendance', compact('month', 'ready', 'attendance', 'pager', 'roster', 'unavailable', 'months'));
+        $unavailable = false;
+        try {
+            $legacy = collect($source->rows());
+        } catch (\Exception $error) {
+            report($error);
+            $legacy = collect();
+            $unavailable = true;
+        }
+
+        $games = PpbGame::whereIntegerInRaw('id', $native->concat($legacy)->pluck('gid')->unique()->all())->get()->keyBy('id');
+        $key = fn ($row) => $row['gid'].':'.$row['subject_type'].':'.$row['subject_id'];
+        $nativeKeys = $native->keyBy($key);
+        $legacy = $legacy->unique($key)->map(function ($row) use ($games) {
+            $game = $games->get($row['gid']);
+            $notes = json_decode((string) $game?->notes, true);
+            $linked = $game && ($notes['_ppb_legacy_game_v1'] ?? false)
+                && $game->display_code === $row['code'] && $game->recommended_at
+                && CarbonImmutable::parse($game->getRawOriginal('recommended_at'), 'UTC')
+                    ->tz('Asia/Taipei')->toDateTimeString() === $row['recommended_time'];
+
+            return $row + ['game' => $linked ? $game : null];
+        })->reject(fn ($row) => $row['game'] && $nativeKeys->has($key($row)));
+
+        $byMonth = $legacy->concat($native->map(function ($row) use ($games) {
+            $game = $games->get($row['gid']);
+
+            return $row + ['game' => $game, 'code' => $game->display_code];
+        }))->groupBy(fn ($row) => substr($row['recommended_time'], 0, 7));
+
+        $current = now('Asia/Taipei')->format('Y-m');
+        $months = $byMonth->keys();
+        if ($unavailable) {
+            $months->push($current);
+        }
+        $months = $months->unique()->sortDesc()->values();
+        $monthIndex = $months->search($requestedMonth, true);
+        $page = $monthIndex === false ? (int) $request->query('p', 1) : $monthIndex + 1;
+        $page = max(1, min($months->count(), $page));
+        $pager = new LengthAwarePaginator($months->forPage($page, 1), $months->count(), 1, $page, [
+            'path' => $request->url(), 'pageName' => 'p',
+        ]);
+        $month = $pager->getCollection()->first() ?? $current;
+        $selected = $byMonth->get($month, collect())->sortBy(['recommended_time', 'gid']);
+        $analysts = PpbAnalyst::whereIntegerInRaw('id', $selected->map(fn ($row) =>
+            $roster->get($row['subject_type'].':'.$row['subject_id'])['native_id'] ?? null)->filter()->all())->get()->keyBy('id');
+        $actor = $request->user('ppb');
+        $canCorrect = $actor->hasPpbPermission('evaluations.view') && $actor->hasPpbPermission('evaluations.manage');
+        $attendance = $selected->map(function ($row) use ($roster, $analysts, $canCorrect, $month) {
+            $subject = $roster->get($row['subject_type'].':'.$row['subject_id']);
+            $analyst = $analysts->get($subject['native_id'] ?? 0);
+            $palette = $row['subject_type'] === 'legacy' ? config('ppb_legacy_colors.'.$row['subject_id']) : null;
+            $correctionUrl = $canCorrect && $row['source'] !== 'legacy'
+                ? route('ppb.evaluations.show', ['type' => $row['subject_type'], 'id' => $row['subject_id'], 'month' => $month]).'#evaluation-attendance'
+                : null;
+
+            return $row + [
+                'name' => $subject['label'] ?? LegacyDisplayLabels::unmappedAnalyst($row['subject_id']),
+                'colors' => $analyst?->scheduleColors($palette) ?? $palette,
+                'correctionUrl' => $correctionUrl,
+            ];
+        });
+
+        return view('ppb.legacy-admin.attendance', compact('month', 'ready', 'attendance', 'pager', 'unavailable'));
     }
 
     public function report(Request $request, EvaluationSubjects $subjects, LocalEvaluationData $data, EvaluationService $service)
