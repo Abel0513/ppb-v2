@@ -18,7 +18,7 @@
 
 固定 root bundle SHA256：`babf57824db0046930ada81db9174be3c9340bba3c15c866d59913e0f5a7f0b8`，S3 鍵 `releases/bootstrap/babf57824db0046930ada81db9174be3c9340bba3c15c866d59913e0f5a7f0b8/fixed.tar.gz`。此物件不在本 ZIP 內，請使用同一 isolation CI 產出的 `reviewed-v2-isolated-tools` artifact。
 
-本批假設目前 Default 為 **v62**，文件 hash `92db95e386608ba55a1f4ba231df94c6af09b1eaaaf965886a4382c62f6fde24`。工具內建舊版對照為 v61／`05d73f4e07f94748f11bcd291114cd3c296e7fde2f0ad04c90508bf456a48a3a` 與 v62／上述 hash。若預檢發現 Default 不是 61／62，或 hash 不符，停止並回傳預檢 JSON，不要 `--apply`。
+首次安裝與每次資料發布都要求 SSM Default 為 **v62**，且 v61、v62 皆存在。兩版的 `describe-document` SHA-256 必須分別符合 v61／`05d73f4e07f94748f11bcd291114cd3c296e7fde2f0ad04c90508bf456a48a3a` 和 v62／`92db95e386608ba55a1f4ba231df94c6af09b1eaaaf965886a4382c62f6fde24`。任一條件不符，預檢及 `--apply` 都會在寫入前回傳 `result: STOP`。有效的安裝 journal 可在 Default 切換後繼續執行或重跑驗證。
 
 ## 因為這是新工具位元組
 
@@ -44,7 +44,7 @@ python3 manage-ui-source.py
 python3 manage-ui-source.py --apply
 ```
 
-預檢成功：`result` 為 `UI_SOURCE_MANAGEMENT_BATCH_DRY_RUN`，`default_version` 為 `"62"`，`ec2_commands`／`document_writes`／`iam_writes` 皆為 0，`s3_verified` 三筆 SHA 相符。
+首次安裝預檢成功時，`result` 為 `UI_SOURCE_MANAGEMENT_BATCH_DRY_RUN`，`default_version` 為 `"62"`，`ec2_commands`／`document_writes`／`iam_writes` 皆為 0，`s3_verified` 三筆 SHA 相符。
 
 Apply 成功：`result` 為 `MANAGED_UI_SOURCE_INSTALL_VERIFIED`。工具會建立／切換文件版本，在隔離與 R2 收據通過後才把 Default 指到 isolated runtime，並只在封存、非 Default、安全檢查通過後才刪 61／62。不要在 Console 自行改 Default 或刪文件版本。
 

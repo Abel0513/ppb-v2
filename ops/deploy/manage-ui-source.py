@@ -40,6 +40,22 @@ def reviewed_objects():
  objects=[(f'releases/bootstrap/{BUNDLE}/fixed.tar.gz',BUNDLE)]
  objects += [(f'releases/ssm-reviewed/{SOURCE}/{kind}-{PINS[f"PPB-V2-Controlled-Deploy.{kind}.ssm.json"]}.json',PINS[f'PPB-V2-Controlled-Deploy.{kind}.ssm.json']) for kind in ['bootstrap','isolated']]
  return objects
+def document_versions(raw):
+ token=None
+ for _ in range(20):
+  page=raw('ssm','list-document-versions','--name',DOC,*(['--next-token',token] if token else []))
+  yield from (entry['DocumentVersion'] for entry in page.get('DocumentVersions',[]))
+  token=page.get('NextToken')
+  if not token:return
+ raise RuntimeError('DOCUMENT_SCAN_LIMIT')
+def default_version(raw):
+ return raw('ssm','get-document','--name',DOC,'--document-version','$DEFAULT','--document-format','JSON')['DocumentVersion']
+def describe_version(raw,version):
+ return raw('ssm','describe-document','--name',DOC,'--document-version',version)['Document']
+def require_fresh_versions(default,hashes):
+ need(default=='62','FRESH_DEFAULT_MUST_BE_V62')
+ need(PREVIOUS.keys()<=hashes.keys(),'FRESH_PINNED_VERSION_MISSING')
+ need(all(hashes[version]==sha for version,sha in PREVIOUS.items()),'FRESH_PINNED_HASH_MISMATCH')
 def publish_data(apply=False,bundle_path=None,call=None):
  activation=load_activation();raw=wrap_call(call or activation.c.aws)
  identity_guard(raw)
@@ -52,6 +68,13 @@ def publish_data(apply=False,bundle_path=None,call=None):
   f'releases/ssm-reviewed/{SOURCE}/isolated-{PINS["PPB-V2-Controlled-Deploy.isolated.ssm.json"]}.json':(ROOT/'PPB-V2-Controlled-Deploy.isolated.ssm.json').read_bytes(),
  }
  planned=[{'key':key,'sha256':digest(data)} for key,data in payloads.items()]
+ default=default_version(raw)
+ hashes={}
+ for version in document_versions(raw):
+  if version in PREVIOUS:
+   meta=describe_version(raw,version)
+   hashes[version]=meta.get('Hash') if meta.get('HashType')=='Sha256' else None
+ require_fresh_versions(default,hashes)
  if not apply:return dict(result='UI_SOURCE_S3_PUBLICATION_DRY_RUN',objects=planned,ec2_commands=0,iam_writes=0,document_writes=0,ssm_writes=0)
  verified=[]
  with tempfile.TemporaryDirectory() as tmp:
@@ -72,24 +95,20 @@ def manage(apply=False,state_path='ui-source.state.json',call=None,pause=lambda 
  with tempfile.TemporaryDirectory() as tmp:
   for index,(key,sha) in enumerate(reviewed_objects()):
    local=Path(tmp)/str(index);raw('s3api','get-object','--bucket',BUCKET,'--key',key,str(local));need(digest(local.read_bytes())==sha,'MANAGEMENT_S3_READBACK_HASH_MISMATCH');verified.append(dict(key=key,sha256=sha))
- versions={};hashes={};token=None
- for _ in range(20):
-  page=raw('ssm','list-document-versions','--name',DOC,*(['--next-token',token] if token else []))
-  for entry in page.get('DocumentVersions',[]):
-   version=entry['DocumentVersion'];doc=raw('ssm','get-document','--name',DOC,'--document-version',version,'--document-format','JSON');meta=raw('ssm','describe-document','--name',DOC,'--document-version',version)['Document']
-   value=json.loads(doc['Content']);need(meta['HashType']=='Sha256' and re.fullmatch('[a-f0-9]{64}',meta['Hash']) and (value in docs.values() or PREVIOUS.get(version)==meta['Hash']),'UNREVIEWED_CONCURRENT_DOCUMENT_VERSION')
-   versions[version]=value;hashes[version]=meta['Hash']
-  token=page.get('NextToken')
-  if not token:break
- else:raise RuntimeError('DOCUMENT_SCAN_LIMIT')
- default=raw('ssm','get-document','--name',DOC,'--document-version','$DEFAULT','--document-format','JSON')['DocumentVersion']
- if not apply:return dict(result='UI_SOURCE_MANAGEMENT_BATCH_DRY_RUN',s3_verified=verified,default_version=default,ec2_commands=0,iam_writes=0,document_writes=0)
  path=Path(state_path).absolute()
- if path.exists():
+ state=None
+ if path.exists() or path.is_symlink():
   need(not path.is_symlink() and path.stat().st_mode&0o077==0,'MANAGEMENT_JOURNAL_UNSAFE');state=json.loads(path.read_text());need(state.get('bundle')==BUNDLE and state.get('source')==SOURCE,'MANAGEMENT_JOURNAL_CONFLICT')
   need(not state.get('send_intent') or state.get('command_id'),'COMMAND_OUTCOME_UNKNOWN_DO_NOT_RESEND')
- else:
-  need(default in PREVIOUS,'EXISTING_INSTALL_RECEIPT_REQUIRED')
+ versions={};hashes={}
+ for version in document_versions(raw):
+  doc=raw('ssm','get-document','--name',DOC,'--document-version',version,'--document-format','JSON');meta=describe_version(raw,version)
+  value=json.loads(doc['Content']);need(meta['HashType']=='Sha256' and re.fullmatch('[a-f0-9]{64}',meta['Hash']) and (value in docs.values() or PREVIOUS.get(version)==meta['Hash']),'UNREVIEWED_CONCURRENT_DOCUMENT_VERSION')
+  versions[version]=value;hashes[version]=meta['Hash']
+ default=default_version(raw)
+ if state is None:require_fresh_versions(default,hashes)
+ if not apply:return dict(result='UI_SOURCE_MANAGEMENT_BATCH_DRY_RUN',s3_verified=verified,default_version=default,ec2_commands=0,iam_writes=0,document_writes=0)
+ if state is None:
   state=dict(source=SOURCE,bundle=BUNDLE,phase='INTENT',request_id='ui-source-'+uuid.uuid4().hex,default_before=default,command_id=None,send_intent=False,bootstrap_verified=False)
   save(path,state)
  run=state['request_id'];archived=set();current_default=default
