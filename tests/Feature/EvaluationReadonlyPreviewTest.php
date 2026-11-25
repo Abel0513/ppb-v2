@@ -56,6 +56,15 @@ class EvaluationReadonlyPreviewTest extends TestCase
         $this->get('https://v2.csdatw.xyz/admin/evaluations-preview')->assertForbidden();
     }
 
+    public function test_preview_owner_permission_does_not_grant_draft_writer_permission():void
+    {
+        $this->actor(); // accounts.manage only; evaluations.manage remains denied.
+        $writer=Mockery::mock(\App\Services\Ppb\Evaluation\EvaluationWriter::class);
+        $writer->shouldNotReceive('save');$this->app->instance(\App\Services\Ppb\Evaluation\EvaluationWriter::class,$writer);
+        $this->post('https://v2.csdatw.xyz/admin/evaluations/legacy/2',['operation'=>'salary_snapshot'])->assertForbidden();
+        $this->post('https://v2.csdatw.xyz/admin/evaluations-preview/health')->assertStatus(405);
+    }
+
     public function test_detail_and_summary_use_mocked_readonly_values_without_v2_tables():void
     {
         $this->actor();

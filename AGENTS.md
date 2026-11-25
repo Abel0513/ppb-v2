@@ -32,6 +32,48 @@ features use the reviewed fixed executor and data manifests, not per-release AWS
 IAM/SSM installation. Report genuine missing technical authority without pretending
 that user authorization changed IAM. Never claim unperformed deployment/DB checks.
 
+## Standing design baseline — 2026-11-15
+
+Owner design comment6883893790: the whole evaluation module must match the actual
+legacy UI and operation flow. Future V2 features without an explicitly approved
+new design also default to legacy layout/interaction. Read actual View, CSS, JS
+and action sources first; do not substitute current V2 cards, memory or generic
+mobile redesigns. Preserve fields/order/names/colors/buttons/modals/flows and
+source-ground each page. Missing or redacted sources are NOT permission to guess.
+Keep V2 calculations, salary snapshots, permissions, provenance, escaping, CSRF,
+request receipts and idempotence. Never copy legacy SQL/unsafe auth/side effects.
+PR58 stays Draft; this UI batch grants no production migration, writes or release.
+Do not remove fixed reader redaction or widen privileged access to obtain UI files.
+
+## Standing autonomous execution rule — 2026-11-15
+
+Owner's default: **自動開發 → 自動排查 → 自動修復 → 自動測試 → 自動整合 → 統一驗收**.
+Within each authorized batch, continue through analysis, implementation, debugging,
+regression testing and submission to the corresponding Draft PR without asking
+for approval at every step. Then take the next confirmed independent task.
+Use existing requirements and source evidence; do not invent features, repeat
+accepted work or split one investigation into successive diagnostic PRs.
+
+An external dependency blocks ONLY the tasks that actually require it. Investigate
+and try lawful solutions within existing authority; if unresolved, mark that item
+BLOCKED and continue other confirmed independent work. The earlier instruction
+that absence of a Phase A administrator receipt stops all development is revoked.
+Phase A package/approval preparation is complete; do not rebuild it, repeat known
+AccessDenied probes or request the same approval again. Actual ui_inventory,
+production Phase B catalogs and source-grounded UI restoration still require the
+real installation receipt and approved source access. Never guess missing UI.
+
+Autonomy does not expand technical privileges or production authorization. Seek
+approval only for genuinely new authority, irreversible production operations or
+unconfirmed business decisions. All existing legacy protection, credential,
+readonly, fixed SHA, IAM/SSM and GitHub review boundaries remain in force.
+PR58 and PR102 stay Draft; no migration, production deployment/business writes,
+payment or LINE/PDF sending under this continuation. No test DB/persistent test
+tables; preserve accepted calculations, salary snapshots, permissions and receipts.
+Do not claim background automation that has not actually been established. If no
+confirmed independent work remains, report the concrete remaining dependencies
+and save a safe checkpoint instead of creating artificial tasks.
+
 ## First Codex task: READ-ONLY audit
 
 **Only the first onboarding/audit task is read-only.** Before the user approves a specific implementation batch, inspect and report only: no edits, dependency installation, lockfile generation, commits, pushes, merges, PRs or deployment. Deliver the first audit in the task response, not as a new repository file. **This is NOT a permanent ban on coding or V2 database work.** After the user approves an implementation batch, Codex may independently modify V2 code, run appropriate tests, adjust V2-owned schema/data, and prepare a PR within that approved scope, without asking for permission for every file or row. Production application rollout and destructive or irreversible changes still require a separate acceptance gate.
@@ -77,3 +119,23 @@ For the first task, return in Traditional Chinese:
 4. Explicit confirmation of files changed (expected: NONE), database writes (NONE), network side effects (NONE), Git pushes/merges (NONE).
 
 Do not start implementation until the user approves the proposed batch.
+
+## Scoped shared-InnoDB concurrency exception — owner decision 2026-11-16
+
+PR #104 may create ordinary shared InnoDB tables only in a newly created,
+disposable MySQL 5.7 container: network=none, verified tmpfs datadir/temp/logs,
+no persistent volumes or production mounts/connections, existing container schema
+only (no CREATE DATABASE). Independent sessions and explicit barriers must prove
+interleavings. A separate guardian must destroy the container/data on success,
+failure, signals and deadline; verify destruction. This exception never permits
+production/persistent test tables, business writes, migrations or deployment.
+PR #58/#102/#103/#104 remain Draft for this batch. Preserve all other safeguards.
+
+## Integrated acceptance candidate — owner decision 2026-11-16
+
+Combine latest main, PR58 ca75545 and PR104 1812c3a (already includes PR103
+2f079a7) on a separate Draft branch. Preserve all source branches and exclude
+PR102 management changes. Reuse the above isolated tmpfs/network=none test
+boundary for synthetic HTTP/database integration. No production migration,
+deployment or business write; no WP/LINE/service calls. Legacy UI remains
+source-dependent, never guessed. All original security and Draft gates remain.

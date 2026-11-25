@@ -65,14 +65,18 @@ Route::prefix('admin')->middleware([
     Route::post('/assignments/{assignment}/status', [AssignmentController::class, 'status'])->middleware([PpbCan::class.':schedules.manage','throttle:20,1'])->name('ppb.assignments.status');
 
     // PPB W2 | 2026-11-06 | Authenticated editorial workflow.
-    // The controller checks either schedules.manage or exact linked analyst/reviewer identity.
-    Route::get('/manuscripts', [ManuscriptController::class, 'index'])->name('ppb.manuscripts.index');
-    Route::get('/games/{game}/manuscripts', [ManuscriptController::class, 'show'])->name('ppb.manuscripts.game');
+    // Backend management only; account_id never delegates analyst LINE/LIFF authority.
+    Route::get('/manuscripts', [ManuscriptController::class, 'index'])->middleware(PpbCan::class.':schedules.manage')->name('ppb.manuscripts.index');
+    Route::get('/games/{game}/manuscripts', [ManuscriptController::class, 'show'])->middleware(PpbCan::class.':schedules.manage')->name('ppb.manuscripts.game');
     Route::post('/manuscripts/assignments/{assignment}/save', [ManuscriptController::class, 'save'])
-        ->middleware('throttle:30,1')->name('ppb.manuscripts.save');
+        ->middleware([PpbCan::class.':schedules.manage','throttle:30,1'])->name('ppb.manuscripts.save');
     Route::post('/manuscripts/submissions/{submission}/review', [ManuscriptController::class, 'review'])
-        ->whereNumber('submission')->middleware('throttle:30,1')->name('ppb.manuscripts.review');
+        ->whereNumber('submission')->middleware([PpbCan::class.':schedules.manage','throttle:30,1'])->name('ppb.manuscripts.review');
 
+    // Evaluations remain an administrative workflow, not analyst authentication.
+    Route::get('/evaluations', [\App\Http\Controllers\Ppb\EvaluationController::class,'index'])->middleware(PpbCan::class.':evaluations.view')->name('ppb.evaluations.index');
+    Route::get('/evaluations/{type}/{id}', [\App\Http\Controllers\Ppb\EvaluationController::class,'show'])->whereIn('type',['legacy','v2'])->whereNumber('id')->middleware(PpbCan::class.':evaluations.view')->name('ppb.evaluations.show');
+    Route::post('/evaluations/{type}/{id}', [\App\Http\Controllers\Ppb\EvaluationController::class,'save'])->whereIn('type',['legacy','v2'])->whereNumber('id')->middleware([PpbCan::class.':evaluations.manage','throttle:30,1'])->name('ppb.evaluations.save');
 
     // Owner-only read-only preview. Never requires/migrates ppb_evaluation* tables.
     Route::get('/evaluations-preview', [\App\Http\Controllers\Ppb\EvaluationPreviewController::class, 'index'])
@@ -85,4 +89,11 @@ Route::prefix('admin')->middleware([
     Route::post('/logout', [AdminController::class, 'logout'])
         ->middleware('throttle:10,1')
         ->name('ppb.logout');
+});
+
+// Compatibility applies only to this Laravel V2 host; old server routes are unchanged.
+Route::middleware([PpbRequireSecureHost::class,'auth:ppb',PpbEnsureActive::class,PpbCan::class.':evaluations.view'])->group(function(){
+    foreach(['/Admin/AnalystRating/index','/Admin/AnalystRating/salary','/Admin/AnalystRating/rating','/Admin/AnalystPerformance/index'] as $legacyEntry){
+        foreach([$legacyEntry,$legacyEntry.'.html'] as $entry)Route::get($entry,fn(\Illuminate\Http\Request $request)=>redirect()->route('ppb.evaluations.index',['month'=>$request->query('month')]));
+    }
 });
