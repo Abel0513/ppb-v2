@@ -6,7 +6,7 @@ import argparse,hashlib,json,os,re,subprocess,tempfile,time
 from pathlib import Path
 ACCOUNT='429724121147';REGION='us-east-1';DOC='PPB-V2-Controlled-Deploy'
 BUCKET='ppb-v2-release-artifacts-429724121147-use1'
-PINS={'bootstrap':'567d9ff5798e08e82472c4595892e3d0ad904a9451930bb168d08feb5390d794','isolated':'b16109a7334de36ba9d860ee96220fd00bb9b9be2237a1f832c5ccddee6e0768'}
+PINS={'bootstrap':'6c0879a9b672cfcb1496d533701fca4494cbc66fe2438c659bbb3962739244e4','isolated':'f63b5aa86b017223e3df17381d615da6a88fc989e70a7b15429ed5c328094b4d'}
 def need(ok,code):
  if not ok:raise RuntimeError(code)
 def aws(*args):
