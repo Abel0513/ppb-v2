@@ -1,1 +1,1 @@
-{"migrate":true,"cache":["config","routes","views"],"queue_restart":false}
+{"migrate":false,"cache":["config","routes","views"],"queue_restart":false}
