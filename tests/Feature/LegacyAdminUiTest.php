@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\PpbAccount;
+use App\Models\PpbAnalyst;
+use App\Models\PpbGame;
 use App\Services\Ppb\Evaluation\EvaluationService;
 use App\Services\Ppb\Evaluation\EvaluationSubjects;
 use App\Services\Ppb\Evaluation\LegacyReader;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\SQLiteConnection;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Mockery;
@@ -33,9 +35,10 @@ class LegacyAdminUiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['app.url' => self::HOST, 'database.default' => 'sqlite']);
+        config(['app.url' => self::HOST]);
         // Midnight in Taipei, still the prior day and month in UTC.
         $this->travelTo(CarbonImmutable::parse('2026-10-31 16:00:00', 'UTC'));
+        $this->installSchema();
     }
 
     private function actor(array $permissions): void
@@ -50,42 +53,82 @@ class LegacyAdminUiTest extends TestCase
         $this->actingAs($actor, 'ppb');
     }
 
-    private function fixtureConnection(callable $select): void
+    private function installSchema(): void
     {
-        // Exercise Eloquent SQL construction and HTTP/Blade with no PDO or test tables.
-        DB::extend('sqlite', function ($config, $name) use ($select) {
-            return new class($config + ['name' => $name], $select) extends SQLiteConnection {
-                public function __construct(array $config, private $selectHook)
-                {
-                    $this->database = ':memory:';
-                    $this->tablePrefix = $config['prefix'] ?? '';
-                    $this->config = $config;
-                    $this->useDefaultQueryGrammar();
-                    $this->useDefaultPostProcessor();
-                }
-
-                public function select($query, $bindings = [], $useReadPdo = true)
-                {
-                    return ($this->selectHook)($query, $bindings);
-                }
-
-                public function selectFromWriteConnection($query, $bindings = [])
-                {
-                    return $this->select($query, $bindings, false);
-                }
-
-                public function getPdo()
-                {
-                    throw new \LogicException('Fixture must not connect');
-                }
-
-                public function getReadPdo()
-                {
-                    return $this->getPdo();
-                }
-            };
+        if (Schema::hasTable('ppb_games')) {
+            return;
+        }
+        Schema::create('ppb_games', function (Blueprint $table) {
+            $table->increments('id');
+            $table->char('month_key', 7)->nullable();
+            $table->integer('game_type')->nullable();
+            $table->integer('game_number')->nullable();
+            $table->integer('active_number')->nullable();
+            $table->string('status')->default('scheduled');
+            $table->string('matchup_text')->nullable();
+            $table->dateTime('recommended_at')->nullable();
+            $table->text('notes')->nullable();
+            $table->unsignedBigInteger('reviewer_analyst_id')->nullable();
+            $table->boolean('has_long_article')->default(false);
+            $table->timestamps();
         });
-        DB::purge('sqlite');
+        Schema::create('ppb_assignments', function (Blueprint $table) {
+            $table->increments('id');
+            $table->unsignedBigInteger('game_id');
+            $table->unsignedBigInteger('current_analyst_id')->nullable();
+            $table->string('kind')->nullable();
+            $table->integer('slot_no')->nullable();
+            $table->string('status')->default('active');
+        });
+        Schema::create('ppb_analysts', function (Blueprint $table) {
+            $table->increments('id');
+            $table->string('name')->nullable();
+            $table->string('display_name')->nullable();
+            $table->integer('user_type')->default(0);
+            $table->string('status')->default('active');
+            $table->string('color', 7)->nullable();
+            $table->string('background', 7)->nullable();
+            $table->string('line_name')->nullable();
+            $table->string('line_id')->nullable();
+            $table->unsignedTinyInteger('rating_level')->nullable();
+            $table->unsignedTinyInteger('analyst_level')->nullable();
+        });
+        Schema::create('ppb_submissions', function (Blueprint $table) {
+            $table->increments('id');
+            $table->unsignedBigInteger('game_id')->nullable();
+            $table->unsignedBigInteger('assignment_id')->nullable();
+            $table->unsignedBigInteger('submitted_analyst_id')->nullable();
+            $table->unsignedBigInteger('legacy_source_pick_id')->nullable();
+            $table->string('kind')->nullable();
+            $table->string('status')->nullable();
+            $table->text('content_body')->nullable();
+        });
+        Schema::create('ppb_publications', function (Blueprint $table) {
+            $table->increments('id');
+            $table->unsignedBigInteger('game_id')->nullable();
+            $table->string('status')->nullable();
+            $table->dateTime('verified_at')->nullable();
+        });
+        Schema::create('ppb_legacy_pick_contents', function (Blueprint $table) {
+            $table->increments('id');
+            $table->unsignedBigInteger('game_id')->nullable();
+            $table->unsignedBigInteger('source_pick_id')->nullable();
+            $table->unsignedBigInteger('legacy_analyst_id')->nullable();
+            $table->string('kind')->nullable();
+            $table->text('recommend_pick')->nullable();
+        });
+        Schema::create('ppb_legacy_wp_articles', function (Blueprint $table) {
+            $table->increments('id');
+            $table->unsignedBigInteger('game_id')->nullable();
+            $table->unsignedBigInteger('source_pick_id')->nullable();
+            $table->text('wp_link')->nullable();
+        });
+        Schema::create('ppb_schedule_events', function (Blueprint $table) {
+            $table->increments('id');
+            $table->unsignedBigInteger('game_id')->nullable();
+            $table->string('event')->nullable();
+            $table->text('detail_json')->nullable();
+        });
     }
 
     public static function pagerCases(): array
@@ -101,40 +144,19 @@ class LegacyAdminUiTest extends TestCase
     public function test_shift_pager(int $future, int $history, int $total, int $lastPage): void
     {
         $this->actor(['schedules.view']);
-        $rows = [];
         foreach ([[1, $history, '2026-10-31 03:00:00'], [101, $future, '2026-10-31 16:00:00']] as [$first, $count, $time]) {
             for ($id = $first; $id < $first + $count; $id++) {
-                $rows[] = (object) [
-                    'id' => $id, 'month_key' => $id >= 101 ? '2026-11' : '2026-10',
-                    'recommended_at' => $time, 'game_type' => 1, 'game_number' => $id,
-                    'status' => 'scheduled', 'matchup_text' => 'Fixture game '.$id,
-                ];
+                PpbGame::unguarded(fn () => PpbGame::query()->create([
+                    'id' => $id,
+                    'month_key' => $id >= 101 ? '2026-11' : '2026-10',
+                    'recommended_at' => $time,
+                    'game_type' => 1,
+                    'game_number' => $id,
+                    'status' => 'scheduled',
+                    'matchup_text' => 'Fixture game '.$id,
+                ]));
             }
         }
-        $this->fixtureConnection(function ($sql, $bindings) use ($rows) {
-            if (str_contains($sql, 'select exists(')) {
-                return [(object) ['exists' => 0]];
-            }
-            if (!preg_match('/ from "ppb_games"(?: where| order|$)/i', $sql)) {
-                return [];
-            }
-            $filtered = $rows;
-            if (str_contains($sql, '"recommended_at" >= ?') || str_contains($sql, '"recommended_at" < ?')) {
-                self::assertSame('2026-10-31 16:00:00', $bindings[0]);
-                $futureQuery = str_contains($sql, '"recommended_at" >= ?');
-                $filtered = array_values(array_filter($rows, fn ($row) => ($row->id >= 101) === $futureQuery));
-            }
-            if (str_starts_with($sql, 'select count(')) {
-                self::assertStringNotContainsString('"recommended_at" >= ?', $sql);
-                return [(object) ['aggregate' => count($filtered)]];
-            }
-            if (str_contains($sql, '"recommended_at" desc')) {
-                $filtered = array_reverse($filtered);
-            }
-            preg_match('/\blimit (\d+)/i', $sql, $limit);
-            preg_match('/\boffset (\d+)/i', $sql, $offset);
-            return array_slice($filtered, (int) ($offset[1] ?? 0), isset($limit[1]) ? (int) $limit[1] : null);
-        });
 
         $first = $this->get(self::HOST.'/admin/games')->assertOk()
             ->assertSee('分析師輪值表')->assertSee('共 '.$total.' 筆 / 第 1 頁')
@@ -164,9 +186,6 @@ class LegacyAdminUiTest extends TestCase
             $this->get(self::HOST.$path)->assertForbidden();
         }
 
-        $this->fixtureConnection(fn ($sql) => str_starts_with($sql, 'select count(') ? [(object) ['aggregate' => 0]] : []);
-        Schema::shouldReceive('hasTable')->with('ppb_evaluation_videos')->andReturn(false);
-        Schema::shouldReceive('hasTable')->with('ppb_evaluation_attendance')->andReturn(false);
         $roster = Mockery::mock(EvaluationSubjects::class);
         $roster->shouldReceive('all')->andReturn([
             ['type' => 'legacy', 'id' => 4, 'label' => '哆啦', 'native_id' => null, 'rating_level' => 2, 'analyst_level' => 1],
@@ -190,32 +209,38 @@ class LegacyAdminUiTest extends TestCase
 
     public function test_analyst_list_only_reads_line_name_with_both_master_permissions(): void
     {
-        Schema::shouldReceive('getColumnListing')->with('ppb_analysts')
-            ->andReturn(['id', 'color', 'background', 'line_name', 'line_id']);
-        $queriesWithLineName = 0;
-        $this->fixtureConnection(function ($sql) use (&$queriesWithLineName) {
-            self::assertStringNotContainsString('"line_id"', $sql);
-            $readsLineName = str_contains($sql, '"line_name"');
-            $queriesWithLineName += (int) $readsLineName;
-            $row = ['id' => 7, 'color' => null, 'background' => null];
-            if ($readsLineName) {
-                $row['line_name'] = 'Fixture private name';
-            }
-            return [(object) $row];
-        });
+        PpbAnalyst::unguarded(fn () => PpbAnalyst::query()->create([
+            'id' => 7,
+            'name' => 'Fixture name',
+            'display_name' => 'Fixture name',
+            'user_type' => 0,
+            'status' => 'active',
+            'line_name' => 'Fixture private name',
+            'line_id' => 'synthetic-private-id',
+            'rating_level' => 0,
+            'analyst_level' => 0,
+        ]));
         $roster = Mockery::mock(EvaluationSubjects::class);
         $roster->shouldReceive('all')->andReturn([
             ['type' => 'v2', 'id' => 7, 'label' => 'Fixture name', 'native_id' => 7, 'rating_level' => 0, 'analyst_level' => 0],
         ]);
         $this->app->instance(EvaluationSubjects::class, $roster);
 
+        $queries = [];
+        DB::listen(function ($query) use (&$queries) {
+            $queries[] = $query->sql;
+        });
+
         $this->actor(['schedules.view', 'accounts.manage']);
         $this->get(self::HOST.'/admin/analyst-list')->assertOk()->assertSee('Line名稱')->assertDontSee('Fixture private name');
-        self::assertSame(0, $queriesWithLineName);
+        self::assertFalse(collect($queries)->contains(fn ($sql) => str_contains($sql, 'line_name')));
+        self::assertFalse(collect($queries)->contains(fn ($sql) => str_contains($sql, 'line_id')));
 
+        $queries = [];
         $this->actor(['schedules.view', 'schedules.manage', 'accounts.manage']);
         $this->get(self::HOST.'/admin/analyst-list')->assertOk()->assertSee('Fixture private name');
-        self::assertSame(1, $queriesWithLineName);
+        self::assertTrue(collect($queries)->contains(fn ($sql) => str_contains($sql, 'line_name')));
+        self::assertFalse(collect($queries)->contains(fn ($sql) => str_contains($sql, 'line_id')));
     }
 
     public function test_schedule_summary_returns_performance_without_salary_or_line_data(): void
@@ -239,7 +264,6 @@ class LegacyAdminUiTest extends TestCase
 
     public function test_verified_legacy_label_does_not_create_a_mapping(): void
     {
-        $this->fixtureConnection(fn () => []);
         $reader = Mockery::mock(LegacyReader::class);
         $reader->shouldReceive('profiles')->andReturn([
             ['id' => 4, 'sort_id' => 4, 'user_type' => 0, 'rating_level' => 2, 'analyst_level' => 1],
