@@ -27,5 +27,5 @@
 @if($page*5<$total)<a class="link" href="{{ route('ppb.evalpreview.index',['month'=>$month,'page'=>$page+1]) }}">下一頁</a>@endif</div>
 <p class="sub">統計數據使用獨立受限查詢逐位載入；查詢失敗顯示「未取得」，不以 0 假裝成功。</p>
 </div></main></div></div>
-<script src="{{ asset('assets/ppb/ppb-evaluation-preview.js') }}?v=p1" defer></script>
+<script src="{{ asset('assets/ppb/ppb-evaluation-preview.js') }}?v=ui-restore" defer></script>
 @endsection

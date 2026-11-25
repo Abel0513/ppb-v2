@@ -1120,3 +1120,7 @@
 /* Only align brand strip height with the PG7 54px topbar.
    Keep ORIGINAL logo 44px, title 17px and collapse button 30px. */
 .admin-sidebar-brand{height:54px}
+
+.admin-association { color: inherit; text-decoration: none; text-align: center; font-weight: 700; }
+.admin-association small { display: block; font-size: .65rem; }
+@media (max-width: 840px) { .admin-association { display: none; } }

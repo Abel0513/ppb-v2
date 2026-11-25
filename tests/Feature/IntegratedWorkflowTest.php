@@ -127,7 +127,7 @@ class IntegratedWorkflowTest extends TestCase
             self::assertSame(['config','routes','views'],$plan['cache']);
             self::assertFalse($plan['queue_restart']);
             // migrate=true is the owner-authorized isolated backup+migrate gate
-            // for 2026_11_14_000011; the draft-candidate forbid-migrate check no longer applies.
+            // for 2026_11_16_000012 and 2026_11_25_000013; the draft-candidate forbid-migrate check no longer applies.
             $proof=['flow'=>'HTTP schedule → HTTP submit → HTTP approve → author lineage → HTTP evaluation → salary snapshot','request_replay'=>true,'permissions_separated'=>true,'substitution_lineage'=>true,'wp_metadata_guard'=>true,'rollback'=>true,'stale_source_409'=>true,'absence_only_source_stable'=>true];$passed=true;
         }finally{
             $this->travelBack();DB::disconnect('mysql');unset($pdo);$container->destroy();self::assertFalse($container->exists());self::assertDirectoryDoesNotExist($container->directory);

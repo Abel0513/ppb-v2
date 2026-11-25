@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Ppb;
 use App\Http\Controllers\Controller;
 use App\Services\Ppb\Evaluation\{EvaluationSubjects,EvaluationService,EvaluationWriter,LegacyScheduleCalculator};
 use Illuminate\Http\Request;
+use App\Services\Ppb\LegacyDisplayLabels;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 
@@ -13,7 +14,7 @@ class EvaluationController extends Controller
     private function month(Request $request): string
     {
         $data=$request->validate(['month'=>['nullable','date_format:Y-m','after_or_equal:1000-01','before_or_equal:2999-12']]);
-        return $data['month']??now('Asia/Taipei')->startOfMonth()->subMonth()->format('Y-m');
+        return $data['month']??now('Asia/Taipei')->format('Y-m');
     }
     public function index(Request $request)
     {
@@ -27,7 +28,9 @@ class EvaluationController extends Controller
         if($request->query('format')==='summary'){
             return response()->json(['score'=>$report['current']['rating']['total_score'],'previous_score'=>$report['previous']['rating']['total_score'],
                 'earlier_score'=>$report['history'][$report['earlier_month']]['rating']['total_score'],'level'=>$report['current']['level'],
-                'next_level'=>$report['current']['next_rating']['rating_level'],'salary'=>$report['current']['salary'],
+                'next_level'=>$report['current']['next_rating']['rating_level'],
+                'level_label'=>LegacyDisplayLabels::rating($report['current']['level']),
+                'next_level_label'=>LegacyDisplayLabels::rating($report['current']['next_rating']['rating_level']),'salary'=>$report['current']['salary'],
                 'performance'=>$report['current']['performance']],200,['Cache-Control'=>'private,no-store']);
         }
         if($request->query('format')==='csv'){

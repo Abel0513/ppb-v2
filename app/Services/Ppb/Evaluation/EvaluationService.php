@@ -78,7 +78,8 @@ class EvaluationService
         }
         return ['subject'=>$subject,'month'=>$month,'previous_month'=>$prior,'source_sha256'=>$sourceHash,'legacy_sha256'=>$snapshot['source_sha256'],
             'manual'=>$manuals[$month],'current'=>$current,'previous'=>$previous,'revision'=>$local->has($month)?$local[$month]->revision:0,
-            'earlier_month'=>$earlier,'history'=>$reports,'saved_next_rating'=>$local->has($month)?$local[$month]->next_rating_level:null,'recent'=>$recent,'source_rows'=>count($rows),
+            'earlier_month'=>$earlier,'history'=>$reports,
+            'recorded_next_level'=>$this->level($snapshot,$local,$date->addMonth()->format('Y-m')),'saved_next_rating'=>$local->has($month)?$local[$month]->next_rating_level:null,'recent'=>$recent,'source_rows'=>count($rows),
             'native_attendance_video_supported'=>true,'inputs'=>$inputs[$month],'saved_salary'=>$savedSalary];
     }
 
@@ -110,7 +111,7 @@ class EvaluationService
     {
         $previous=CarbonImmutable::createFromFormat('!Y-m',$period)->subMonth()->format('Y-m');
         if($local->has($previous)&&$local[$previous]->next_rating_level!==null)return (int)$local[$previous]->next_rating_level;
-        foreach($snapshot['ratings'] as $r)if($r['rating_month']===$period)return (int)$r['rating_level'];
+        foreach($snapshot['ratings'] as $r)if($r['rating_month']===$period)return isset($r['rating_level'])?(int)$r['rating_level']:null;
         return null; // Source salary falls back to2; do not invent stored history.
     }
 

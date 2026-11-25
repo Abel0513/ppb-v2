@@ -1,13 +1,14 @@
 {{-- PPB UI6 | 2026-11-04 | Zero-flow insert entry, existing ScheduleManager validation retained. --}}
 @extends('ppb.layout')
-@section('title','賽事排班')
+@section('title','分析師輪值表')
 @push('styles')
 <link rel="stylesheet" href="{{ asset('assets/ppb/ppb-shift-ui4.css') }}?v=20261105-op1">
 @endpush
 @section('body')
 @php
     $weekdays = ['日','一','二','三','四','五','六'];
-    $plays = [1=>'讓分',2=>'不讓分',3=>'大小分',4=>'特殊玩法',5=>'手動玩法'];
+    $canManage = !$readOnly && auth('ppb')->user()->hasPpbPermission('schedules.manage');
+    $plays = [1=>'推 讓分',2=>'推 不讓分',3=>'推 大小分',4=>'特殊玩法',5=>'手動玩法'];
     $legacyColors = config('ppb_legacy_colors', []);
     // PPB MG4: show historically imported text, never claim WP publication.
     $legacyImportByAssignment = \Illuminate\Support\Facades\DB::table('ppb_submissions')
@@ -41,16 +42,16 @@
       @if($errors->any())<div class="error" role="alert">{{ $errors->first() }}</div>@endif
       {{-- PPB UI5 2026-11-04 | Old shift.tpl search fields / buttons, no extra filters. --}}
       <section class="ppb-shift-search-card" aria-label="搜尋賽事">
-        <form method="get" action="{{ route('ppb.games.index') }}" class="ppb-shift-search-form">
+        <form method="get" action="{{ url()->current() }}" class="ppb-shift-search-form">
           <label class="ppb-shift-filter"><span>賽事編號</span><input type="text" name="match_no" value="{{ $matchNo }}" placeholder="例如：G31" maxlength="12" autocomplete="off"></label>
           <label class="ppb-shift-filter"><span>日期</span><input type="text" name="match_date" value="{{ $matchDate }}" placeholder="賽事推薦時間" aria-label="賽事推薦時間" onfocus="this.type='date'" onblur="if(!this.value)this.type='text'"></label>
           <button class="ppb-shift-search-btn" type="submit">搜尋</button>
-          @if(auth('ppb')->user()->hasPpbPermission('schedules.manage'))
+          @if($canManage)
             <button type="button" class="ppb-shift-add-btn ppb-open-game-modal" aria-haspopup="dialog">新增賽事</button>
           @endif
         </form>
       </section>
-      @if(auth('ppb')->user()->hasPpbPermission('schedules.manage'))
+      @if($canManage)
         {{-- Legacy mobile search was hidden. Keep add accessible on narrow screens. --}}
         <div class="ppb-shift-mobile-add"><button type="button" class="ppb-shift-add-btn ppb-open-game-modal" aria-haspopup="dialog">新增賽事</button></div>
       @endif
@@ -62,12 +63,12 @@
             $bonus = $activeAssignments->firstWhere('kind','bonus');
             $long = $activeAssignments->firstWhere('kind','long');
             $reviewer = $reviewers->get($game->reviewer_analyst_id);
-            $reviewerStyle = $reviewer && isset($legacyColors[(int)$reviewer->id]) ? $legacyColors[(int)$reviewer->id] : null;
+            $reviewerStyle = $reviewer?->scheduleColors($legacyColors[(int)$reviewer->id] ?? null);
             $isCancelled = $game->status === 'cancelled';
             $legacyGameNotes = is_string($game->notes) ? json_decode($game->notes,true) : null;
             $legacyLottery = is_array($legacyGameNotes) && ($legacyGameNotes['_ppb_legacy_game_v1'] ?? false)
                 ? ($legacyGameNotes['lottery_no'] ?? null) : null;
-            $locked = $game->hasVerifiedWp() || $game->hasUnresolvedWp();
+            $locked = !$readOnly && ($game->hasVerifiedWp() || $game->hasUnresolvedWp());
             // PPB INS2 | Every visible card boundary has a tiny entry. Controller
             // checks the FULL month/type number scope, including off-page games.
             // No JS/UI flag can bypass ScheduleManager's final transaction checks.
@@ -108,20 +109,28 @@
               <span class="ppb-shift-legend ppb-shift-lose">敗</span>
               <span class="ppb-shift-legend ppb-shift-pending">未結算</span>
             </div>
-            <div class="ppb-shift-reviewer">核稿：<span @if($reviewerStyle) style="background-color:{{ $reviewerStyle['background'] }};color:{{ $reviewerStyle['color'] }}" @endif>{{ $reviewer ? ($reviewer->display_name ?: $reviewer->name) : '未指派' }}</span></div>
+            <div class="ppb-shift-reviewer">核稿：<span @if($reviewerStyle) style="@if($reviewerStyle['background']!==null)background-color:{{ $reviewerStyle['background'] }};@endif color:{{ $reviewerStyle['color'] }}" @endif>{{ $reviewer ? ($reviewer->display_name ?: $reviewer->name) : '未指派' }}</span></div>
             {{-- PPB OP1 2026-11-05 | Compact actions, preserving original routes and permissions. --}}
+            @unless($readOnly)
             <div class="ppb-shift-actions">
+              @if($canManage && !$isCancelled && !$locked)
+                <a class="ppb-shift-action ppb-open-game-modal" href="{{ route('ppb.games.edit',$game) }}"
+                  data-create-url="{{ route('ppb.games.edit',[$game,'modal'=>'1']) }}"
+                  data-dialog-title="修改賽事" aria-label="修改賽事" title="修改賽事">✏️</a>
+                @if(!$game->submissions_count && !$game->publications_count && !$game->assignments()->whereHas('substitutions')->exists())
+                  <a class="ppb-shift-action" href="{{ route('ppb.games.show',$game) }}#delete-game"
+                    aria-label="刪除無投稿賽事" title="刪除無投稿賽事">🗑️</a>
+                @endif
+              @endif
               <details class="ppb-shift-manage">
                 <summary class="ppb-shift-action ppb-shift-manage-toggle" aria-label="管理 {{ $game->display_code }}" title="管理賽事">⋯</summary>
                 <div class="ppb-shift-manage-menu">
-                  @if(auth('ppb')->user()->hasPpbPermission('schedules.manage'))
-                    @if(!$isCancelled && !$locked)
-                      <a href="{{ route('ppb.games.edit',$game) }}">編輯／補齊人員</a>
-                    @endif
+                  @if($canManage)
                     @if(!$isCancelled)
                       <button type="button" class="ppb-shift-cancel-open"
                         data-cancel-url="{{ route('ppb.games.cancel',$game) }}"
                         data-game-code="{{ $game->display_code }}"
+                        data-revision="{{ \App\Services\Ppb\ScheduleVersion::game($game) }}"
                         data-wp-hold="{{ $locked ? '1' : '0' }}">取消賽事</button>
                     @endif
                   @endif
@@ -132,12 +141,13 @@
                 </div>
               </details>
             </div>
+            @endunless
           </div>
           <div class="ppb-shift-prediction">{{ $plays[$game->play_type] ?? '玩法待補' }} {{ $game->play_value ?: '' }} @if($game->market_type) <span class="ppb-shift-market">／{{ (int)$game->market_type===2 ? '三路盤' : '兩路盤' }}</span>@endif</div>
           @for($slot=1;$slot<=5;$slot++)
             @php
               $assignment=$short->get($slot);
-              $nameColor=$assignment ? ($legacyColors[(int)$assignment->current_analyst_id] ?? null) : null;
+              $nameColor=$assignment?->currentAnalyst?->scheduleColors($legacyColors[(int)$assignment->current_analyst_id] ?? null);
               $legacyPreviewRow=$assignment ? $legacyImportByAssignment->get($assignment->id) : null;
               $legacyPreview=$legacyPreviewRow ? json_decode((string)$legacyPreviewRow->content_body,true) : null;
               if(!is_array($legacyPreview) || !($legacyPreview['_ppb_legacy_pick_v1'] ?? false)) $legacyPreview=null;
@@ -154,13 +164,13 @@
             @endphp
             <div class="ppb-shift-row">
               <span class="ppb-shift-label">推薦＋短文</span>
-              <span class="ppb-shift-name" @if($nameColor) style="background-color:{{ $nameColor['background'] }};color:{{ $nameColor['color'] }}" @endif title="{{ $legacyArchived ? '舊版歷史重複指派（唯讀）' : ($assignment?->currentAnalyst?->display_name ?: ($assignment?->currentAnalyst?->name ?: '尚未指派')) }}">{{ $legacyArchived ? $archiveName : ($assignment?->currentAnalyst?->display_name ?: ($assignment?->currentAnalyst?->name ?: '未指派')) }}</span>
+              <span class="ppb-shift-name" @if($nameColor) style="@if($nameColor['background']!==null)background-color:{{ $nameColor['background'] }};@endif color:{{ $nameColor['color'] }}" @endif title="{{ $legacyArchived ? '舊版歷史重複指派（唯讀）' : ($assignment?->currentAnalyst?->display_name ?: ($assignment?->currentAnalyst?->name ?: '尚未指派')) }}">{{ $legacyArchived ? $archiveName : ($assignment?->currentAnalyst?->display_name ?: ($assignment?->currentAnalyst?->name ?: '未指派')) }}</span>
               <span class="ppb-shift-pick" @if($legacyPreviewColor) style="background-color:{{ $legacyPreviewColor }}" @endif>{{ ($assignment || $legacyArchived) ? ($legacyPreview ? (($legacyPreview['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未串接投稿') : '尚未指派' }}</span>
               <span class="ppb-shift-note">{{ $legacyPreview ? (($legacyPreview['short_analysis'] ?? null) ?: '—') : ($assignment ? '稿件內容尚未接入新版' : '—') }}</span>
             </div>
           @endfor
           @php
-            $bonusColor=$bonus ? ($legacyColors[(int)$bonus->current_analyst_id] ?? null) : null;
+            $bonusColor=$bonus?->currentAnalyst?->scheduleColors($legacyColors[(int)$bonus->current_analyst_id] ?? null);
             $legacyBonusRow=$bonus ? $legacyImportByAssignment->get($bonus->id) : null;
             $legacyBonus=$legacyBonusRow ? json_decode((string)$legacyBonusRow->content_body,true) : null;
             if(!is_array($legacyBonus) || !($legacyBonus['_ppb_legacy_pick_v1'] ?? false)) $legacyBonus=null;
@@ -168,20 +178,20 @@
           @endphp
           <div class="ppb-shift-row">
             <span class="ppb-shift-label ppb-shift-label-bonus">BONUS</span>
-            <span class="ppb-shift-name" @if($bonusColor) style="background-color:{{ $bonusColor['background'] }};color:{{ $bonusColor['color'] }}" @endif>{{ $bonus?->currentAnalyst?->display_name ?: ($bonus?->currentAnalyst?->name ?: '未指派') }}</span>
+            <span class="ppb-shift-name" @if($bonusColor) style="@if($bonusColor['background']!==null)background-color:{{ $bonusColor['background'] }};@endif color:{{ $bonusColor['color'] }}" @endif>{{ $bonus?->currentAnalyst?->display_name ?: ($bonus?->currentAnalyst?->name ?: '未指派') }}</span>
             <span class="ppb-shift-pick" @if($legacyBonusColor) style="background-color:{{ $legacyBonusColor }}" @endif>{{ $bonus ? ($legacyBonus ? (($legacyBonus['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未串接投稿') : '尚未指派' }}</span>
             <span class="ppb-shift-note">{{ $legacyBonus ? (($legacyBonus['short_analysis'] ?? null) ?: '—') : ($bonus ? '稿件內容尚未接入新版' : '—') }}</span>
           </div>
           @if($game->has_long_article)
             @php
-              $longColor=$long ? ($legacyColors[(int)$long->current_analyst_id] ?? null) : null;
+              $longColor=$long?->currentAnalyst?->scheduleColors($legacyColors[(int)$long->current_analyst_id] ?? null);
               $legacyLongRow=$long ? $legacyImportByAssignment->get($long->id) : null;
               $legacyLong=$legacyLongRow ? json_decode((string)$legacyLongRow->content_body,true) : null;
               if(!is_array($legacyLong) || !($legacyLong['_ppb_legacy_pick_v1'] ?? false)) $legacyLong=null;
             @endphp
             <div class="ppb-shift-row ppb-shift-row-long">
               <span class="ppb-shift-label ppb-shift-label-long">分析文</span>
-              <span class="ppb-shift-name" @if($longColor) style="background-color:{{ $longColor['background'] }};color:{{ $longColor['color'] }}" @endif>{{ $long?->currentAnalyst?->display_name ?: ($long?->currentAnalyst?->name ?: '未指派') }}</span>
+              <span class="ppb-shift-name" @if($longColor) style="@if($longColor['background']!==null)background-color:{{ $longColor['background'] }};@endif color:{{ $longColor['color'] }}" @endif>{{ $long?->currentAnalyst?->display_name ?: ($long?->currentAnalyst?->name ?: '未指派') }}</span>
               {{-- PPB CT6 | Old is_long=1 pick.recommend_pick stores WP URL; short_analysis is the WP post ID. --}}
               @if(isset($longArticleLinks[(int)$game->id]))
                 <a class="ppb-shift-long-note" style="color:#0000ee;text-decoration:underline" href="{{ $longArticleLinks[(int)$game->id] }}" target="_blank" rel="noopener noreferrer" title="開啟原 WordPress 分析文章">{{ $longArticleLinks[(int)$game->id] }}</a>
@@ -199,11 +209,12 @@
         <div class="ppb-shift-empty">目前查詢條件下沒有賽事。請確認賽事編號或日期。</div>
       @endforelse
       {{-- PPB PG2 2026-11-05 | Old shift.tpl style: total / current page + compact numbered navigation. --}}
-      @if(auth('ppb')->user()->hasPpbPermission('schedules.manage'))
+      @if($canManage)
       {{-- PPB OP1 2026-11-05 | Submit to existing protected cancel route. No state mutation via JS. --}}
       <dialog id="ppbCancelGameDialog" class="ppb-shift-cancel-dialog" aria-labelledby="ppbCancelTitle">
         <form id="ppbCancelGameForm" method="post">
           @csrf
+          <input type="hidden" name="revision_token" value="">
           <h2 id="ppbCancelTitle">取消賽事 <span id="ppbCancelCode"></span></h2>
           <p id="ppbCancelWpNote" class="ppb-shift-cancel-notice" hidden>此場有 WP 鎖定或待確認紀錄；系統將依既有後端規則審查，不能保證可以取消或釋出編號。</p>
           <label for="ppbCancelReason">取消原因（必填）</label>
@@ -215,43 +226,8 @@
         </form>
       </dialog>
       @endif
-      <div class="ppb-shift-pagination" role="navigation" aria-label="賽事分頁">
-        <div class="ppb-shift-pagination-info">共 {{ $games->total() }} 筆 / 第 {{ $games->currentPage() }} 頁</div>
-        @if($games->hasPages())
-          <div class="ppb-shift-pagination-links">
-            @if($games->onFirstPage())
-              <span aria-disabled="true">上一頁</span>
-            @else
-              <a href="{{ $games->previousPageUrl() }}" rel="prev">上一頁</a>
-            @endif
-            @php
-              $firstPage = max(1, $games->currentPage()-2);
-              $lastPage = min($games->lastPage(), $games->currentPage()+2);
-            @endphp
-            @if($firstPage > 1)
-              <a href="{{ $games->url(1) }}" aria-label="第 1 頁">1</a>
-              @if($firstPage > 2)<span class="ppb-shift-pagination-ellipsis">…</span>@endif
-            @endif
-            @foreach($games->getUrlRange($firstPage,$lastPage) as $number=>$url)
-              @if($number == $games->currentPage())
-                <span class="current" aria-current="page">{{ $number }}</span>
-              @else
-                <a href="{{ $url }}" aria-label="第 {{ $number }} 頁">{{ $number }}</a>
-              @endif
-            @endforeach
-            @if($lastPage < $games->lastPage())
-              @if($lastPage + 1 < $games->lastPage())<span class="ppb-shift-pagination-ellipsis">…</span>@endif
-              <a href="{{ $games->url($games->lastPage()) }}" aria-label="最後一頁">{{ $games->lastPage() }}</a>
-            @endif
-            @if($games->hasMorePages())
-              <a href="{{ $games->nextPageUrl() }}" rel="next">下一頁</a>
-            @else
-              <span aria-disabled="true">下一頁</span>
-            @endif
-          </div>
-        @endif
-      </div>
-      @if(auth('ppb')->user()->hasPpbPermission('schedules.manage'))
+      @include('ppb.legacy-admin.pager')
+      @if($canManage)
       {{-- PPB INS2 | Explain blocked positions; never pretend a protected renumber worked. --}}
       <dialog id="ppbInsertHoldDialog" class="ppb-shift-cancel-dialog ppb-insert-hold-dialog" aria-labelledby="ppbInsertHoldTitle">
         <h2 id="ppbInsertHoldTitle">此處目前無法安全插入</h2>
@@ -278,6 +254,7 @@
             if (!btn.dataset.cancelUrl) return;
             form.action=btn.dataset.cancelUrl;
             form.reset();
+            form.elements.revision_token.value=btn.dataset.revision;
             code.textContent=btn.dataset.gameCode || '';
             note.hidden=btn.dataset.wpHold!=='1';
             if (!dlg.open) dlg.showModal();
@@ -314,7 +291,13 @@
         if(!dialog)return;
         const frame=dialog.querySelector('iframe');
         const close=()=>{dialog.close();};
-        document.querySelectorAll('.ppb-open-game-modal').forEach(button=>button.addEventListener('click',()=>{
+        dialog.addEventListener('close',()=>frame.removeAttribute('src'));
+        document.querySelectorAll('.ppb-open-game-modal').forEach(button=>button.addEventListener('click',event=>{
+          event.preventDefault();
+          button.closest('details')?.removeAttribute('open');
+          const title=button.dataset.dialogTitle || '新增賽事';
+          dialog.querySelector('strong').textContent=title;
+          frame.title=title;
           // Switching from a gap insertion to the ordinary add button must reset
           // the context: never accidentally submit a stale anchor.
           const nextUrl=button.dataset.createUrl || frame.dataset.src;
@@ -328,6 +311,10 @@
             const loc=frame.contentWindow.location;
             // V2 form POST redirects to a protected game details page on success.
             if(loc.origin!==window.location.origin)return;
+            frame.contentDocument.querySelector('[data-close-schedule-form]')?.addEventListener('click',event=>{
+              event.preventDefault();
+              close();
+            });
             if(/^\/admin\/games\/\d+\/?$/.test(loc.pathname)){
               window.location.assign(loc.href);
             } else if(loc.pathname==='/admin/games'){

@@ -24,6 +24,18 @@ class EvaluationInterfaceTest extends TestCase
         $result+=['level'=>2,'selected'=>$selected,'next_rating'=>['rating_level'=>2,'is_terminate'=>false]];
         return ['subject'=>['type'=>'legacy','id'=>2,'label'=>'<script>not executable</script>'],'month'=>'2026-05','manual'=>$manual,'current'=>$result,'previous'=>$result,'revision'=>0,'source_sha256'=>str_repeat('a',64),'earlier_month'=>'2026-03','history'=>['2026-03'=>$result,'2026-04'=>$result,'2026-05'=>$result],'saved_next_rating'=>null,'native_attendance_video_supported'=>true,'inputs'=>['games'=>[91=>['id'=>91,'recommended_time'=>'2026-05-12 12:00:00']],'attendance'=>[],'videos'=>[['id'=>8,'scheduled_at'=>'2026-05-12 04:00:00','guest_1'=>'legacy:2','guest_2'=>null,'guest_3'=>null,'cancelled'=>false]]]];
     }
+    public function test_month_defaults_to_current_taipei_month(): void
+    {
+        $this->actor();
+        $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-31 16:00:00', 'UTC'));
+        $subjects = Mockery::mock(EvaluationSubjects::class);
+        $subjects->shouldReceive('all')->once()->andReturn([]);
+        $this->app->instance(EvaluationSubjects::class, $subjects);
+
+        $this->get('https://v2.csdatw.xyz/admin/evaluations')
+            ->assertOk()->assertViewHas('month', '2026-11');
+    }
+
     public function test_guest_cannot_read_evaluation_and_http_or_foreign_host_is_denied(): void
     {
         config(['app.url'=>'https://v2.csdatw.xyz']);
@@ -44,6 +56,26 @@ class EvaluationInterfaceTest extends TestCase
         $response=$this->get('https://v2.csdatw.xyz/admin/evaluations/legacy/2?month=2026-05');
         $response->assertOk()->assertSee('&lt;script&gt;not executable&lt;/script&gt;',false)->assertDontSee('<script>not executable</script>',false)->assertSee('name="request_id"',false)->assertSee('name="source_sha256"',false)->assertSee('儲存人工評分')->assertSee('確認並保存下月評級')->assertSee('保存出勤更正')->assertSee('保存影片參與')->assertSee('2026-05-12T12:00',false);
     }
+    public function test_missing_monthly_grade_renders_no_data_in_detail_and_summary(): void
+    {
+        $this->actor(false, true);
+        $subject = ['type' => 'legacy', 'id' => 2];
+        $subjects = Mockery::mock(EvaluationSubjects::class);
+        $subjects->shouldReceive('get')->with('legacy', 2)->andReturn($subject);
+        $subjects->shouldReceive('all')->andReturn([]);
+        $this->app->instance(EvaluationSubjects::class, $subjects);
+
+        $report = $this->report();
+        $report['current']['level'] = null;
+        $service = Mockery::mock(EvaluationService::class);
+        $service->shouldReceive('load')->with($subject, '2026-05')->twice()->andReturn($report);
+        $this->app->instance(EvaluationService::class, $service);
+
+        $url = 'https://v2.csdatw.xyz/admin/evaluations/legacy/2?month=2026-05';
+        $this->get($url)->assertOk()->assertSee('本月等級：無資料');
+        $this->getJson($url.'&format=summary')->assertOk()->assertJsonPath('level_label', '無資料');
+    }
+
     public function test_invalid_month_is_rejected_before_source_or_database_queries(): void
     {
         $this->actor();$subjects=Mockery::mock(EvaluationSubjects::class);$subjects->shouldNotReceive('all');$this->app->instance(EvaluationSubjects::class,$subjects);
@@ -70,7 +102,7 @@ class EvaluationInterfaceTest extends TestCase
         $subjects=Mockery::mock(EvaluationSubjects::class);$subjects->shouldReceive('all')->andReturn($roster);$subjects->shouldReceive('get')->andReturn(['type'=>'legacy','id'=>2]);$this->app->instance(EvaluationSubjects::class,$subjects);
         $this->get('https://v2.csdatw.xyz/admin/evaluations?month=2026-05&page=2')->assertOk()->assertSee('AnalystFixture6')->assertSee('AnalystFixture10')->assertDontSee('AnalystFixture11')->assertSee('data-evaluation-summary',false);
         $service=Mockery::mock(EvaluationService::class);$service->shouldReceive('load')->once()->andReturn($this->report());$this->app->instance(EvaluationService::class,$service);
-        $json=$this->getJson('https://v2.csdatw.xyz/admin/evaluations/legacy/2?month=2026-05&format=summary')->assertOk()->assertJsonPath('score',60)->assertJsonPath('earlier_score',60)->assertJsonMissingPath('subject')->assertJsonMissingPath('current.selected.records');
+        $json=$this->getJson('https://v2.csdatw.xyz/admin/evaluations/legacy/2?month=2026-05&format=summary')->assertOk()->assertJsonPath('score',60)->assertJsonPath('earlier_score',60)->assertJsonPath('level_label','A')->assertJsonPath('next_level_label','A')->assertJsonMissingPath('subject')->assertJsonMissingPath('current.selected.records');
         self::assertStringContainsString('no-store',$json->headers->get('Cache-Control'));
     }
 

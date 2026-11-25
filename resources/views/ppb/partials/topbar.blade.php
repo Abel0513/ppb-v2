@@ -5,6 +5,11 @@
     {{-- PPB_UI3_20261104 | Keep the real page title, remove redundant subtitle. --}}
     <div class="admin-page-heading"><h1 class="admin-page-title">@yield('title', '排班管理')</h1></div>
   </div>
+  @if(auth('ppb')->user()?->hasPpbPermission('schedules.view'))
+    <a class="admin-association" href="{{ route('ppb.games.index') }}">
+      中華民國運動彩券發展協會 <small>CHINESE SPORTS LOTTERY DEVELOPMENT ASSOCIATION</small>
+    </a>
+  @endif
   <div class="admin-topbar-right" id="adminProfileWrapper">
     @if(auth('ppb')->check())
       <button class="admin-profile-button" id="adminProfileButton" type="button" aria-haspopup="true" aria-expanded="false">
@@ -13,7 +18,7 @@
       </button>
       <div class="admin-profile-dropdown" id="adminProfileDropdown">
         <div class="admin-profile-dropdown-header"><p class="admin-profile-dropdown-name">{{ auth('ppb')->user()->name }}</p><p class="admin-profile-dropdown-account">{{ auth('ppb')->user()->username }}</p></div>
-        <div class="admin-profile-dropdown-menu"><form method="POST" action="{{ route('ppb.logout') }}">@csrf<button class="admin-profile-menu-item logout" type="submit"><span class="admin-profile-menu-icon">↪</span><span>安全登出</span></button></form></div>
+        <div class="admin-profile-dropdown-menu"><form method="POST" action="{{ route('ppb.logout') }}">@csrf<button class="admin-profile-menu-item logout" type="submit"><span class="admin-profile-menu-icon">↪</span><span>退出</span></button></form></div>
       </div>
     @else
       <span class="admin-topbar-preview">介面預覽</span>

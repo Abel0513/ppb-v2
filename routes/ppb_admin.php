@@ -5,6 +5,7 @@ use App\Http\Controllers\Ppb\AccountController;
 use App\Http\Controllers\Ppb\RoleController;
 use App\Http\Controllers\Ppb\AnalystController;
 use App\Http\Controllers\Ppb\GameController;
+use App\Http\Controllers\Ppb\LegacyAdminController;
 use App\Http\Controllers\Ppb\AssignmentController;
 use App\Http\Controllers\Ppb\ManuscriptController;
 use App\Http\Middleware\PpbCan;
@@ -52,6 +53,25 @@ Route::prefix('admin')->middleware([
     Route::put('/analysts/{analyst}', [AnalystController::class, 'update'])->middleware([PpbCan::class.':schedules.manage','throttle:20,1'])->name('ppb.analysts.update');
 
     Route::get('/games', [GameController::class, 'index'])->middleware(PpbCan::class.':schedules.view')->name('ppb.games.index');
+    Route::middleware(PpbCan::class.':schedules.view')->group(function () {
+        Route::get('/games/readonly', [GameController::class, 'index'])->name('ppb.games.readonly');
+        Route::get('/schedule/overview', [GameController::class, 'index'])->name('ppb.schedule.overview');
+        Route::get('/schedule/articles', [LegacyAdminController::class, 'articles'])->name('ppb.schedule.articles');
+        Route::get('/schedule/videos', [LegacyAdminController::class, 'videos'])->name('ppb.schedule.videos');
+        Route::get('/schedule/attendance', [LegacyAdminController::class, 'attendance'])->name('ppb.schedule.attendance');
+        Route::get('/analyst-list', [LegacyAdminController::class, 'report'])->defaults('kind', 'analyst-list')->name('ppb.analyst-list');
+        Route::get('/performance', [LegacyAdminController::class, 'report'])->defaults('kind', 'performance')->name('ppb.performance');
+        Route::get('/performance/summary/{type}/{id}', [LegacyAdminController::class, 'summary'])
+            ->whereIn('type', ['legacy', 'v2'])->whereNumber('id')->defaults('kind', 'schedule')->name('ppb.performance.summary');
+        Route::get('/csda/users', [LegacyAdminController::class, 'csda'])->name('ppb.csda.users');
+    });
+    Route::prefix('rating')->middleware(PpbCan::class.':evaluations.view')->group(function () {
+        foreach (['index' => 'rating-salary', 'salary' => 'salary', 'change' => 'rating'] as $path => $kind) {
+            Route::get('/'.$path, [LegacyAdminController::class, 'report'])->defaults('kind', $kind)->name('ppb.rating.'.$path);
+        }
+        Route::get('/summary/{type}/{id}', [LegacyAdminController::class, 'summary'])
+            ->whereIn('type', ['legacy', 'v2'])->whereNumber('id')->defaults('kind', 'rating')->name('ppb.rating.summary');
+    });
     Route::get('/games/anchors', [GameController::class, 'anchors'])->middleware(PpbCan::class.':schedules.view')->name('ppb.games.anchors');
     Route::get('/games/create', [GameController::class, 'create'])->middleware(PpbCan::class.':schedules.manage')->name('ppb.games.create');
     Route::post('/games', [GameController::class, 'store'])->middleware([PpbCan::class.':schedules.manage','throttle:20,1'])->name('ppb.games.store');

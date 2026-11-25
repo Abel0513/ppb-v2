@@ -22,6 +22,18 @@ class EvaluationReadonlyPreviewTest extends TestCase
         $this->actingAs($user,'ppb');
     }
 
+    public function test_month_defaults_to_current_taipei_month(): void
+    {
+        $this->actor();
+        $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-31 16:00:00', 'UTC'));
+        $subjects = Mockery::mock(EvaluationSubjects::class);
+        $subjects->shouldReceive('all')->once()->andReturn([]);
+        $this->app->instance(EvaluationSubjects::class, $subjects);
+
+        $this->get('https://v2.csdatw.xyz/admin/evaluations-preview')
+            ->assertOk()->assertViewHas('month', '2026-11');
+    }
+
     public function test_guest_and_untrusted_hosts_are_not_allowed():void
     {
         config(['app.url'=>'https://v2.csdatw.xyz']);
@@ -75,7 +87,7 @@ class EvaluationReadonlyPreviewTest extends TestCase
         $value=['score_delivery_time'=>50,'score_compliance'=>50,'score_professionalism'=>50,
             'score_interaction_avg'=>40,'score_initiative'=>0,'score_winrate_bonus'=>0,
             'score_extra_adjustment'=>0,'total_score'=>60];
-        $current=['view'=>$value,'rating'=>$value,
+        $current=['view'=>$value,'rating'=>$value,'level'=>2,
             'salary'=>['short'=>100,'long'=>400,'video'=>0,'late'=>0,'absent'=>0,'total'=>500],
             'counts'=>['salary_short'=>1,'salary_long'=>1],
             'next_rating'=>['rating_level'=>2,'is_terminate'=>false],
@@ -91,7 +103,7 @@ class EvaluationReadonlyPreviewTest extends TestCase
         $this->get('https://v2.csdatw.xyz/admin/evaluations-preview/legacy/2?month=2026-05')
             ->assertOk()->assertSee('來源薪酬試算')->assertDontSee('name="operation"',false);
         $this->getJson('https://v2.csdatw.xyz/admin/evaluations-preview/legacy/2?month=2026-05&format=summary')
-            ->assertOk()->assertJsonPath('score',60)->assertJsonPath('salary.total',500)
+            ->assertOk()->assertJsonPath('score',60)->assertJsonPath('salary.total',500)->assertJsonPath('level_label','A')->assertJsonPath('next_level_label','A')
             ->assertJsonMissingPath('source_sha256');
         $this->post('https://v2.csdatw.xyz/admin/evaluations-preview/legacy/2',[])->assertStatus(405);
     }

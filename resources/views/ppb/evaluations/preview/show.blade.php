@@ -20,9 +20,9 @@
 @endforeach
 </tbody></table></div><p class="sub">統計頁與評級計算對代班稿採不同口徑，仍沿用舊規則。</p></section>
 <section class="card eval-preview-section"><h2>等級試算</h2><div class="eval-preview-grid">
-<p>當月等級：<strong>{{ $report['level'] }}</strong></p><p>當月評級分數：<strong>{{ $now['rating']['total_score'] }}</strong></p>
+<p>當月等級：<strong>{{ \App\Services\Ppb\LegacyDisplayLabels::rating($now['level'] ?? null) }}</strong></p><p>當月評級分數：<strong>{{ $now['rating']['total_score'] }}</strong></p>
 <p>前月評級分數：<strong>{{ $report['previous']['rating']['total_score'] }}</strong></p>
-<p>下月等級試算：<strong>{{ $now['next_rating']['rating_level'] }}</strong></p></div>
+<p>下月等級試算：<strong>{{ \App\Services\Ppb\LegacyDisplayLabels::rating($now['next_rating']['rating_level']) }}</strong></p></div>
 @if($now['next_rating']['is_terminate'])<p class="notice">符合舊規則終止條件；預覽不會自動停用分析師。</p>@endif
 </section>
 <section class="card eval-preview-section"><h2>舊來源薪酬試算</h2><div class="eval-preview-grid">

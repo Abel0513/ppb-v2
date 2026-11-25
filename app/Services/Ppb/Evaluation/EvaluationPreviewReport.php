@@ -42,7 +42,7 @@ class EvaluationPreviewReport
         usort($attendance,fn($a,$b)=>[$a['recommended_time'],(int)$a['id']]<=>
             [$b['recommended_time'],(int)$b['id']]);
         $level=null;
-        foreach($snapshot['ratings'] as $r)if($r['rating_month']===$month)$level=(int)$r['rating_level'];
+        foreach($snapshot['ratings'] as $r)if($r['rating_month']===$month)$level=isset($r['rating_level'])?(int)$r['rating_level']:null;
         $result=$this->report->calculate($selected,$manual,$schedules,$attendance,
             (int)($snapshot['video_counts'][$month]??0),$level);
         $result['level']=$level;$result['selected']=$selected;

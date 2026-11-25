@@ -18,6 +18,8 @@ use Illuminate\View\View;
 class GameController extends Controller
 {
     public function index(Request $request): View {
+        $readOnly = $request->routeIs('ppb.games.readonly');
+        $overview = $request->routeIs('ppb.schedule.overview');
         $matchNo=trim((string)$request->query('match_no',''));
         $matchDate=trim((string)$request->query('match_date',''));
         // PPB PG2 2026-11-05 | No default month filter: 2026-10-15+ and future schedules are visible.
@@ -58,7 +60,8 @@ class GameController extends Controller
         }
         // PPB PG8 | 2026-11-05 | Legacy future-first unlimited first page; past pages of 10.
         // The old shift(): p=1 is ALL games from the current local day at 00:00,
-        // ordered ascending. p>=2 is history in DESC 10-row batches, displayed ASC.
+        // ordered ascending. History uses DESC 10-row batches, displayed ASC.
+        // When there are no current or future games, history starts at p=1.
         // Filtered searches/bookmarked month/type/status retain the existing 10-row pager.
         $legacyList=config('ppb_legacy_listing');
         if (!is_array($legacyList) || ($legacyList['order'] ?? null)!==[
@@ -86,7 +89,9 @@ class GameController extends Controller
             $todayUtc=CarbonImmutable::now('Asia/Taipei')->startOfDay()->utc()->format('Y-m-d H:i:s');
             $future=(clone $games)->where('recommended_at','>=',$todayUtc);
             $history=(clone $games)->where('recommended_at','<',$todayUtc);
-            $futureCount=(clone $future)->count();
+            $futureItems=(clone $future)->reorder()->orderBy('recommended_at')
+                ->orderBy('game_type')->orderBy('game_number')->orderBy('id')->get();
+            $futureCount=$futureItems->count();
             $historyCount=(clone $history)->count();
             $total=(clone $games)->count();
             if ($futureCount+$historyCount!==$total) {
@@ -94,34 +99,37 @@ class GameController extends Controller
             }
             $rawPage=$request->query('p','1');
             $page=is_scalar($rawPage)?max(1,(int)$rawPage):1;
-            if ($page===1) {
-                // No LIMIT here: today+ may be greater than per_page=10.
-                $items=$future->reorder()->orderBy('recommended_at','asc')
-                    ->orderBy('game_type','asc')->orderBy('game_number','asc')
-                    ->orderBy('id','asc')->get();
+            if ($page===1 && $futureCount>0) {
+                $items=$futureItems;
             } else {
-                $items=$history->reorder()->orderBy('recommended_at','desc')
+                $historyPage=$page-($futureCount>0 ? 1 : 0);
+                $items=(clone $history)->reorder()->orderBy('recommended_at','desc')
                     ->orderBy('game_type','desc')->orderBy('game_number','desc')
-                    ->orderBy('id','desc')->offset(($page-2)*$perPage)->limit($perPage)
+                    ->orderBy('id','desc')->offset(($historyPage-1)*$perPage)->limit($perPage)
                     ->get()->sort($sortAsc)->values();
             }
-            // Reproduce old Think\Page virtual total so historical pages begin at p=2.
-            $virtualTotal=$futureCount<$perPage && $historyCount>0
+            $virtualTotal=$futureCount>0 && $futureCount<$perPage && $historyCount>0
                 ? $perPage+$historyCount : $total;
+            // An unlimited today+ page with no history is the only page.
+            $paginatorSize=$historyCount===0 ? max($perPage,$futureCount) : $perPage;
             $games=new \Illuminate\Pagination\LengthAwarePaginator(
-                $items,$virtualTotal,$perPage,$page,
+                $items,$virtualTotal,$paginatorSize,$page,
                 ['path'=>$request->url(),'pageName'=>'p']
             );
             $games->appends($request->except('p'));
         }
+        if ($overview) {
+            $resultCount = $total ?? $games->total();
+            return view('ppb.legacy-admin.overview', compact('games','matchNo','matchDate','resultCount'));
+        }
         $ids=$games->getCollection()->pluck('reviewer_analyst_id')->filter()->unique()->values();
-        $reviewers=$ids->isEmpty()?collect():PpbAnalyst::whereIn('id',$ids)->get(['id','name','display_name'])->keyBy('id');
+        $reviewers=$ids->isEmpty()?collect():PpbAnalyst::whereIn('id',$ids)->get()->keyBy('id');
         // PPB INS2 | Compute every VISIBLE card boundary once, without changing PG8 ordering.
         // Blocked boundaries still render a tiny, explanatory control; safe ones open the
         // existing create modal. All SQL below is SELECT; ScheduleManager rechecks on POST.
         $insertGaps=[];
         $visible=$games->getCollection()->values();
-        if (auth('ppb')->user()?->hasPpbPermission('schedules.manage')) {
+        if (!$readOnly && auth('ppb')->user()?->hasPpbPermission('schedules.manage')) {
             $scopes=[];
             $todayMonth=CarbonImmutable::now('Asia/Taipei')->format('Y-m');
             for ($i=1;$i<$visible->count();$i++) {
@@ -222,7 +230,7 @@ class GameController extends Controller
                 else unset($longArticleLinks[$id]);
             }
         }
-        return view('ppb.games-index',compact('games','month','type','status','matchNo','matchDate','reviewers','insertGaps','longArticleLinks'));
+        return view('ppb.games-index',compact('games','month','type','status','matchNo','matchDate','reviewers','insertGaps','longArticleLinks','readOnly'));
     }
     private function formData(?PpbGame $game): array {
         $analysts=PpbAnalyst::query()->where('status','active')->whereIn('user_type',[0,1])->orderBy('name')
