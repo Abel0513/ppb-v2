@@ -32,9 +32,11 @@ class AnalystMasterMysql57Test extends TestCase
             self::assertSame($container->socket(),DB::connection()->getConfig('unix_socket'));
             $before=DB::table('ppb_analysts')->get()->toJson();
             // Only the verified disposable socket may execute candidate DDL.
-            $migration=require base_path('database/migrations/2026_11_16_000012_add_confirmed_ppb_analyst_fields.php');$migration->up();DB::statement('ALTER TABLE ppb_analysts ADD UNIQUE(account_id)');
+            $migration=require base_path('database/migrations/2026_11_16_000012_add_confirmed_ppb_analyst_fields.php');$migration->up();
+            $levelMigration=require base_path('database/migrations/2026_11_25_000013_add_ppb_analyst_background_and_level.php');$levelMigration->up();DB::statement('ALTER TABLE ppb_analysts ADD UNIQUE(account_id)');
             self::assertSame($before,DB::table('ppb_analysts')->get(['id','account_id','name','display_name','status','user_type','internal_notes','created_at','updated_at'])->toJson());
             try{$migration->up();self::fail('Existing columns must not be overwritten.');}catch(\RuntimeException $e){self::assertSame('ANALYST_MASTER_COLUMNS_ALREADY_EXIST',$e->getMessage());}
+            try{$levelMigration->up();self::fail('Existing columns must not be overwritten.');}catch(\RuntimeException $e){self::assertSame('ANALYST_MASTER_COLUMNS_ALREADY_EXIST',$e->getMessage());}
             DB::statement('ALTER TABLE ppb_accounts ADD email VARCHAR(255) NULL');
             DB::statement('CREATE TABLE ppb_roles (id BIGINT PRIMARY KEY,code VARCHAR(40)) ENGINE=InnoDB');
             DB::statement('CREATE TABLE ppb_account_roles (account_id BIGINT,role_id BIGINT) ENGINE=InnoDB');
@@ -43,10 +45,10 @@ class AnalystMasterMysql57Test extends TestCase
             DB::statement('ALTER TABLE ppb_legacy_pick_contents ADD legacy_analyst_id BIGINT NULL, ADD recommend_pick TEXT NULL');DB::statement('ALTER TABLE ppb_legacy_wp_articles ADD wp_link TEXT NULL');EvaluationIntegrationFixture::create();
             $reader=Mockery::mock(LegacyReader::class);$reader->shouldReceive('profiles')->andReturn([]);$this->app->instance(LegacyReader::class,$reader);Http::preventStrayRequests();
             $this->postJson(self::HOST.'/admin/analysts',[])->assertUnauthorized();$this->actor(false,false);$this->postJson(self::HOST.'/admin/analysts',[])->assertForbidden();
-            $this->actor(true);$input=['name'=>'Synthetic profile','display_name'=>'Public label','status'=>'active','user_type'=>1,'account_id'=>null,'internal_notes'=>'Synthetic note','color'=>'#12Ab34','wp_photo'=>'123','author_id'=>'0','rating_level'=>3,'line_id'=>'synthetic-private-id','line_name'=>'Synthetic private display'];
+            $this->actor(true);$input=['name'=>'Synthetic profile','display_name'=>'Public label','status'=>'active','user_type'=>1,'account_id'=>null,'internal_notes'=>'Synthetic note','color'=>'#12Ab34','background'=>'#FFE5A0','wp_photo'=>'123','author_id'=>'0','rating_level'=>3,'analyst_level'=>'1','line_id'=>'synthetic-private-id','line_name'=>'Synthetic private display'];
             $this->postJson(self::HOST.'/admin/analysts',$input)->assertRedirect();$id=(int)DB::table('ppb_analysts')->max('id');$model=PpbAnalyst::findOrFail($id);
-            foreach(['name','display_name','color','line_id','line_name'] as $key)self::assertSame($input[$key],$model->$key);
-            self::assertSame(123,$model->wp_photo);self::assertSame(0,$model->author_id);self::assertSame(3,$model->rating_level);self::assertNull($model->account_id);
+            foreach(['name','display_name','color','background','line_id','line_name'] as $key)self::assertSame($input[$key],$model->$key);
+            self::assertSame(123,$model->wp_photo);self::assertSame(0,$model->author_id);self::assertSame(3,$model->rating_level);self::assertSame(1,$model->analyst_level);self::assertNull($model->account_id);
             self::assertArrayNotHasKey('line_id',$model->toArray());self::assertArrayNotHasKey('line_name',$model->toArray());
             $this->get(self::HOST.'/admin/analysts/'.$id.'/edit')->assertOk()->assertSee('synthetic-private-id')->assertSee('Synthetic private display');
             $this->actor();$form=$this->get(self::HOST.'/admin/analysts/'.$id.'/edit')->assertOk()->assertDontSee('synthetic-private-id')->assertDontSee('Synthetic private display');
@@ -65,19 +67,19 @@ class AnalystMasterMysql57Test extends TestCase
             $this->app->make(\App\Services\Ppb\Evaluation\EvaluationWriter::class)->save($subject,'2026-11','salary_snapshot',[],(string)\Illuminate\Support\Str::uuid(),$report['revision'],$report['source_sha256'],41);
             $report=$service->load($subject,'2026-11');self::assertNotNull($report['saved_salary']);
             $this->update($id,['name'=>'Updated public label','color'=>'#ABCDEF','rating_level'=>1])->assertRedirect();
-            $current=PpbAnalyst::findOrFail($id);self::assertSame(123,$current->wp_photo);self::assertSame(0,$current->author_id);self::assertSame('synthetic-private-id',$current->line_id);
+            $current=PpbAnalyst::findOrFail($id);self::assertSame(123,$current->wp_photo);self::assertSame(0,$current->author_id);self::assertSame('synthetic-private-id',$current->line_id);self::assertSame('#FFE5A0',$current->background);self::assertSame(1,$current->analyst_level);
             self::assertSame($history,DB::table('ppb_submissions')->get()->toJson());self::assertSame($assignments,DB::table('ppb_assignments')->get()->toJson());self::assertSame($version,ScheduleVersion::game(PpbGame::findOrFail($game->id)));
             self::assertSame($w2Before,$this->get(self::HOST.'/admin/games/'.$game->id.'/manuscripts')->assertOk()->viewData('tokens')[$aid]);
             $this->get(self::HOST.'/admin/evaluations/v2/'.$id.'?month=2026-11')->assertOk()->assertDontSee('synthetic-private-id')->assertDontSee('Synthetic private display');
             $fresh=$service->load($subjects->get('v2',$id),'2026-11');self::assertSame($report['source_sha256'],$fresh['source_sha256']);self::assertSame($report['current']['salary'],$fresh['current']['salary']);self::assertSame($report['saved_salary'],$fresh['saved_salary']);
-            self::assertSame('#ABCDEF',$current->scheduleColors()['color']);
-            $page=$this->get(self::HOST.'/admin/games?month=2026-11')->assertOk()->assertSee('color:#ABCDEF',false)->assertDontSee('synthetic-private-id');
+            self::assertSame('#ABCDEF',$current->scheduleColors()['color']);self::assertSame('#FFE5A0',$current->scheduleColors()['background']);
+            $page=$this->get(self::HOST.'/admin/games?month=2026-11')->assertOk()->assertSee('color:#ABCDEF',false)->assertSee('background-color:#FFE5A0',false)->assertDontSee('synthetic-private-id');
             self::assertGreaterThanOrEqual(2,substr_count($page->getContent(),'color:#ABCDEF'),'Current analyst and reviewer must use their own master color.');
             // Explicit null clears only the requested associations; omission preserves.
             $this->actor(true);$this->update($id,['account_id'=>51,'wp_photo'=>456,'author_id'=>789,'line_id'=>'synthetic-rebound','line_name'=>'Synthetic rebound','rating_level'=>0])->assertRedirect();
-            $this->actor();$this->update($id,['display_name'=>'Independent label'])->assertRedirect();$m=PpbAnalyst::findOrFail($id);self::assertSame(51,(int)$m->account_id);self::assertSame(456,$m->wp_photo);self::assertSame(789,$m->author_id);self::assertSame(0,$m->rating_level);
+            $this->actor();$this->update($id,['display_name'=>'Independent label'])->assertRedirect();$m=PpbAnalyst::findOrFail($id);self::assertSame(51,(int)$m->account_id);self::assertSame(456,$m->wp_photo);self::assertSame(789,$m->author_id);self::assertSame(0,$m->rating_level);self::assertSame('#FFE5A0',$m->background);self::assertSame(1,$m->analyst_level);
             $this->get(self::HOST.'/admin/analysts')->assertOk()->assertSee('synthetic-optional')->assertDontSee('synthetic-rebound');
-            foreach([['wp_photo'=>true],['author_id'=>false],['rating_level'=>true],['wp_photo'=>1.2],['wp_photo'=>0],['wp_photo'=>'https://example.invalid/photo'],['author_id'=>-1],['author_id'=>'9223372036854775808'],['rating_level'=>4],['color'=>'red;display:none'],['color'=>'#123'],['id'=>999],['background'=>'Biography'],['analyst_level'=>1],['name'=>str_repeat('n',101)]] as $invalid){
+            foreach([['wp_photo'=>true],['author_id'=>false],['rating_level'=>true],['wp_photo'=>1.2],['wp_photo'=>0],['wp_photo'=>'https://example.invalid/photo'],['author_id'=>-1],['author_id'=>'9223372036854775808'],['rating_level'=>4],['color'=>'red;display:none'],['color'=>'#123'],['id'=>999],['background'=>'Biography'],['background'=>'#123'],['analyst_level'=>2],['analyst_level'=>true],['analyst_level'=>1.5],['name'=>str_repeat('n',101)]] as $invalid){
                 $old=DB::table('ppb_analysts')->where('id',$id)->first();$this->update($id,$invalid)->assertUnprocessable();self::assertEquals($old,DB::table('ppb_analysts')->where('id',$id)->first());
             }
             $this->actor(true);foreach([['line_id'=>str_repeat('i',256)],['line_name'=>"bad\nname"]] as $bad)$this->update($id,$bad)->assertUnprocessable();
@@ -94,14 +96,14 @@ class AnalystMasterMysql57Test extends TestCase
             DB::listen(function($q)use(&$failAudit){if($failAudit&&str_starts_with($q->sql,'insert into `ppb_auth_audits`'))throw new \RuntimeException('ANALYST_AUDIT_FAILURE');});
             $this->update($id,['color'=>'#123456','line_id'=>'synthetic-private-failed'])->assertStatus(500)->assertDontSee('synthetic-private-failed');$failAudit=false;
             self::assertEquals($beforeFailed,DB::table('ppb_analysts')->where('id',$id)->first());self::assertSame($auditCount,DB::table('ppb_auth_audits')->count());self::assertSame(0,DB::connection()->transactionLevel());
-            $this->update($id,['line_id'=>null,'line_name'=>'','color'=>null,'wp_photo'=>null,'author_id'=>null,'rating_level'=>null,'account_id'=>null])->assertRedirect();$cleared=PpbAnalyst::findOrFail($id);
-            foreach(['line_id','line_name','color','wp_photo','author_id','rating_level','account_id'] as $field)self::assertNull($cleared->$field);
+            $this->update($id,['line_id'=>null,'line_name'=>'','color'=>null,'background'=>null,'wp_photo'=>null,'author_id'=>null,'rating_level'=>null,'analyst_level'=>null,'account_id'=>null])->assertRedirect();$cleared=PpbAnalyst::findOrFail($id);
+            foreach(['line_id','line_name','color','background','wp_photo','author_id','rating_level','analyst_level','account_id'] as $field)self::assertNull($cleared->$field);
             $audits=DB::table('ppb_auth_audits')->get()->toJson();foreach(['synthetic-private-id','Synthetic private display','synthetic-rebound','synthetic-never-flash'] as $secret)self::assertStringNotContainsString($secret,$audits);
             try{$migration->down();self::fail('Cannot silently destroy source associations.');}catch(\LogicException $e){self::assertSame('ANALYST_MASTER_ROLLBACK_REQUIRES_REVIEW',$e->getMessage());}
             self::assertSame(4,(int)DB::selectOne('SELECT COUNT(*) n FROM information_schema.SCHEMATA')->n);$pass=true;
         }finally{
             $this->travelBack();DB::disconnect('mysql');unset($pdo);$container->destroy();self::assertFalse($container->exists());self::assertDirectoryDoesNotExist($container->directory);
-            file_put_contents((getenv('RUNNER_TEMP')?:sys_get_temp_dir()).'/ppb-analyst-master-receipt.json',json_encode(['result'=>$pass?'PASS':'FAIL','isolation'=>$container->proof,'checks'=>['confirmed_fields'=>['color','wp_photo','author_id','line_id','line_name','rating_level'],'http_crud'=>true,'private_permissions'=>true,'null_account_scheduling'=>true,'history_and_salary_unchanged'=>true,'audit_rollback'=>true,'candidate_migration_only'=>true],'unverified_fields'=>['background','analyst_level'],'private_values_exported'=>false,'production_connections'=>0,'external_http_calls'=>0],JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR)."\n");
+            file_put_contents((getenv('RUNNER_TEMP')?:sys_get_temp_dir()).'/ppb-analyst-master-receipt.json',json_encode(['result'=>$pass?'PASS':'FAIL','isolation'=>$container->proof,'checks'=>['confirmed_fields'=>['color','background','wp_photo','author_id','line_id','line_name','rating_level','analyst_level'],'http_crud'=>true,'private_permissions'=>true,'null_account_scheduling'=>true,'history_and_salary_unchanged'=>true,'audit_rollback'=>true,'candidate_migration_only'=>true],'unverified_fields'=>['analyst_level_labels'],'private_values_exported'=>false,'production_connections'=>0,'external_http_calls'=>0],JSON_PRETTY_PRINT|JSON_THROW_ON_ERROR)."\n");
         }
     }
 }

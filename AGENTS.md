@@ -148,6 +148,7 @@ verified ONLY at the approved disposable tmpfs/network=none MySQL socket, no
 new DATABASE; no production migration/deploy/write. LINE fields require existing
 accounts.manage plus master-edit access, remain hidden/redacted and never act as
 self-service authentication. account_id remains optional. Keep profile rating,
-monthly rating and analyst_level distinct. Background biography conflicts with
-observed legacy CSS background; analyst_level domain is unverified: do not guess.
-No old-system/WP/LINE/Cron/IAM/SSM/management-package changes.
+monthly rating and analyst_level distinct. Readonly schema/source settled
+background as CSS #RRGGBB on pay_analyst_profiles (not biography) and
+analyst_level as a tinyint 0/1 flag; display labels remain redacted, do not invent
+them. No old-system/WP/LINE/Cron/IAM/SSM/management-package changes.
