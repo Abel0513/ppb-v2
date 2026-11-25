@@ -5,9 +5,9 @@ namespace Tests\Feature;
 use App\Models\PpbAccount;
 use App\Models\PpbAnalyst;
 use App\Models\PpbGame;
-use App\Services\Ppb\Evaluation\EvaluationService;
 use App\Services\Ppb\Evaluation\EvaluationSubjects;
 use App\Services\Ppb\Evaluation\LegacyReader;
+use App\Services\Ppb\Evaluation\LegacyScheduleCalculator;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Schema\Blueprint;
@@ -41,12 +41,17 @@ class LegacyAdminUiTest extends TestCase
             'app.url' => self::HOST,
             'database.default' => 'sqlite',
             'database.connections.sqlite.database' => ':memory:',
+            'database.connections.sqlite.url' => null,
+            'cache.default' => 'array',
         ]);
         DB::purge();
         DB::setDefaultConnection('sqlite');
         // Midnight in Taipei, still the prior day and month in UTC.
         $this->travelTo(CarbonImmutable::parse('2026-10-31 16:00:00', 'UTC'));
         $this->installSchema();
+        $reader = Mockery::mock(LegacyReader::class);
+        $reader->shouldReceive('profiles')->andReturn([]);
+        $this->app->instance(LegacyReader::class, $reader);
     }
 
     private function actor(array $permissions): void
@@ -174,6 +179,14 @@ class LegacyAdminUiTest extends TestCase
             $table->string('subject_type', 12);
             $table->unsignedBigInteger('subject_id');
             $table->char('month', 7);
+        });
+        Schema::create('ppb_evaluation_events', function (Blueprint $table) {
+            $table->increments('id');
+            $table->unsignedBigInteger('evaluation_id');
+            $table->string('operation');
+            $table->string('request_id');
+            $table->text('after_json');
+            $table->timestamps();
         });
         Schema::create('ppb_legacy_wp_articles', function (Blueprint $table) {
             $table->increments('id');
@@ -307,24 +320,143 @@ class LegacyAdminUiTest extends TestCase
         self::assertFalse(collect($queries)->contains(fn ($sql) => str_contains($sql, 'line_id')));
     }
 
-    public function test_schedule_summary_returns_performance_without_salary_or_line_data(): void
+    public function test_reports_use_bridge_summaries_and_render_warm_rows_server_side(): void
     {
-        $this->actor(['schedules.view']);
-        $subject = ['type' => 'legacy', 'id' => 4, 'rating_level' => 2];
-        $data = Mockery::mock(\App\Services\Ppb\Evaluation\LocalEvaluationData::class);
-        $data->shouldReceive('roster')->andReturn(['legacy:4' => $subject]);
-        $data->shouldReceive('ready')->andReturn(true);
-        $this->app->instance(\App\Services\Ppb\Evaluation\LocalEvaluationData::class, $data);
-        $service = Mockery::mock(EvaluationService::class);
-        $service->shouldReceive('loadLocal')->once()->with($subject, '2026-11')->andReturn([
-            'current' => ['level' => 2, 'view' => ['total_score' => 65],
-                'salary' => ['total' => 100], 'performance' => ['month' => ['wins' => 4, 'losses' => 8, 'rate' => 33]]],
-        ]);
-        $this->app->instance(EvaluationService::class, $service);
+        $this->actor(['schedules.view', 'evaluations.view']);
+        $reader = $this->bindReportReader();
+        $reader->shouldReceive('snapshot')->once()->with(4, '2026-11')->andReturn($this->reportSnapshot('2026-11'));
+        $reader->shouldReceive('snapshot')->twice()->with(4, '2026-10')->andReturn($this->reportSnapshot('2026-10'));
+        $reader->shouldReceive('snapshot')->once()->with(4, '2026-09')->andReturn($this->reportSnapshot('2026-09'));
+
+        $this->get(self::HOST.'/admin/analyst-list')->assertOk()
+            ->assertSeeInOrder(['哆啦', '資深分析師', '載入中...'])
+            ->assertSee('/admin/performance/summary/legacy/4?month=2026-11')
+            ->assertSee('2026/11月')->assertSee('2026/6月')->assertDontSee('洛老師');
 
         $this->getJson(self::HOST.'/admin/performance/summary/legacy/4')
-            ->assertOk()->assertJsonPath('rating', 'A')->assertJsonPath('performance.month.rate', 33)
+            ->assertOk()->assertJsonPath('rating', 'S')->assertJsonPath('score', 69)
+            ->assertJsonPath('performance.month.rate', 50)
+            ->assertJsonPath('performance.recent10.rate', 60)
+            ->assertJsonPath('performance.bonus.rate', 100)
             ->assertJsonMissingPath('salary')->assertJsonMissingPath('line_name');
+        $this->get(self::HOST.'/admin/analyst-list')->assertOk()
+            ->assertSeeInOrder(['資深分析師', '50%', '>69<', '>S<'], false)->assertDontSee('載入中...');
+        $this->get(self::HOST.'/admin/performance')->assertOk()
+            ->assertSeeInOrder(['50%', '1 - 1', '60%', '6 - 4', '1 - 0', '100%'])->assertDontSee('載入中...');
+
+        $this->getJson(self::HOST.'/admin/rating/summary/legacy/4')->assertOk()
+            ->assertJsonPath('rating', 'A')->assertJsonPath('next_rating', 'S')->assertJsonPath('change', '升級')
+            ->assertJsonPath('salary.short', 200)->assertJsonPath('salary.late', -50)
+            ->assertJsonPath('salary.absent', -100)->assertJsonPath('salary.long', 400)
+            ->assertJsonPath('salary.video', 400)->assertJsonPath('salary.total', 850)
+            ->assertJsonPath('scores', [68, 67, 66]);
+        $this->get(self::HOST.'/admin/rating/index')->assertOk()
+            ->assertSeeInOrder(['>850<', '>S<', '>A<', '>升級<', '>68<', '>67<', '>66<', '總計'], false)
+            ->assertSee('<option>D</option>', false)->assertDontSee('載入中...');
+        $this->get(self::HOST.'/admin/rating/salary')->assertOk()
+            ->assertSee('data-report-total="total">850</td>', false)->assertDontSee('載入中...');
+        $this->get(self::HOST.'/admin/rating/change')->assertOk()
+            ->assertSeeInOrder(['>S<', '>A<', '>升級<', '>68<', '>67<', '>66<'], false)->assertDontSee('載入中...');
+
+        // The second summary and the warm page requests perform no new snapshots.
+        $this->getJson(self::HOST.'/admin/rating/summary/legacy/4')->assertOk()->assertJsonPath('salary.total', 850);
+        $this->actor(['schedules.view']);
+        $this->getJson(self::HOST.'/admin/rating/summary/legacy/4')->assertForbidden();
+        $this->getJson(self::HOST.'/admin/performance/summary/legacy/4?month=2026-10')
+            ->assertOk()->assertJsonMissingPath('salary')->assertJsonMissingPath('cells.total');
+    }
+
+    public function test_current_analyst_list_rating_falls_back_to_legacy_profile(): void
+    {
+        $this->actor(['schedules.view']);
+        $reader = $this->bindReportReader();
+        foreach (['2026-11', '2026-10'] as $month) {
+            $snapshot = $this->reportSnapshot($month);
+            $snapshot['ratings'] = [];
+            $reader->shouldReceive('snapshot')->once()->with(4, $month)->andReturn($snapshot);
+        }
+
+        $this->getJson(self::HOST.'/admin/performance/summary/legacy/4')
+            ->assertOk()->assertJsonPath('rating', 'B')->assertJsonPath('performance.month.rate', 50);
+        $this->get(self::HOST.'/admin/analyst-list')->assertOk()
+            ->assertSeeInOrder(['50%', '>69<', '>B<'], false)->assertDontSee('載入中...');
+    }
+
+    public function test_pay_month_tabs_start_at_previous_taipei_month(): void
+    {
+        $this->actor(['evaluations.view']);
+        $headers = ['11月評級', '10月評級', '評級異動', '10月評分', '9月評分', '8月評分'];
+        foreach (['index', 'salary', 'change'] as $page) {
+            $response = $this->get(self::HOST.'/admin/rating/'.$page)->assertOk()->assertViewHas('month', '2026-10');
+            preg_match_all('/2026年[0-9]+月/u', $response->getContent(), $tabs);
+            self::assertSame(['2026年10月', '2026年9月', '2026年8月', '2026年7月', '2026年6月', '2026年5月'], $tabs[0]);
+
+            if ($page !== 'salary') {
+                preg_match('/<thead>.*?<\/thead>/s', $response->getContent(), $tableHeader);
+                preg_match_all('/(?:[0-9]+月評級|評級異動|[0-9]+月評分)/u', $tableHeader[0], $labels);
+                self::assertSame($headers, $labels[0]);
+            }
+        }
+    }
+
+    public function test_summary_reader_failure_is_reported_without_caching_zero_values(): void
+    {
+        $this->actor(['evaluations.view']);
+        $reader = $this->bindReportReader();
+        $reader->shouldReceive('snapshot')->once()->with(4, '2026-10')->andThrow(new \RuntimeException('LEGACY_READER_UNAVAILABLE'));
+        $this->get(self::HOST.'/admin/rating/salary')->assertOk()
+            ->assertSee('載入中...')->assertSee('data-report-total="total">—</td>', false);
+        $this->getJson(self::HOST.'/admin/rating/summary/legacy/4')->assertStatus(503)
+            ->assertExactJson(['message' => '讀取失敗']);
+        $this->get(self::HOST.'/admin/rating/salary')->assertOk()->assertSee('載入中...');
+    }
+
+    private function bindReportReader(): LegacyReader
+    {
+        $reader = Mockery::mock(LegacyReader::class);
+        $reader->shouldReceive('profiles')->andReturn([
+            ['id' => 7, 'sort_id' => 1, 'user_type' => 2, 'rating_level' => 0, 'analyst_level' => 0],
+            ['id' => 4, 'sort_id' => 4, 'user_type' => 0, 'rating_level' => 1, 'analyst_level' => 1],
+        ]);
+        $this->app->instance(LegacyReader::class, $reader);
+
+        return $reader;
+    }
+
+    private function reportSnapshot(string $month): array
+    {
+        $prior = CarbonImmutable::createFromFormat('!Y-m', $month)->subMonth()->format('Y-m');
+        $next = CarbonImmutable::createFromFormat('!Y-m', $month)->addMonth()->format('Y-m');
+        $picks = $columns = $schedules = $attendance = $evaluations = $ratings = [];
+        foreach ([$prior, $month] as $period) {
+            $index = (int) substr($period, -2);
+            foreach ([[1, 0, 0, 1], [2, 0, 0, 2], [3, 1, 0, 1], [4, 0, 1, 0]] as [$day, $bonus, $long, $result]) {
+                $id = $index * 10 + $day;
+                $pick = [
+                    'id' => $id, 'gid' => $id, 'analyst_name' => 4, 'is_substitute' => 0,
+                    'recommended_time' => $period.sprintf('-%02d 08:00:00', $day),
+                    'is_bonus' => $bonus, 'is_long' => $long, 'is_win' => $result,
+                    'score_delivery_time' => 60, 'score_word_count' => 60, 'score_format' => 60, 'score_typos' => 60,
+                ] + array_fill_keys(LegacyScheduleCalculator::RATING_FIELDS, 0);
+                $columns = array_keys($pick);
+                $picks[] = array_values($pick);
+                $schedules[] = ['id' => $id, 'game_type' => 1, 'game_id' => $day, 'market_type' => 1];
+            }
+            $attendance[] = ['id' => $index * 10 + 5, 'recommended_time' => $period.'-05 08:00:00', 'attendance_status' => 1];
+            $attendance[] = ['id' => $index * 10 + 6, 'recommended_time' => $period.'-06 08:00:00', 'attendance_status' => 2];
+            $evaluations[] = ['eval_month' => $period, 'score_extra_adjustment' => $index + 2];
+        }
+        foreach ([$prior, $month, $next] as $period) {
+            $ratings[] = ['rating_month' => $period, 'rating_level' => $period >= '2026-11' ? 3 : 2];
+        }
+        return [
+            'picks' => $picks, 'pick_columns' => $columns, 'schedules' => $schedules,
+            'attendance' => $attendance, 'evaluations' => $evaluations, 'ratings' => $ratings,
+            'video_counts' => [$prior => 1, $month => 1],
+            'recent' => array_map(fn ($i) => ['id' => $i, 'recommended_time' => $month.sprintf('-%02d 08:00:00', $i),
+                'is_win' => $i > 4 ? 1 : 2], range(1, 10)),
+            'source_sha256' => str_repeat('a', 64), 'profile' => ['id' => 4, 'rating_level' => 1],
+        ];
     }
 
     public function test_verified_legacy_label_does_not_create_a_mapping(): void

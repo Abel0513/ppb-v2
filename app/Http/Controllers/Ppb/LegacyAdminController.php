@@ -5,15 +5,19 @@ namespace App\Http\Controllers\Ppb;
 use App\Http\Controllers\Controller;
 use App\Models\PpbAnalyst;
 use App\Models\PpbGame;
-use App\Services\Ppb\Evaluation\EvaluationService;
 use App\Services\Ppb\Evaluation\EvaluationInputs;
+use App\Services\Ppb\Evaluation\EvaluationService;
+use App\Services\Ppb\Evaluation\EvaluationSubjects;
+use App\Services\Ppb\Evaluation\LegacyReader;
 use App\Services\Ppb\Evaluation\LocalEvaluationData;
 use App\Services\Ppb\LegacyDisplayLabels;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class LegacyAdminController extends Controller
 {
@@ -88,39 +92,39 @@ class LegacyAdminController extends Controller
         return view('ppb.legacy-admin.attendance', compact('month', 'ready', 'attendance', 'pager', 'roster', 'unavailable', 'months'));
     }
 
-    public function report(Request $request, LocalEvaluationData $data, EvaluationService $service)
+    public function report(Request $request, EvaluationSubjects $subjects, LocalEvaluationData $data, EvaluationService $service)
     {
         $kind = $request->route()->defaults['kind'];
         $title = self::REPORT_TITLES[$kind];
         $isPay = in_array($kind, ['rating-salary', 'salary', 'rating'], true);
         $month = $this->month($request, $isPay);
-        $roster = collect($data->roster());
-        $unavailable = !$data->ready();
-        $context = $unavailable ? null : $data->context(CarbonImmutable::createFromFormat('!Y-m', $month, 'Asia/Taipei'));
-        $values = $roster->map(function ($subject) use ($service, $context, $month, $isPay) {
-            if ($context === null) return [];
-            $report = $service->loadLocal($subject, $month, $context);
-            $current = $report['current'];
-            $level = $current['level'] === null ? null : (int) $current['level'];
-            if ($isPay) {
-                $next = $report['recorded_next_level'] ?? ($level !== null ? ($current['next_rating']['rating_level'] ?? null) : null);
-                return $current['salary'] + [
-                    'rating' => LegacyDisplayLabels::rating($level),
-                    'next_rating' => LegacyDisplayLabels::rating($next),
-                    'change' => $level === null || $next === null ? '無資料' : ['降級', '維持', '升級'][($next <=> $level) + 1],
-                    ...array_combine(['score_0', 'score_1', 'score_2'], array_reverse(array_column(array_column($report['history'], 'rating'), 'total_score'))),
-                ];
+        $unavailable = false;
+        try {
+            $roster = collect($subjects->all());
+        } catch (\Exception $error) {
+            report($error);
+            $roster = collect();
+            $unavailable = true;
+        }
+        $context = $roster->contains('type', 'v2') && $data->ready()
+            ? $data->context(CarbonImmutable::createFromFormat('!Y-m', $month, 'Asia/Taipei'))
+            : null;
+        $cacheKeys = $roster->where('type', 'legacy')->map(fn ($subject) => $this->summaryCacheKey($subject, $month));
+        $cached = $cacheKeys->isEmpty() ? [] : Cache::many($cacheKeys->all());
+        $values = $roster->mapWithKeys(function (array $subject) use ($service, $context, $month, $isPay, $cached) {
+            $key = $subject['type'].':'.$subject['id'];
+            if ($subject['type'] === 'legacy') {
+                $summary = $cached[$this->summaryCacheKey($subject, $month)] ?? null;
+                if ($summary === null) {
+                    return [$key => null]; // The browser fills a cold legacy row.
+                }
+            } elseif ($context === null) {
+                return [$key => ['failed' => true]];
+            } else {
+                $summary = $this->reportSummary($service->loadLocal($subject, $month, $context), $subject, $month);
             }
-            if ($level === null && $month === now('Asia/Taipei')->format('Y-m') && isset($subject['rating_level'])) {
-                $level = (int) $subject['rating_level'];
-            }
-            $row = ['rating' => LegacyDisplayLabels::rating($level), 'score' => $current['view']['total_score']];
-            foreach (['month' => 'month', 'recent' => 'recent10', 'bonus' => 'bonus'] as $prefix => $period) {
-                $stats = $current['performance'][$period];
-                $row[$prefix.'_rate'] = $stats['rate'];
-                $row[$prefix.'_record'] = $stats['wins'] === null ? null : $stats['wins'].' - '.$stats['losses'];
-            }
-            return $row;
+
+            return [$key => $this->reportCells($summary[$isPay ? 'rating' : 'schedule'], $isPay)];
         });
         $canSeeLineName = $kind === 'analyst-list'
             && $request->user('ppb')->hasPpbPermission('schedules.manage')
@@ -137,39 +141,87 @@ class LegacyAdminController extends Controller
         $canSeeWork = $request->user('ppb')->hasPpbPermission('evaluations.view');
 
         return response()->view('ppb.legacy-admin.report', compact(
-            'kind', 'title', 'month', 'roster', 'profiles', 'canSeeLineName', 'canSeeWork', 'unavailable', 'values'
+            'kind', 'title', 'month', 'roster', 'profiles', 'canSeeLineName', 'canSeeWork', 'unavailable', 'values', 'isPay'
         ))->header('Cache-Control', 'private, no-store');
     }
 
-    public function summary(Request $request, string $type, int $id, LocalEvaluationData $data, EvaluationService $service)
+    public function summary(Request $request, string $type, int $id, EvaluationSubjects $subjects, LocalEvaluationData $data, EvaluationService $service)
     {
         $kind = $request->route()->defaults['kind'];
-        $month = $this->month($request, $kind !== 'schedule');
-        $subject = $data->roster()[$type.':'.$id] ?? abort(404);
-        abort_unless($data->ready(), 503);
-        $report = $service->loadLocal($subject, $month);
-        $current = $report['current'];
+        $month = $this->month($request, $kind === 'rating');
+        try {
+            $subject = $subjects->get($type, $id);
+            if ($subject['type'] === 'legacy') {
+                $ttl = $month === now('Asia/Taipei')->format('Y-m') ? 120 : 600;
+                $summary = Cache::remember($this->summaryCacheKey($subject, $month), $ttl,
+                    fn () => $this->reportSummary($service->load($subject, $month), $subject, $month));
+            } elseif ($data->ready()) {
+                $summary = $this->reportSummary($service->loadLocal($subject, $month), $subject, $month);
+            }
+        } catch (\Exception $error) {
+            // Preserve the subject lookup's 404 and any other HTTP boundary.
+            if ($error instanceof HttpExceptionInterface) {
+                throw $error;
+            }
+            report($error);
+        }
 
-        if ($kind === 'schedule') {
-            $values = [
-                'rating' => LegacyDisplayLabels::rating($current['level'] ?? ($month === now('Asia/Taipei')->format('Y-m') ? ($subject['rating_level'] ?? null) : null)),
+        $headers = ['Cache-Control' => 'private, no-store'];
+        if (!isset($summary)) {
+            return response()->json(['message' => '讀取失敗'], 503, $headers);
+        }
+
+        $values = $summary[$kind];
+        $values['cells'] = $this->reportCells($values, $kind === 'rating');
+        return response()->json($values, 200, $headers);
+    }
+
+    private function summaryCacheKey(array $subject, string $month): string
+    {
+        return 'ppb:report:v1:'.LegacyReader::SNAPSHOT_FORMAT.':'.$subject['type'].':'.$subject['id'].':'.$month;
+    }
+
+    private function reportSummary(array $report, array $subject, string $month): array
+    {
+        $current = $report['current'];
+        $level = $current['level'];
+        $next = $report['recorded_next_level'] ?? ($level !== null ? ($current['next_rating']['rating_level'] ?? null) : null);
+        $listLevel = $level ?? ($month === now('Asia/Taipei')->format('Y-m') ? ($subject['rating_level'] ?? null) : null);
+
+        return [
+            'schedule' => [
+                'rating' => LegacyDisplayLabels::rating($listLevel),
                 'score' => $current['view']['total_score'],
                 'performance' => $current['performance'],
-            ];
-        } else {
-            $level = $current['level'];
-            $next = $report['recorded_next_level'] ?? ($level !== null ? ($current['next_rating']['rating_level'] ?? null) : null);
-            $values = [
+            ],
+            'rating' => [
                 'salary' => $current['salary'],
                 'rating' => LegacyDisplayLabels::rating($level),
                 'next_rating' => LegacyDisplayLabels::rating($next),
                 'change' => $level === null || $next === null ? '無資料' : ['降級', '維持', '升級'][($next <=> $level) + 1],
-                'scores' => array_values(array_reverse(array_map(
-                    fn ($period) => $period['rating']['total_score'], $report['history']
-                ))),
+                'scores' => array_reverse(array_column(array_column($report['history'], 'rating'), 'total_score')),
+            ],
+        ];
+    }
+
+    private function reportCells(array $summary, bool $isPay): array
+    {
+        if ($isPay) {
+            return $summary['salary'] + [
+                'rating' => $summary['rating'],
+                'next_rating' => $summary['next_rating'],
+                'change' => $summary['change'],
+                ...array_combine(['score_0', 'score_1', 'score_2'], $summary['scores']),
             ];
         }
-        return response()->json($values, 200, ['Cache-Control' => 'private, no-store']);
+
+        $row = ['rating' => $summary['rating'], 'score' => $summary['score']];
+        foreach (['month' => 'month', 'recent' => 'recent10', 'bonus' => 'bonus'] as $prefix => $period) {
+            $stats = $summary['performance'][$period];
+            $row[$prefix.'_rate'] = $stats['rate'];
+            $row[$prefix.'_record'] = $stats['wins'] === null ? null : $stats['wins'].' - '.$stats['losses'];
+        }
+        return $row;
     }
 
     public function csda()

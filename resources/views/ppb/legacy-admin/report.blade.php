@@ -32,7 +32,7 @@
   @if($isAnalystList || $showRatings)
   <select class="field" name="rating" aria-label="所有評級">
     <option value="">所有評級</option>
-    @foreach($showRatings ? ['S','A','B','C','無資料'] : ['S','A','B','C'] as $level)
+    @foreach($showRatings ? ['S','A','B','C','D','無資料'] : ['S','A','B','C'] as $level)
       <option>{{ $level }}</option>
     @endforeach
   </select>
@@ -53,7 +53,7 @@
 @endif
 @include('ppb.legacy-admin.month-tabs', ['ratingTabs' => $isRating])
 </div>
-@if($unavailable)<p class="notice">唯讀資料暫時無法取得。</p>@endif
+@if($unavailable)<p class="notice">讀取失敗</p>@endif
 <div class="card table-scroll">
 <table class="data-table" data-legacy-report="{{ $kind }}" @if($unavailable) data-roster-unavailable @endif>
   <thead><tr><th>分析師</th>
@@ -73,10 +73,13 @@
       @php
         $profile = $profiles->get($subject['native_id']);
         $fallback = $subject['type'] === 'legacy' ? ($palette[$subject['id']] ?? null) : null;
-        $row = $values->get($subject['type'].':'.$subject['id'], []);
+        $row = $values->get($subject['type'].':'.$subject['id']);
+        $pending = $row === null;
+        $failed = $row['failed'] ?? false;
         $key = ['type' => $subject['type'], 'id' => $subject['id'], 'month' => $month];
       @endphp
-      <tr data-report-values="{{ json_encode($row, JSON_THROW_ON_ERROR) }}" data-analyst-name="{{ $subject['label'] }}">
+      <tr data-report-values="{{ json_encode($row ?? [], JSON_THROW_ON_ERROR) }}" data-analyst-name="{{ $subject['label'] }}"
+        @if($pending) data-report-url="{{ route($isPay ? 'ppb.rating.summary' : 'ppb.performance.summary', $key) }}" aria-busy="true" @endif>
         <td>@include('ppb.legacy-admin.name-pill', ['name' => $subject['label'], 'colors' => $profile ? $profile->scheduleColors($fallback) : $fallback])</td>
         @foreach($headers as $field => $header)
           @if($field === 'type')
@@ -87,9 +90,11 @@
             @php
               $value = $row[$field] ?? null;
               $isRate = str_ends_with($field, '_rate') && is_numeric($value);
-              $display = $value ?? ($field === 'rating' || str_starts_with($field, 'score_') ? '無資料' : (str_starts_with($field, 'recent_') ? '未達10場' : '未分析'));
+              $empty = in_array($field, ['rating', 'next_rating', 'change'], true) || str_starts_with($field, 'score_')
+                  ? '無資料' : (str_starts_with($field, 'recent_') ? '未達10場' : '未分析');
+              $display = $pending ? '載入中...' : ($failed ? '讀取失敗' : ($value ?? $empty));
             @endphp
-            <td @class(['legacy-salary-total' => $field === 'total'])><span @class(['legacy-win-rate' => $isRate, 'legacy-negative' => is_numeric($value) && $value < 0])>{{ $display }}{{ $isRate ? '%' : '' }}</span></td>
+            <td @class(['legacy-salary-total' => $field === 'total'])><span data-report-field="{{ $field }}" data-empty="{{ $empty }}" @class(['legacy-win-rate' => $isRate, 'legacy-negative' => is_numeric($value) && $value < 0])>{{ $display }}{{ $isRate ? '%' : '' }}</span></td>
           @endif
         @endforeach
         @if($isRating && $canSeeWork)<td><a class="link" href="{{ route('ppb.evaluations.show', $key) }}">評鑑・薪酬・稿件</a></td>@endif
@@ -99,7 +104,7 @@
   @if($showSalary)
     <tfoot><tr><th scope="row">總計</th>
       @foreach($headers as $field => $header)
-        <td @if(isset($salaryHeaders[$field])) data-report-total="{{ $field }}" @endif>@if(isset($salaryHeaders[$field])){{ $unavailable ? '—' : number_format($values->sum($field)) }}@endif</td>
+        <td @if(isset($salaryHeaders[$field])) data-report-total="{{ $field }}" @endif>@if(isset($salaryHeaders[$field])){{ $unavailable || $values->contains(fn ($row) => !isset($row[$field])) ? '—' : number_format($values->sum($field)) }}@endif</td>
       @endforeach
       @if($canSeeWork)<td></td>@endif
     </tr></tfoot>
@@ -109,5 +114,5 @@
 @endsection
 
 @section('legacy-scripts')
-<script src="{{ asset('assets/ppb/ppb-legacy-admin.js') }}" defer></script>
+<script src="{{ asset('assets/ppb/ppb-legacy-admin.js') }}?v=acceptance-round3" defer></script>
 @endsection

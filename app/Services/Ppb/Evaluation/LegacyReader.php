@@ -5,6 +5,8 @@ namespace App\Services\Ppb\Evaluation;
 /** Same fixed reader used by SSM. No old DB credentials, shell or URL in V2. */
 class LegacyReader
 {
+    public const SNAPSHOT_FORMAT = 'ppb-evaluation-source-v1';
+
     public function query(array $query): array
     {
         $path = '/run/ppb-v2-legacy-reader.sock';
@@ -48,7 +50,7 @@ class LegacyReader
     public function snapshot(int $id,string $month): array
     {
         $data=$this->query(['operation'=>'evaluation_snapshot','analyst_id'=>$id,'month'=>$month]);$s=$data['snapshot']??[];
-        if(($data['transaction_isolation']??null)!=='REPEATABLE-READ'||($s['format']??null)!=='ppb-evaluation-source-v1'
+        if(($data['transaction_isolation']??null)!=='REPEATABLE-READ'||($s['format']??null)!==self::SNAPSHOT_FORMAT
             ||($s['analyst_id']??null)!==$id||($s['month']??null)!==$month||(int)($s['profile']['id']??0)!==$id
             ||($s['transactional_tables_verified']??null)!==7||!preg_match('/^[a-f0-9]{64}$/D',$s['source_sha256']??'')){
             throw new \RuntimeException('LEGACY_SNAPSHOT_SCOPE_NOT_PROVEN');
