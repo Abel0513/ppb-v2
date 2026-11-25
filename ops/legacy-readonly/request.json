@@ -1,42 +1,43 @@
 [
   {
-    "operation": "inventory",
-    "offset": 400,
-    "limit": 50
+    "operation": "schema",
+    "table": "pay.pay_analyst_profiles",
+    "limit": 50,
+    "offset": 0
   },
   {
-    "operation": "inventory",
-    "offset": 450,
-    "limit": 50
-  },
-  {
-    "operation": "inventory",
-    "offset": 500,
-    "limit": 50
-  },
-  {
-    "operation": "inventory",
-    "offset": 550,
-    "limit": 50
-  },
-  {
-    "operation": "inventory",
-    "offset": 600,
-    "limit": 50
-  },
-  {
-    "operation": "inventory",
-    "offset": 650,
+    "operation": "search",
+    "query": "analyst_level",
     "limit": 50
   },
   {
     "operation": "search",
-    "query": "analyststats",
+    "query": "pay_analyst_profiles",
     "limit": 50
   },
   {
-    "operation": "search",
-    "query": "stylesheet",
+    "operation": "ui_inventory",
+    "offset": 0,
+    "limit": 50
+  },
+  {
+    "operation": "ui_inventory",
+    "offset": 50,
+    "limit": 50
+  },
+  {
+    "operation": "ui_inventory",
+    "offset": 100,
+    "limit": 50
+  },
+  {
+    "operation": "ui_inventory",
+    "offset": 150,
+    "limit": 50
+  },
+  {
+    "operation": "ui_inventory",
+    "offset": 200,
     "limit": 50
   }
 ]
