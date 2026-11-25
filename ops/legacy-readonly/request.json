@@ -1,10 +1,10 @@
 [
-  {"operation": "schema", "table": "pay.pay_schedule", "limit": 50, "offset": 0},
-  {"operation": "schema", "table": "pay.pay_attendance_record", "limit": 50, "offset": 0},
-  {"operation": "schema", "table": "pay.pay_video_schedule", "limit": 50, "offset": 0},
-  {"operation": "schema", "table": "pay.pay_analyst_monthly_rating", "limit": 50, "offset": 0},
-  {"operation": "search", "query": "function attendanceRecord", "limit": 20},
-  {"operation": "search", "query": "function videoschedule", "limit": 20},
-  {"operation": "search", "query": "function analystlist", "limit": 20},
-  {"operation": "search", "query": "function updateRating", "limit": 20}
+  {"operation": "db_permissions"},
+  {"operation": "select", "table": "pay.pay_attendance_record", "columns": ["id", "gid", "uid", "attendance_status"], "limit": 50, "offset": 0},
+  {"operation": "select", "table": "pay.pay_schedule", "columns": ["id", "game_id", "game_type", "recommended_time", "reviewer", "market_type"], "filters": [{"column": "recommended_time", "op": ">=", "value": "2026-11-26 00:00:00"}], "limit": 10, "offset": 0},
+  {"operation": "select", "table": "pay.pay_analyst_pick", "columns": ["id", "gid", "analyst_name", "recommended_time", "is_win", "is_bonus", "is_long", "is_substitute"], "filters": [{"column": "recommended_time", "op": ">=", "value": "2026-11-26 00:00:00"}], "limit": 10, "offset": 0},
+  {"operation": "select", "table": "pay.pay_video_schedule", "columns": ["id", "schedule_date"], "limit": 10, "offset": 0},
+  {"operation": "select", "table": "pay.pay_schedule", "columns": ["id", "lottery_no"], "filters": [{"column": "recommended_time", "op": ">=", "value": "2026-11-26 00:00:00"}], "limit": 5, "offset": 0},
+  {"operation": "source", "path": "Application/Admin/Controller/AdminScheduleController.class.php", "offset": 463, "limit": 140},
+  {"operation": "source", "path": "Application/Admin/Controller/AdminScheduleController.class.php", "offset": 1815, "limit": 100}
 ]
