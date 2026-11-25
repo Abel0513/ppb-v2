@@ -1,0 +1,126 @@
+name: PPB WordPress Expert remote acceptance
+on:
+  # Historical v2 journal/resume client: keep offline/manual safeguards, but
+  # stop automatic remote calls after approved parameterized document v3.
+  pull_request:
+    paths: ['tools/wpn2/**', 'ops/wp-test/**', '.github/workflows/ppb-v2-wp-draft-test.yml']
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'CREATE-ONE-EXPERT-DRAFT (existing permanent journal prevents another Expert)'
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: PHP to Python integration and WP remote regressions
+        run: python3 -m unittest discover -s ops/wp-test/tests -v
+      - name: Lint the actual PHP producer and fixture
+        run: for file in tools/wpn2/*.php; do php -l "$file"; done
+      - run: php tools/wpn2/test.php
+      - run: python3 tools/wpn2/build-package.py --check
+      - run: python3 ops/wp-test/render-ssm.py --check
+      - run: python3 ops/wp-test/interface/render.py --check
+      - run: bash -n ops/wp-test/ppb_wpn2_verified.sh
+  public-schema:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[wp-schema-only]')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - run: python3 ops/wp-test/public-schema.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wp-public-schema-${{ github.run_id }}
+          path: wp-result/public-expert-schema.json
+          retention-days: 7
+  execute:
+    needs: offline
+    # Pushes default to journal; an explicitly authorized resume marker invokes only installed fixed code.
+    # PR/fork events never receive AWS authority; no pull_request_target checkout.
+    if: >-
+      github.repository == 'Abel0513/ppb-v2' && github.repository_id == '1454285732' &&
+      github.repository_owner_id == '55256582' &&
+      !contains(github.event.head_commit.message, '[wp-schema-only]') &&
+      ((github.event_name == 'push' && github.ref == 'refs/heads/codex/issue-12-wp-draft') ||
+       (github.event_name == 'workflow_dispatch' &&
+        (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/issue-12-wp-draft') &&
+        inputs.confirmation == 'CREATE-ONE-EXPERT-DRAFT'))
+    concurrency:
+      group: ppb-issue-12-single-expert
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Initialize correlated acceptance evidence before AWS access
+        run: python3 ops/wp-test/remote.py init
+      - name: Diagnose OIDC identity without logging credentials
+        shell: bash
+        run: |
+          python3 - <<'PY_OIDC'
+          import base64, json, os, urllib.parse, urllib.request
+          from pathlib import Path
+          url = os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']
+          url += ('&' if '?' in url else '?') + urllib.parse.urlencode({'audience':'sts.amazonaws.com'})
+          request = urllib.request.Request(url, headers={'Authorization':'Bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
+          with urllib.request.urlopen(request, timeout=30) as response:
+              token = json.load(response)['value']
+          encoded = token.split('.')[1]
+          claims = json.loads(base64.urlsafe_b64decode(encoded+'='*(-len(encoded)%4)))
+          keys = ['iss','aud','sub','repository','repository_id','repository_owner_id','ref','job_workflow_ref','run_id','run_attempt']
+          identity = {key:claims.get(key) for key in keys}
+          Path('wp-result/oidc-identity.json').write_text(json.dumps(identity,indent=2))
+          print('OIDC_IDENTITY='+json.dumps(identity))
+          PY_OIDC
+      - name: Assume WP-only role through existing GitHub OIDC provider
+        id: aws
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::429724121147:role/PPB-V2-GitHub-WP-Draft-Test-Role
+          role-session-name: PPBWP-${{ github.run_id }}-${{ github.run_attempt }}
+          aws-region: us-east-1
+          allowed-account-ids: '429724121147'
+          role-duration-seconds: 1800
+          retry-max-attempts: 2
+      - name: Read existing journal through fixed data-only interface
+        if: steps.aws.outcome == 'success' && github.event_name != 'workflow_dispatch' && !contains(github.event.head_commit.message, '[wp-resume-existing]')
+        run: python3 ops/wp-test/interface/client.py journal
+      - name: Resume only the already verified Expert through reviewed installed code
+        if: steps.aws.outcome == 'success' && ((github.event_name == 'workflow_dispatch' && inputs.confirmation == 'CREATE-ONE-EXPERT-DRAFT') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[wp-resume-existing]')))
+        run: python3 ops/wp-test/interface/client.py resume
+      - name: Collect credential-free public Expert schema after remote failure
+        if: failure() && steps.aws.outcome == 'success'
+        run: python3 ops/wp-test/public-schema.py
+      - name: Record OIDC blocker without inventing Command ID or Expert ID
+        if: always() && steps.aws.outcome == 'failure'
+        run: python3 ops/wp-test/remote.py oidc-failed
+      - name: Publish acceptance summary even on remote failure
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f wp-result/summary.md ]]; then cat wp-result/summary.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Preserve correlated result, never upload EC2 credentials or raw logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wp-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: wp-result/
+          if-no-files-found: error
+          retention-days: 7

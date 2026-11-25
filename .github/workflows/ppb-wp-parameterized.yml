@@ -1,0 +1,79 @@
+name: WP parameterized receipt-bound operations
+on:
+  push:
+    branches: ['codex/issue-12-wp-draft']
+    paths: ['ops/wp-test/parameterized/**', 'ops/wp-test/tests/**', '.github/workflows/ppb-wp-parameterized.yml', 'ops/wp-test/audit-v2-capabilities.py']
+  pull_request:
+    paths: ['ops/wp-test/parameterized/**', 'ops/wp-test/tests/**', '.github/workflows/ppb-wp-parameterized.yml', 'ops/wp-test/audit-v2-capabilities.py']
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        options: [read, update_acf, verify]
+        default: read
+        required: true
+      expert_id:
+        description: 'Existing Expert ID matching the permanent creation receipt'
+        type: string
+        required: false
+      request_id:
+        description: 'Stable unique mutation request ID; reused for verify/reconciliation'
+        type: string
+        required: false
+      fields_json:
+        description: 'Exact ACF fields/value JSON map; no URL/code parameters'
+        type: string
+        required: false
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with: {persist-credentials: false}
+      - uses: shivammathur/setup-php@v2
+        with: {php-version: '8.4', coverage: none}
+      - run: python3 -m unittest discover -s ops/wp-test/tests -v
+      - run: php -l ops/wp-test/parameterized/worker.php
+      - run: python3 ops/wp-test/parameterized/render.py --check
+      - run: python3 ops/wp-test/interface/render.py --check
+  authorized-read:
+    needs: offline
+    if: github.event_name != 'pull_request' && github.repository_id == '1454285732' && github.repository_owner_id == '55256582' && github.ref == 'refs/heads/codex/issue-12-wp-draft'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency: {group: ppb-issue-12-single-expert, cancel-in-progress: false}
+    permissions: {contents: read, actions: read, id-token: write}
+    steps:
+      - uses: actions/checkout@v5
+        with: {persist-credentials: false}
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::429724121147:role/PPB-V2-GitHub-WP-Draft-Test-Role
+          aws-region: us-east-1
+          allowed-account-ids: '429724121147'
+          role-duration-seconds: 1800
+      - name: Check WP document installation authority without changing its content
+        if: contains(github.event.head_commit.message, '[wp-authority-audit]')
+        run: python3 ops/wp-test/parameterized/authority.py
+      - name: Invoke reviewed installed operation only if document matches
+        env:
+          OPERATION: ${{ github.event_name == 'workflow_dispatch' && inputs.operation || contains(github.event.head_commit.message, '[wp-update-acf]') && 'update_acf' || contains(github.event.head_commit.message, '[wp-verify-acf]') && 'verify' || 'read' }}
+          REQUEST_EXPERT_ID: ${{ inputs.expert_id }}
+          REQUEST_ID: ${{ inputs.request_id }}
+          REQUEST_FIELDS_JSON: ${{ inputs.fields_json }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=("$OPERATION" --request ops/wp-test/parameterized/request.json)
+          if [[ -n "$REQUEST_EXPERT_ID" ]]; then args+=(--expert-id "$REQUEST_EXPERT_ID"); fi
+          if [[ -n "$REQUEST_ID" ]]; then args+=(--request-id "$REQUEST_ID"); fi
+          if [[ -n "$REQUEST_FIELDS_JSON" ]]; then args+=(--fields-json "$REQUEST_FIELDS_JSON"); fi
+          python3 ops/wp-test/parameterized/client.py "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: parameterized-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: wp-result/
+          retention-days: 7

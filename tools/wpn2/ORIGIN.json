@@ -1,0 +1,16 @@
+{
+  "attachment": "ppb_wpf6.zip",
+  "attachment_sha256": "670226adad9f838e02a1bb6c6ecaa3636139ae8b75e3275eb6ac1d1caa51c3b4",
+  "files": {
+    "README.txt": "b59305b0010ecad3172dce02e5bccf830958b980ed1885f834d7c4a2688ba168",
+    "wpf6.php": "456feb1496fce8cf64dceca3dbe4095bf1b40a9c5337c22894b6f8caa2c49bd1",
+    "parser.php": "87df8c5fd470b8b33620023618d36dcd6bf894a27778bc64cd30c162a77f8154",
+    "SHA256SUMS": "96930c48cb5208175c3b51b1f08285d442f34a9d81eb27b1ec4bbcdf5c417565",
+    "run.sh": "b0fa2e10c5f3b209bfe08d65738aec5313928f3076f8c5826631fe748bc01896"
+  },
+  "parser_identical": true,
+  "verification": "PHP 8.4.24 lint and offline orchestration passed; live WP NOT executed",
+  "adaptations": [
+    "mediaSourceInfo retains WP validation; run.php owns the explicit report media count."
+  ]
+}

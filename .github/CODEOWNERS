@@ -1,0 +1,6 @@
+# Independent human review is required by the protected-branch ruleset.
+/ops/wp-test/interface/ @Abel0513
+/.github/workflows/ @Abel0513
+/.github/CODEOWNERS @Abel0513
+/tools/wpn2/ @Abel0513
+/ops/wp-test/result-envelope.py @Abel0513

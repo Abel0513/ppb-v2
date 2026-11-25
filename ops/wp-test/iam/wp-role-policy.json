@@ -1,0 +1,46 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "OnlyFixedWpDocumentAndInstance",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:SendCommand"
+      ],
+      "Resource": [
+        "arn:aws:ssm:us-east-1:429724121147:document/PPB-V2-WP-Draft-Test",
+        "arn:aws:ec2:us-east-1:429724121147:instance/i-0135d6b2fac7a54c2"
+      ]
+    },
+    {
+      "Sid": "ReadPinnedWpDocument",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:DescribeDocument",
+        "ssm:GetDocument"
+      ],
+      "Resource": "arn:aws:ssm:us-east-1:429724121147:document/PPB-V2-WP-Draft-Test"
+    },
+    {
+      "Sid": "CollectCommandStatus",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:ListCommandInvocations"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "UploadWpPackagesOnly",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::ppb-v2-release-artifacts-429724121147-use1/wp-test/*",
+      "Condition": {
+        "StringEquals": {
+          "s3:x-amz-server-side-encryption": "AES256"
+        }
+      }
+    }
+  ]
+}
