@@ -279,6 +279,18 @@ class GameController extends Controller
 
     private function absenceCounts(): array
     {
+        try {
+            return $this->computeAbsenceCounts();
+        } catch (\Throwable $error) {
+            // The absence suffix is advisory; never break the schedule form over it.
+            report($error);
+
+            return [];
+        }
+    }
+
+    private function computeAbsenceCounts(): array
+    {
         $start = CarbonImmutable::now('Asia/Taipei')->startOfMonth();
         $end = $start->addMonth();
         $native = [];
