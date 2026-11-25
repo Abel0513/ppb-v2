@@ -60,7 +60,7 @@
 <h2 class="card-title" style="margin:0 0 16px">1. 排班資料</h2>
 <div class="ppb-sched-grid">
 @if($isEdit)
-    @php($legacyNotes = json_decode((string) $game->notes, true))
+    @php $legacyNotes = json_decode((string) $game->notes, true); @endphp
     @if(($legacyNotes['_ppb_legacy_game_v1'] ?? false) && isset($legacyNotes['lottery_no']))
         <label class="field-label">台彩賽事編號<input class="field" value="{{ $legacyNotes['lottery_no'] }}" readonly></label>
     @endif

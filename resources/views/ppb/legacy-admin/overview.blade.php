@@ -12,14 +12,14 @@
     $plays = [1=>'推 讓分',2=>'推 不讓分',3=>'推 大小分',4=>'特殊玩法',5=>'手動填寫玩法'];
 @endphp
 @forelse($games->getCollection()->groupBy(fn ($game) => $game->recommended_at?->timezone('Asia/Taipei')->format('Y-m-d')) as $group)
-  @php($date = $group->first()->recommended_at?->timezone('Asia/Taipei'))
+  @php $date = $group->first()->recommended_at?->timezone('Asia/Taipei'); @endphp
   <section class="legacy-overview-group">
     @if($date)<h2>{{ $date->format('m/d') }}（{{ $weekdays[$date->dayOfWeek] }}）</h2>@endif
     @foreach($group as $game)
-      @php($notes = json_decode((string) $game->notes, true))
+      @php $notes = json_decode((string) $game->notes, true); @endphp
       <div class="legacy-game-row">
         @include('ppb.legacy-admin.game-pill', ['code' => $game->display_code])
-        @php($hour = $game->recommended_at?->timezone('Asia/Taipei')->format('G'))
+        @php $hour = $game->recommended_at?->timezone('Asia/Taipei')->format('G'); @endphp
         @if($hour)<span class="ppb-shift-time {{ $hour === '11' ? 'ppb-shift-time-11' : 'ppb-shift-time-16' }}">{{ $hour }}點</span>@endif
         <span class="legacy-play">{{ $plays[$game->play_type] ?? '玩法待補' }} {{ $game->play_value }}</span>
         @if(($notes['_ppb_legacy_game_v1'] ?? false) && isset($notes['lottery_no']))

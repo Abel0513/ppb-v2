@@ -8,7 +8,7 @@
     <a class="link" href="{{ request()->fullUrlWithQuery(['month' => $top->addMonth()->format('Y-m')]) }}">‹</a>
   @endif
   @foreach(range(0, 5) as $offset)
-    @php($tab = $top->subMonths($offset))
+    @php $tab = $top->subMonths($offset); @endphp
     <a class="link" href="{{ request()->fullUrlWithQuery(['month' => $tab->format('Y-m')]) }}"
       @if($tab->format('Y-m') === $month) aria-current="page" @endif>{{ ($ratingTabs ?? false) ? $tab->format('Y年n月') : $tab->format('Y/n月') }}</a>
   @endforeach

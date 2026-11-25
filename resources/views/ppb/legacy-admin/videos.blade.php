@@ -23,7 +23,7 @@
       <h3>主持人 &amp; 來賓</h3>
       <div class="legacy-video-guests">
       @foreach(range(1, 3) as $slot)
-        @php($guest = $roster->get($video->{'guest_'.$slot}))
+        @php $guest = $roster->get($video->{'guest_'.$slot}); @endphp
         <p>來賓 {{ $slot }}
           @include('ppb.legacy-admin.name-pill', [
               'name' => $guest['label'] ?? '—',

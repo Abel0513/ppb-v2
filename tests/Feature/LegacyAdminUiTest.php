@@ -54,13 +54,27 @@ class LegacyAdminUiTest extends TestCase
     {
         // Exercise Eloquent SQL construction and HTTP/Blade with no PDO or test tables.
         DB::extend('sqlite', function ($config, $name) use ($select) {
-            $connection = Mockery::mock(SQLiteConnection::class, [
-                static fn () => throw new \LogicException('Fixture must not connect'),
-                ':memory:', '', $config + ['name' => $name],
-            ])->makePartial();
-            $connection->shouldReceive('select')->andReturnUsing($select);
-            $connection->shouldReceive('selectFromWriteConnection')->andReturnUsing($select);
-            return $connection;
+            return new class($config + ['name' => $name], $select) extends SQLiteConnection {
+                public function __construct(array $config, private $selectHook)
+                {
+                    parent::__construct(
+                        static fn () => throw new \LogicException('Fixture must not connect'),
+                        ':memory:',
+                        '',
+                        $config
+                    );
+                }
+
+                public function select($query, $bindings = [], $useReadPdo = true)
+                {
+                    return ($this->selectHook)($query, $bindings);
+                }
+
+                public function selectFromWriteConnection($query, $bindings = [])
+                {
+                    return $this->select($query, $bindings, false);
+                }
+            };
         });
         DB::purge('sqlite');
     }

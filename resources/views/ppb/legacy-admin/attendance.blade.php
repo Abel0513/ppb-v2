@@ -9,7 +9,7 @@
     <thead><tr><th>賽事</th><th>分析師</th><th>對戰組合</th><th>狀態</th></tr></thead>
     <tbody>
     @forelse($attendance as $game)
-      @php($analyst = $roster->get($game->subject_type.':'.$game->subject_id))
+      @php $analyst = $roster->get($game->subject_type.':'.$game->subject_id); @endphp
       <tr>
         <td>@include('ppb.legacy-admin.game-pill', ['code' => ((int) $game->game_type === 1 ? 'G' : 'E').$game->game_number])</td>
         <td>@include('ppb.legacy-admin.name-pill', [
