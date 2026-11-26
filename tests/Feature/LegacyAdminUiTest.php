@@ -990,4 +990,34 @@ class LegacyAdminUiTest extends TestCase
             fn ($pager) => $pager->getCollection()->pluck('id')->all() === range(6, 15)
         );
     }
+
+    public function test_overview_renders_old_style_rows_grouped_by_taipei_date(): void
+    {
+        $this->actor(['schedules.view']);
+        PpbGame::unguarded(fn () => PpbGame::query()->create([
+            'id' => 31, 'month_key' => '2026-11', 'recommended_at' => '2026-11-01 03:00:00',
+            'game_type' => 1, 'game_number' => 31, 'status' => 'scheduled', 'matchup_text' => 'Away@Home',
+            'play_type' => 1, 'play_value' => '+10.5', 'has_long_article' => true,
+            'notes' => json_encode(['lottery_no' => '306']),
+        ]));
+        PpbGame::unguarded(fn () => PpbGame::query()->create([
+            'id' => 32, 'month_key' => '2026-11', 'recommended_at' => '2026-11-01 08:00:00',
+            'game_type' => 2, 'game_number' => 2, 'status' => 'scheduled', 'matchup_text' => 'East@West',
+            'play_type' => 3, 'has_long_article' => false,
+        ]));
+        $response = $this->get(self::HOST.'/admin/schedule/overview')->assertOk()
+            ->assertSee('<form class="search-card"', false)
+            ->assertSee('<button type="submit" class="search-btn">搜尋</button>', false)
+            ->assertSee('<span class="date-label">11/01（日）</span>', false)
+            ->assertSee('<span class="tag tag-g">G31</span>', false)
+            ->assertSee('<span class="time-tag time-11">11點</span>', false)
+            ->assertSee('>推 讓分 +10.5</span>', false)
+            ->assertSee('<span class="lottery" title="台彩賽事編號">306</span>', false)
+            ->assertSee('Away@Home', false)
+            ->assertSee('<span class="tag tag-e">E2</span>', false)
+            ->assertSee('<span class="time-tag time-16">16點</span>', false)
+            ->assertSee('>推 大小分</span>', false)
+            ->assertSee('East@West', false);
+        self::assertSame(1, substr_count($response->getContent(), '<span class="article-tag">分析文</span>'));
+    }
 }
