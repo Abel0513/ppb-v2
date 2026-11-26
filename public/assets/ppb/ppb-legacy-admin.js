@@ -58,13 +58,34 @@
   const pending = rows.filter(row => row.element.dataset.reportUrl);
   let next = 0;
 
-  async function fillRows() {
-    while (next < pending.length) {
-      const row = pending[next++];
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
-      const cells = row.element.querySelectorAll('[data-report-field]');
+  // Every pending row must end with values or 讀取失敗. Rows rendered from the
+  // last known summary keep those values when a background refresh fails.
+  function settle(row, values) {
+    const cells = row.element.querySelectorAll('[data-report-field]');
+    if (values) {
+      row.values = values;
+      for (const cell of cells) {
+        const field = cell.dataset.reportField;
+        const value = values[field];
+        const rate = field.endsWith('_rate') && Number.isFinite(value);
+        cell.textContent = rate ? value + '%' : (value ?? cell.dataset.empty);
+        cell.classList.toggle('legacy-win-rate', rate);
+        cell.classList.toggle('legacy-negative', Number.isFinite(value) && value < 0);
+      }
+    } else if (row.element.hasAttribute('aria-busy')) {
+      row.values = {};
+      for (const cell of cells) cell.textContent = '讀取失敗';
+    }
+    row.done = true;
+    row.element.removeAttribute('aria-busy');
+    try { refresh(); } catch { /* sorting/filtering must never stop the queue */ }
+  }
 
+  async function load(row) {
+    const cells = row.element.querySelectorAll('[data-report-field]');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
       try {
         const response = await fetch(row.element.dataset.reportUrl, {
           headers: { Accept: 'application/json' },
@@ -75,26 +96,32 @@
         if (!values || [...cells].some(cell => !Object.hasOwn(values, cell.dataset.reportField))) {
           throw new Error('Report summary incomplete');
         }
-        row.values = values;
-        for (const cell of cells) {
-          const field = cell.dataset.reportField;
-          const value = values[field];
-          const rate = field.endsWith('_rate') && Number.isFinite(value);
-          cell.textContent = rate ? value + '%' : (value ?? cell.dataset.empty);
-          cell.classList.toggle('legacy-win-rate', rate);
-          cell.classList.toggle('legacy-negative', Number.isFinite(value) && value < 0);
-        }
+        return values;
       } catch {
-        row.values = {};
-        for (const cell of cells) cell.textContent = '讀取失敗';
+        if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 1500));
       } finally {
         clearTimeout(timeout);
-        row.element.removeAttribute('aria-busy');
-        refresh();
       }
+    }
+    return null;
+  }
+
+  async function fillRows() {
+    while (next < pending.length) {
+      const row = pending[next++];
+      if (row.done) continue;
+      let values = null;
+      try { values = await load(row); } catch { values = null; }
+      // A late success still replaces a watchdog 讀取失敗.
+      if (values || !row.done) settle(row, values);
     }
   }
 
   refresh();
-  for (let worker = 0; worker < Math.min(6, pending.length); worker++) void fillRows();
+  // The legacy reader serves requests serially; a small queue avoids starving later rows.
+  for (let worker = 0; worker < Math.min(3, pending.length); worker++) void fillRows();
+  // Watchdog: nothing may stay 載入中 indefinitely.
+  if (pending.length) setTimeout(() => {
+    for (const row of pending) if (!row.done) settle(row, null);
+  }, 90000);
 })();

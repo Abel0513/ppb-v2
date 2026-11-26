@@ -515,6 +515,26 @@ class LegacyAdminUiTest extends TestCase
             ->assertSeeInOrder(['50%', '>69<', '>B<'], false)->assertDontSee('載入中...');
     }
 
+    public function test_expired_rows_render_last_known_values_and_refresh_in_background(): void
+    {
+        $this->actor(['schedules.view']);
+        $reader = $this->bindReportReader();
+        foreach (['2026-11', '2026-10'] as $month) {
+            $reader->shouldReceive('snapshot')->with(4, $month)->andReturn($this->reportSnapshot($month));
+        }
+
+        $this->getJson(self::HOST.'/admin/performance/summary/legacy/4')->assertOk();
+        $this->travel(10)->minutes();
+
+        $page = $this->get(self::HOST.'/admin/analyst-list')->assertOk()
+            ->assertSeeInOrder(['資深分析師', '50%', '>69<', '>S<'], false)->assertDontSee('載入中...');
+        $html = $page->getContent();
+        // The stale row is refreshed by the browser but is not shown as loading.
+        self::assertStringContainsString('/admin/performance/summary/legacy/4?month=2026-11', $html);
+        self::assertStringNotContainsString('aria-busy', $html);
+        $this->get(self::HOST.'/admin/performance')->assertOk()->assertDontSee('載入中...');
+    }
+
     public function test_pay_month_tabs_start_at_previous_taipei_month(): void
     {
         $this->actor(['evaluations.view']);
@@ -775,6 +795,9 @@ class LegacyAdminUiTest extends TestCase
         ]]);
         $this->getJson($url)->assertOk()->assertExactJson(['count' => 3]);
         $this->getJson($url)->assertOk()->assertExactJson(['count' => 3]);
+        // The last known count renders immediately; the browser then refreshes it.
+        $this->get(self::HOST.'/admin/games')->assertOk()
+            ->assertSee('data-url="/admin/games/unsettled-count">3</span>', false);
 
         $this->travel(5)->minutes();
         $reader->shouldReceive('query')->twice()->with($query)->andThrow(new \RuntimeException('LEGACY_READER_UNAVAILABLE'));
