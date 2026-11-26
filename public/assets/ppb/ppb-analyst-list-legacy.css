@@ -12,7 +12,8 @@
 .ppb-al .tab{border:1px solid #e5e7eb;background:#fff;color:#374151;padding:10px 14px;border-radius:999px;font-weight:800;font-size:13px;line-height:normal;text-decoration:none;transition:.15s ease;user-select:none}
 .ppb-al .tab:hover{transform:translateY(-1px)}
 .ppb-al .tab.active{border-color:#c7d2fe;background:#eef2ff;color:#3730a3;box-shadow:0 6px 18px rgba(0,0,0,.05)}
-.ppb-al .manage-link{margin-left:auto;height:38px;display:inline-flex;align-items:center;padding:0 16px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;color:#64748b;font-size:14px;font-weight:600;text-decoration:none}
+.ppb-al .manage-row{display:flex;justify-content:flex-end;margin-top:16px}
+.ppb-al .manage-link{height:38px;display:inline-flex;align-items:center;padding:0 16px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;color:#64748b;font-size:14px;font-weight:600;text-decoration:none}
 .ppb-al .table-container{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.04)}
 .ppb-al table{width:100%;border-collapse:collapse;table-layout:auto}
 .ppb-al thead th{background:#f1f5f9;color:#475569;font-weight:700;font-size:14.4px;padding:14px 20px;text-align:center;border-bottom:2px solid #e2e8f0;line-height:normal;letter-spacing:normal;text-transform:none}
@@ -39,4 +40,4 @@
 .ppb-al .rank{font-weight:700;font-size:16px;color:#3730a3}
 .ppb-al .no-data{color:#94a3b8;font-style:italic;font-size:13.6px}
 .ppb-al .cell-pending{color:#94a3b8;font-size:13.6px}
-@media (max-width:760px){.ppb-al .table-container{overflow-x:auto}.ppb-al table{min-width:720px}.ppb-al .manage-link{margin-left:0}}
+@media (max-width:760px){.ppb-al .table-container{overflow-x:auto}.ppb-al table{min-width:720px}}
