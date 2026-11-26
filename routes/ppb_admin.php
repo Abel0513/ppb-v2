@@ -72,6 +72,8 @@ Route::prefix('admin')->middleware([
         Route::get('/summary/{type}/{id}', [LegacyAdminController::class, 'summary'])
             ->whereIn('type', ['legacy', 'v2'])->whereNumber('id')->defaults('kind', 'rating')->name('ppb.rating.summary');
     });
+    Route::get('/games/unsettled-count', [GameController::class, 'unsettledCount'])
+        ->middleware(PpbCan::class.':schedules.view')->name('ppb.games.unsettled-count');
     Route::get('/games/anchors', [GameController::class, 'anchors'])->middleware(PpbCan::class.':schedules.view')->name('ppb.games.anchors');
     Route::get('/games/{game}/assignments/{assignment}/rating', [\App\Http\Controllers\Ppb\EvaluationController::class, 'scheduleRating'])
         ->middleware(PpbCan::class.':schedules.view')->name('ppb.games.assignment-rating');

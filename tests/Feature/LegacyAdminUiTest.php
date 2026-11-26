@@ -52,7 +52,7 @@ class LegacyAdminUiTest extends TestCase
         $reader = Mockery::mock(LegacyReader::class);
         $reader->shouldReceive('profiles')->andReturn([]);
         $reader->shouldReceive('query')->with(Mockery::on(fn ($query) =>
-            $query['operation'] === 'select' && $query['table'] === 'pay.pay_attendance_record'))
+            $query['operation'] === 'select' && in_array($query['table'], ['pay.pay_attendance_record', 'pay.pay_analyst_pick'], true)))
             ->andReturn(['rows' => []]);
         $this->app->instance(LegacyReader::class, $reader);
     }
@@ -743,43 +743,95 @@ class LegacyAdminUiTest extends TestCase
         self::assertSame(1, $pick['is_win']);
     }
 
+    public function test_unsettled_badge_loads_asynchronously_and_counts_distinct_legacy_games(): void
+    {
+        $this->actor(['schedules.view']);
+        $this->seedArchive();
+        $url = self::HOST.'/admin/games/unsettled-count';
+        $reader = Mockery::mock(LegacyReader::class);
+        $this->app->instance(LegacyReader::class, $reader);
+        $this->get(self::HOST.'/admin/games')->assertOk()
+            ->assertSee('data-url="/admin/games/unsettled-count">—</span>', false);
+
+        $query = [
+            'operation' => 'select', 'table' => 'pay.pay_analyst_pick', 'columns' => ['id', 'gid', 'is_win'],
+            'filters' => [
+                ['column' => 'recommended_time', 'op' => '>=', 'value' => '2026-10-15 00:00:00'],
+                ['column' => 'recommended_time', 'op' => '<', 'value' => '2026-11-01 00:00:00'],
+                ['column' => 'is_long', 'op' => '=', 'value' => 0],
+                ['column' => 'is_bonus', 'op' => '=', 'value' => 0],
+            ],
+            'limit' => 50, 'offset' => 0,
+        ];
+        $reader->shouldReceive('query')->once()->with($query)->andReturn(['rows' =>
+            array_map(fn ($id) => ['id' => $id, 'gid' => 15, 'is_win' => null], range(1, 50)),
+        ]);
+        $reader->shouldReceive('query')->once()->with(array_replace($query, ['offset' => 50]))->andReturn(['rows' => [
+            ['id' => 51, 'gid' => 15, 'is_win' => null],
+            ['id' => 52, 'gid' => 16, 'is_win' => '0'],
+            ['id' => 53, 'gid' => 17, 'is_win' => 1],
+            ['id' => 54, 'gid' => 18, 'is_win' => 2],
+            ['id' => 55, 'gid' => 19, 'is_win' => 0],
+        ]]);
+        $this->getJson($url)->assertOk()->assertExactJson(['count' => 3]);
+        $this->getJson($url)->assertOk()->assertExactJson(['count' => 3]);
+
+        $this->travel(5)->minutes();
+        $reader->shouldReceive('query')->twice()->with($query)->andThrow(new \RuntimeException('LEGACY_READER_UNAVAILABLE'));
+        $this->getJson($url)->assertOk()->assertExactJson(['count' => 1]);
+        Schema::drop('ppb_games');
+        $this->getJson($url)->assertOk()->assertExactJson(['count' => null]);
+    }
+
+    public function test_unsettled_count_requires_an_authenticated_schedule_viewer(): void
+    {
+        $url = self::HOST.'/admin/games/unsettled-count';
+        $this->getJson($url)->assertUnauthorized();
+        $this->actor([]);
+        $this->getJson($url)->assertForbidden();
+    }
+
     public function test_game_modals_show_current_taipei_absences_and_lottery_field(): void
     {
         $this->actor(['schedules.view', 'schedules.manage']);
         $this->seedArchive();
+        DB::table('ppb_analysts')->where('id', 11)->update(['user_type' => 1]);
         DB::table('ppb_analysts')->insert(['id' => 12, 'name' => '零場分析師']);
-        DB::table('ppb_evaluation_attendance')->insert([
-            'game_id' => 15, 'subject_type' => 'legacy', 'subject_id' => 4, 'attendance_status' => 2,
+        DB::table('ppb_games')->insert([
+            'id' => 16, 'month_key' => '2026-11', 'recommended_at' => '2026-11-06 08:00:00',
+            'game_type' => 1, 'game_number' => 16, 'status' => 'scheduled', 'matchup_text' => 'Native fixture',
         ]);
+        DB::table('ppb_evaluation_attendance')->insert([
+            ['game_id' => 15, 'subject_type' => 'legacy', 'subject_id' => 4, 'attendance_status' => 2],
+            ['game_id' => 16, 'subject_type' => 'legacy', 'subject_id' => 4, 'attendance_status' => 2],
+        ]);
+        $query = [
+            'operation' => 'select', 'table' => 'pay.pay_analyst_pick', 'columns' => ['id', 'is_substitute'],
+            'filters' => [
+                ['column' => 'recommended_time', 'op' => '>=', 'value' => '2026-11-01 00:00:00'],
+                ['column' => 'recommended_time', 'op' => '<=', 'value' => '2026-11-30 23:59:59'],
+                ['column' => 'is_substitute', 'op' => '>', 'value' => 1],
+            ],
+            'limit' => 50, 'offset' => 0,
+        ];
         $reader = Mockery::mock(LegacyReader::class);
-        $reader->shouldReceive('query')->twice()->andReturnUsing(function (array $query) {
-            self::assertSame('select', $query['operation']);
-            if ($query['table'] === 'pay.pay_attendance_record') {
-                return ['rows' => [
-                    ['id' => 1, 'gid' => 15, 'uid' => 4, 'attendance_status' => 2],
-                    ['id' => 2, 'gid' => 16, 'uid' => 4, 'attendance_status' => 2],
-                    ['id' => 3, 'gid' => 17, 'uid' => 4, 'attendance_status' => 1],
-                ]];
-            }
-            self::assertSame('pay.pay_schedule', $query['table']);
-
-            return ['rows' => array_map(fn ($id) => [
-                'id' => $id, 'game_id' => $id, 'game_type' => 1, 'recommended_time' => '2026-11-05 16:00:00',
-            ], [15, 16, 17])];
-        });
+        $reader->shouldReceive('query')->once()->with($query)->andReturn(['rows' => [
+            ['id' => 1, 'is_substitute' => 4],
+            ['id' => 2, 'is_substitute' => '4'],
+            ['id' => 3, 'is_substitute' => 12],
+        ]]);
         $this->app->instance(LegacyReader::class, $reader);
         $this->get(self::HOST.'/admin/games/15/edit?modal=1')->assertOk()
             ->assertSeeInOrder(['台彩賽事編號', 'placeholder="請輸入台彩賽事編號"', 'value="0123"'], false)
-            ->assertSee('運彩ABC ( 當月曠職2場 )')->assertSee('零場分析師</option>', false);
+            ->assertSee('運彩ABC ( 當月曠職3場 )</option></select></label>', false)
+            ->assertSee('零場分析師</option>', false);
         $this->get(self::HOST.'/admin/games/create?modal=1&match_date=2026-10-31')->assertOk()
-            ->assertSee('運彩ABC ( 當月曠職2場 )');
+            ->assertSee('運彩ABC ( 當月曠職3場 )');
         $options = self::HOST.'/admin/games/form-options?date=2026-12-01';
-        $this->getJson($options)->assertOk()->assertJsonPath('absences.11', 2);
+        $this->getJson($options)->assertOk()->assertJsonPath('absences.11', 3)->assertJsonMissingPath('absences.12');
 
-        \Illuminate\Support\Facades\Cache::forget('ppb:legacy-attendance:v1');
-        $reader = Mockery::mock(LegacyReader::class);
-        $reader->shouldReceive('query')->once()->andThrow(new \RuntimeException('LEGACY_READER_UNAVAILABLE'));
-        $this->app->instance(LegacyReader::class, $reader);
+        $this->travel(5)->minutes();
+        $reader->shouldReceive('query')->once()->with($query)->andThrow(new \RuntimeException('LEGACY_READER_UNAVAILABLE'));
         $this->getJson($options)->assertOk()->assertJsonPath('absences.11', 1);
     }
 

@@ -12,10 +12,18 @@
   @endif
   <div class="admin-topbar-right" id="adminProfileWrapper">
     @if(auth('ppb')->user()?->hasPpbPermission('schedules.view') && request()->query('modal') !== '1')
-      @php
-        $unsettled = app(\App\Services\Ppb\SchedulePickDisplay::class)->unsettledCount();
-      @endphp
-      <a class="link" href="{{ route('ppb.games.index') }}">! 未結算場次 {{ $unsettled ?? '—' }}</a>
+      <a class="link" href="{{ route('ppb.games.index') }}">! 未結算場次 <span id="ppbUnsettledCount" data-url="{{ route('ppb.games.unsettled-count', [], false) }}">—</span></a>
+      <script>
+        (() => {
+          const badge = document.getElementById('ppbUnsettledCount');
+          fetch(badge.dataset.url, {headers: {'Accept': 'application/json'}})
+            .then(response => response.ok ? response.json() : null)
+            .then(data => {
+              if (Number.isInteger(data?.count)) badge.textContent = data.count;
+            })
+            .catch(() => {});
+        })();
+      </script>
     @endif
     @if(auth('ppb')->check())
       <button class="admin-profile-button" id="adminProfileButton" type="button" aria-haspopup="true" aria-expanded="false">
