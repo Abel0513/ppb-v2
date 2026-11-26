@@ -18,7 +18,7 @@ class SchedulePickDisplay
         $legacyByNative = array_flip(app(Evaluation\EvaluationSubjects::class)->mappings());
         $events = DB::table('ppb_schedule_events')->whereIn('game_id', $ids)
             ->where('event', 'legacy_archived_pick')->orderBy('id')->get();
-        $assigned = $archived = [];
+        $assigned = $archived = $unlinked = [];
         foreach ($games as $game) {
             $picks = $archives->get($game->id, collect());
             foreach ($game->assignments->where('status', 'active') as $assignment) {
@@ -45,7 +45,19 @@ class SchedulePickDisplay
                 'preview' => $this->preview(null, $archive, $detail['source_row'] ?? []),
             ];
         }
-        return ['assigned' => $assigned, 'archived' => $archived];
+        foreach ($submissions->whereNull('assignment_id') as $submission) {
+            $body = json_decode((string) $submission->content_body, true);
+            $slot = $body['legacy_slot_no'] ?? null;
+            $label = $body['legacy_analyst_label'] ?? null;
+            if (!($body['_ppb_legacy_pick_v1'] ?? false) || !is_int($slot) || !is_string($label)) continue;
+            $archive = $archives->get($submission->game_id, collect())
+                ->firstWhere('source_pick_id', $submission->legacy_source_pick_id);
+            if (!$archive || $archive->kind !== $submission->kind) continue;
+            $unlinked[$submission->game_id][$submission->kind][$slot] = [
+                'name' => $label, 'preview' => $this->preview($submission->content_body, $archive),
+            ];
+        }
+        return ['assigned' => $assigned, 'archived' => $archived, 'unlinked' => $unlinked];
     }
 
     private function preview(?string $body, ?object $archive, array $fallback = []): array

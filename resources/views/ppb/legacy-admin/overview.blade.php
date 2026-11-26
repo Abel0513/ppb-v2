@@ -20,7 +20,7 @@
         @include('ppb.legacy-admin.game-pill', ['code' => $game->display_code])
         @php $hour = $game->recommended_at?->timezone('Asia/Taipei')->format('G'); @endphp
         @if($hour)<span class="ppb-shift-time {{ $hour === '11' ? 'ppb-shift-time-11' : 'ppb-shift-time-16' }}">{{ $hour }}點</span>@endif
-        <span class="legacy-play">{{ $plays[$game->play_type] ?? '玩法待補' }} {{ $game->play_value }}</span>
+        <span class="legacy-play">{{ $plays[$game->play_type] ?? $game->legacyPrediction() ?? '玩法待補' }} {{ $game->play_value }}</span>
         <span class="ppb-shift-number" title="台彩賽事編號">{{ $game->lotteryNumber() ?? '—' }}</span>
         <strong>@include('ppb.legacy-admin.matchup')</strong>
         @if($game->has_long_article)<span class="ppb-shift-label ppb-shift-label-long">分析文</span>@endif

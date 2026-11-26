@@ -124,7 +124,7 @@
             </div>
             @endunless
           </div>
-          <div class="ppb-shift-prediction">{{ $plays[$game->play_type] ?? '玩法待補' }} {{ $game->play_value ?: '' }} @if($game->market_type) <span class="ppb-shift-market">／{{ (int)$game->market_type===2 ? '三路盤' : '兩路盤' }}</span>@endif</div>
+          <div class="ppb-shift-prediction">{{ $plays[$game->play_type] ?? $game->legacyPrediction() ?? '玩法待補' }} {{ $game->play_value ?: '' }} @if($game->market_type) <span class="ppb-shift-market">／{{ (int)$game->market_type===2 ? '三路盤' : '兩路盤' }}</span>@endif</div>
           @for($slot=1;$slot<=5;$slot++)
             @php
               $assignment=$short->get($slot);
@@ -133,6 +133,11 @@
               $legacyArchived = $assignment ? null : ($archivedPickByGameSlot[(int)$game->id][$slot] ?? null);
               $archiveAnalyst = $legacyArchived ? $archivedAnalysts->get((int)$legacyArchived['analyst_id']) : null;
               $archiveName = $legacyArchived ? ($archiveAnalyst ? ($archiveAnalyst->display_name ?: $archiveAnalyst->name) : '歷史分析師 #'.$legacyArchived['analyst_id']) : null;
+              $unlinkedShort = $assignment || $legacyArchived ? null : ($pickDisplay['unlinked'][$game->id]['pick'][$slot] ?? null);
+              if ($unlinkedShort) {
+                  $archiveName = $unlinkedShort['name'];
+                  $legacyPreview = $unlinkedShort['preview'];
+              }
               if($legacyArchived) {
                   $legacyPreview = $legacyArchived['preview'];
                   $nameColor=$legacyColors[(int)$legacyArchived['analyst_id']] ?? null;
@@ -141,27 +146,29 @@
             <div class="ppb-shift-row">
               <span class="ppb-shift-label">推薦＋短文</span>
               @include('ppb.partials.schedule-rating-trigger', ['slotAssignment' => $assignment, 'archivedName' => $archiveName, 'pick' => $legacyPreview, 'colors' => $nameColor])
-              <span class="ppb-shift-pick" style="background-color:{{ $pickColor($legacyPreview) }}">{{ ($assignment || $legacyArchived) ? (($legacyPreview['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未指派' }}</span>
-              <span class="ppb-shift-note">{{ ($legacyPreview['short_analysis'] ?? null) ?: (($assignment || $legacyArchived) ? '分析內容…' : '—') }}</span>
+              <span class="ppb-shift-pick" style="background-color:{{ $pickColor($legacyPreview) }}">{{ ($assignment || $legacyArchived || $unlinkedShort) ? (($legacyPreview['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未指派' }}</span>
+              <span class="ppb-shift-note">{{ ($legacyPreview['short_analysis'] ?? null) ?: (($assignment || $legacyArchived || $unlinkedShort) ? '分析內容…' : '—') }}</span>
             </div>
           @endfor
           @php
             $bonusColor=$bonus?->currentAnalyst?->scheduleColors($legacyColors[(int)$bonus->current_analyst_id] ?? null);
-            $legacyBonus = $pickDisplay['assigned'][$bonus?->id] ?? [];
+            $unlinkedBonus = $bonus ? null : ($pickDisplay['unlinked'][$game->id]['bonus'][1] ?? null);
+            $legacyBonus = $pickDisplay['assigned'][$bonus?->id] ?? $unlinkedBonus['preview'] ?? [];
           @endphp
           <div class="ppb-shift-row">
             <span class="ppb-shift-label ppb-shift-label-bonus">BONUS</span>
-            @include('ppb.partials.schedule-rating-trigger', ['slotAssignment' => $bonus, 'archivedName' => null, 'pick' => $legacyBonus, 'colors' => $bonusColor])
-            <span class="ppb-shift-pick" style="background-color:{{ $pickColor($legacyBonus) }}">{{ $bonus ? (($legacyBonus['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未指派' }}</span>
-            <span class="ppb-shift-note">{{ ($legacyBonus['short_analysis'] ?? null) ?: ($bonus ? '分析內容…' : '—') }}</span>
+            @include('ppb.partials.schedule-rating-trigger', ['slotAssignment' => $bonus, 'archivedName' => $unlinkedBonus['name'] ?? null, 'pick' => $legacyBonus, 'colors' => $bonusColor])
+            <span class="ppb-shift-pick" style="background-color:{{ $pickColor($legacyBonus) }}">{{ ($bonus || $unlinkedBonus) ? (($legacyBonus['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未指派' }}</span>
+            <span class="ppb-shift-note">{{ ($legacyBonus['short_analysis'] ?? null) ?: (($bonus || $unlinkedBonus) ? '分析內容…' : '—') }}</span>
           </div>
           @if($game->has_long_article)
             @php
+              $unlinkedLong = $long ? null : ($pickDisplay['unlinked'][$game->id]['long'][1] ?? null);
               $longColor=$long?->currentAnalyst?->scheduleColors($legacyColors[(int)$long->current_analyst_id] ?? null);
             @endphp
             <div class="ppb-shift-row ppb-shift-row-long">
               <span class="ppb-shift-label ppb-shift-label-long">分析文</span>
-              @include('ppb.partials.schedule-rating-trigger', ['slotAssignment' => $long, 'archivedName' => null, 'pick' => $pickDisplay['assigned'][$long?->id] ?? [], 'colors' => $longColor])
+              @include('ppb.partials.schedule-rating-trigger', ['slotAssignment' => $long, 'archivedName' => $unlinkedLong['name'] ?? null, 'pick' => $pickDisplay['assigned'][$long?->id] ?? $unlinkedLong['preview'] ?? [], 'colors' => $longColor])
               {{-- PPB CT6 | Old is_long=1 pick.recommend_pick stores WP URL; short_analysis is the WP post ID. --}}
               @if(isset($longArticleLinks[(int)$game->id]))
                 <a class="ppb-shift-long-note" style="color:#0000ee;text-decoration:underline" href="{{ $longArticleLinks[(int)$game->id] }}" target="_blank" rel="noopener noreferrer" title="開啟原 WordPress 分析文章">{{ $longArticleLinks[(int)$game->id] }}</a>
