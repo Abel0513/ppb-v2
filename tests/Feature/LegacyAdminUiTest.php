@@ -11,6 +11,7 @@ use App\Services\Ppb\Evaluation\LegacyScheduleCalculator;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Mockery;
@@ -82,6 +83,8 @@ class LegacyAdminUiTest extends TestCase
             $table->integer('active_number')->nullable();
             $table->string('status')->default('scheduled');
             $table->string('matchup_text')->nullable();
+            $table->string('away_team')->nullable();
+            $table->string('home_team')->nullable();
             $table->dateTime('recommended_at')->nullable();
             $table->text('notes')->nullable();
             $table->unsignedBigInteger('reviewer_analyst_id')->nullable();
@@ -674,7 +677,11 @@ class LegacyAdminUiTest extends TestCase
             ->assertSee('1234')->assertDontSee('彩券號 —')
             ->assertSee('編輯／補齊人員')->assertSee('#delete-game">刪除賽事</a>', false)
             ->assertSee('data-dialog-title="編輯賽事"', false)
-            ->assertSee('class="admin-unsettled-chip"', false)->assertSee('未結算 <span id="ppbUnsettledCount"', false)
+            ->assertSee('<button class="admin-unsettled-button" id="ppbUnsettledButton" type="button"', false)
+            ->assertSee('aria-haspopup="dialog" aria-expanded="false" aria-controls="ppbUnsettledDropdown"', false)
+            ->assertSee('id="ppbUnsettledDropdown" role="dialog" aria-labelledby="ppbUnsettledTitle" tabindex="-1" hidden', false)
+            ->assertSee('! 未結算場次')
+            ->assertSee('<strong id="ppbUnsettledTitle">未結算場次</strong><span>待處理</span>', false)
             ->assertSee('<p class="admin-sidebar-label">MAIN</p>', false)->assertSee('安全登出')
             ->assertDontSee('首页')->assertDontSee('定時廣播')->assertDontSee('中華民國運動彩券發展協會')
             ->assertSee('data-open-rating', false)->assertSee('id="ppbScheduleRatingTitle">分析師評鑑</h2>', false);
@@ -682,7 +689,7 @@ class LegacyAdminUiTest extends TestCase
 
         $this->get(self::HOST.'/admin/games/create?modal=1')->assertOk()
             ->assertSee('盤口類型')->assertSee('手動填寫玩法')->assertSee('BONUS 分析師')
-            ->assertDontSee('id="ppbUnsettledCount"', false);
+            ->assertDontSee('id="ppbUnsettledCount"', false)->assertDontSee('id="ppbUnsettledDropdown"', false);
 
         $this->get(self::HOST.'/admin/rating/index')->assertOk()
             ->assertSee('11月評級')->assertSee('10月評級')->assertDontSee('載入中...')
@@ -821,14 +828,27 @@ class LegacyAdminUiTest extends TestCase
     {
         $this->actor(['schedules.view']);
         $this->seedArchive();
+        DB::table('ppb_games')->where('id', 15)->update([
+            'month_key' => '2026-10', 'recommended_at' => '2026-10-27 03:00:00',
+        ]);
+        DB::table('ppb_games')->insert([
+            ['id' => 116, 'month_key' => '2026-10', 'game_type' => 2, 'game_number' => 24, 'recommended_at' => '2026-10-22 08:00:00',
+                'matchup_text' => '奧蘭多魔術@鳳凰城太陽', 'status' => 'completed',
+                'notes' => '{"_ppb_legacy_game_v1":true,"legacy_source_schedule_id":16}'],
+            ['id' => 19, 'month_key' => '2026-10', 'game_type' => 1, 'game_number' => 19, 'recommended_at' => '2026-10-24 03:00:00',
+                'matchup_text' => 'Unrelated V2 game', 'status' => 'completed', 'notes' => null],
+        ]);
         $url = self::HOST.'/admin/games/unsettled-count';
         $reader = Mockery::mock(LegacyReader::class);
         $this->app->instance(LegacyReader::class, $reader);
         $this->get(self::HOST.'/admin/games')->assertOk()
             ->assertSee('data-url="/admin/games/unsettled-count">—</span>', false);
+        Cache::put('ppb:legacy-unsettled:last:v1', 7);
+        $this->get(self::HOST.'/admin/games')->assertOk()
+            ->assertSee('class="admin-unsettled-count" id="ppbUnsettledCount" data-url="/admin/games/unsettled-count">7</span>', false);
 
         $query = [
-            'operation' => 'select', 'table' => 'pay.pay_analyst_pick', 'columns' => ['id', 'gid', 'is_win'],
+            'operation' => 'select', 'table' => 'pay.pay_analyst_pick', 'columns' => ['id', 'gid', 'is_win', 'recommended_time'],
             'filters' => [
                 ['column' => 'recommended_time', 'op' => '>=', 'value' => '2026-10-15 00:00:00'],
                 ['column' => 'recommended_time', 'op' => '<', 'value' => '2026-11-01 00:00:00'],
@@ -838,26 +858,44 @@ class LegacyAdminUiTest extends TestCase
             'limit' => 50, 'offset' => 0,
         ];
         $reader->shouldReceive('query')->once()->with($query)->andReturn(['rows' =>
-            array_map(fn ($id) => ['id' => $id, 'gid' => 15, 'is_win' => null], range(1, 50)),
+            array_map(fn ($id) => ['id' => $id, 'gid' => 15, 'is_win' => null, 'recommended_time' => '2026-10-27 11:00:00'], range(1, 50)),
         ]);
         $reader->shouldReceive('query')->once()->with(array_replace($query, ['offset' => 50]))->andReturn(['rows' => [
-            ['id' => 51, 'gid' => 15, 'is_win' => null],
-            ['id' => 52, 'gid' => 16, 'is_win' => '0'],
-            ['id' => 53, 'gid' => 17, 'is_win' => 1],
-            ['id' => 54, 'gid' => 18, 'is_win' => 2],
-            ['id' => 55, 'gid' => 19, 'is_win' => 0],
+            ['id' => 51, 'gid' => 15, 'is_win' => null, 'recommended_time' => '2026-10-27 11:00:00'],
+            ['id' => 52, 'gid' => 16, 'is_win' => '0', 'recommended_time' => '2026-10-30 16:00:00'],
+            ['id' => 53, 'gid' => 17, 'is_win' => 1, 'recommended_time' => '2026-10-24 11:00:00'],
+            ['id' => 54, 'gid' => 18, 'is_win' => 2, 'recommended_time' => '2026-10-24 11:00:00'],
+            ['id' => 55, 'gid' => 19, 'is_win' => 0, 'recommended_time' => '2026-10-29 11:00:00'],
+            ['id' => 56, 'gid' => '19', 'is_win' => 0, 'recommended_time' => '2026-10-24 11:00:00'],
+            ['id' => 57, 'gid' => null, 'is_win' => 0, 'recommended_time' => '2026-10-24 11:00:00'],
         ]]);
-        $this->getJson($url)->assertOk()->assertExactJson(['count' => 3]);
-        $this->getJson($url)->assertOk()->assertExactJson(['count' => 3]);
+        $games = [
+            ['code' => 'E24', 'at' => '2026/10/22 16:00', 'matchup' => '奧蘭多魔術@鳳凰城太陽', 'url' => '/admin/games/116'],
+            ['code' => '#19', 'at' => '2026/10/24 11:00', 'matchup' => null, 'url' => null],
+            ['code' => 'G15', 'at' => '2026/10/27 11:00', 'matchup' => 'Fixture', 'url' => '/admin/games/15'],
+        ];
+        $expected = ['count' => count($games), 'games' => $games];
+        $this->getJson($url)->assertOk()->assertExactJson($expected);
+        $this->getJson($url)->assertOk()->assertExactJson($expected);
         // The last known count renders immediately; the browser then refreshes it.
         $this->get(self::HOST.'/admin/games')->assertOk()
-            ->assertSee('data-url="/admin/games/unsettled-count">3</span>', false);
+            ->assertSee('class="admin-unsettled-count" id="ppbUnsettledCount" data-url="/admin/games/unsettled-count">3</span>', false);
 
         $this->travel(5)->minutes();
         $reader->shouldReceive('query')->twice()->with($query)->andThrow(new \RuntimeException('LEGACY_READER_UNAVAILABLE'));
-        $this->getJson($url)->assertOk()->assertExactJson(['count' => 1]);
+        $this->getJson($url)->assertOk()->assertExactJson(['count' => 1, 'games' => []]);
+        self::assertSame($expected, Cache::get('ppb:legacy-unsettled:last:v2'));
         Schema::drop('ppb_games');
-        $this->getJson($url)->assertOk()->assertExactJson(['count' => null]);
+        $this->getJson($url)->assertOk()->assertExactJson(['count' => null, 'games' => []]);
+    }
+
+    public function test_unsettled_count_returns_an_empty_list_when_no_legacy_games_qualify(): void
+    {
+        $this->actor(['schedules.view']);
+        $this->getJson(self::HOST.'/admin/games/unsettled-count')->assertOk()
+            ->assertExactJson(['count' => 0, 'games' => []]);
+        $this->get(self::HOST.'/admin/games')->assertOk()
+            ->assertSee('data-url="/admin/games/unsettled-count">0</span>', false);
     }
 
     public function test_unsettled_count_requires_an_authenticated_schedule_viewer(): void
