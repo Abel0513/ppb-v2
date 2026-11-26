@@ -3,7 +3,7 @@
 
 @push('styles')
 <link rel="stylesheet" href="{{ asset('assets/ppb/ppb-schedule-dialogs.css') }}?v=v2-style-20261126">
-<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-videos-legacy.css') }}?v=20261127-1">
+<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-videos-legacy.css') }}?v=20261127-2">
 @endpush
 
 @section('legacy-content')
@@ -30,10 +30,11 @@
   };
 @endphp
 <div class="ppb-vs">
-@if($canManageVideos)
-  <div class="ppb-vs-header"><button type="button" class="btn-add" data-open-video>＋ 新增班表</button></div>
-@endif
-@include('ppb.legacy-admin.month-tabs')
+<div class="ppb-vs-header">
+  <div class="title">影音<span>班表</span></div>
+  @if($canManageVideos)<button type="button" class="btn-add" data-open-video>＋ 新增班表</button>@endif
+</div>
+@include('ppb.legacy-admin.month-tabs', ['plainTabs' => true])
 @if(!$ready)<p class="notice">影音排班資料暫時無法取得。</p>@endif
 <div class="ppb-vs-grid">
   @forelse($videos as $video)
