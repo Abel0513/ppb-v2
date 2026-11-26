@@ -390,18 +390,18 @@ class LegacyAdminUiTest extends TestCase
 
         $url = self::HOST.'/admin/schedule/attendance';
         $first = $this->get($url)->assertOk()
-            ->assertSee('2026-11 出缺勤紀錄')->assertSee('共 3 個月 / 第 1 頁')
-            ->assertSee('<td><strong>G15</strong></td>', false)->assertSee('<td><strong>E8</strong></td>', false)
-            ->assertSee('<td>Mapped analyst</td>', false)->assertDontSee('background-color:#ABCDEF')
-            ->assertSee('舊分析師 #77')->assertSee('Imported matchup')->assertSee('<td>—</td>', false)
-            ->assertSee('class="status disabled">曠職', false)->assertSee('class="status status-neutral">遲到', false)
-            ->assertDontSee('Unrelated local matchup')->assertDontSee('<td><strong>G30</strong></td>', false);
+            ->assertSee('<div class="month-label">2026-11</div>', false)->assertSee('共 3 個月 / 第 1 頁')
+            ->assertSee('<span class="tag tag-g">G15</span>', false)->assertSee('<span class="tag tag-e">E8</span>', false)
+            ->assertSee('<span class="analyst-tag" style="background:#ABCDEF;color:#142536">Mapped analyst</span>', false)->assertDontSee('background-color:#ABCDEF')
+            ->assertSee('舊分析師 #77')->assertSee('Imported matchup')->assertSee('<div class="c-matchup">—</div>', false)
+            ->assertSee('class="status-badge status-absent">曠職', false)->assertSee('class="status-badge status-late">遲到', false)
+            ->assertDontSee('Unrelated local matchup')->assertDontSee('<span class="tag tag-g">G30</span>', false);
         self::assertSame(1, substr_count($first->getContent(), '#evaluation-attendance'));
         self::assertSame(1, substr_count($first->getContent(), 'Mapped analyst'));
-        $this->get($url.'?p=2')->assertOk()->assertSee('2026-10 出缺勤紀錄')
-            ->assertSee('共 3 個月 / 第 2 頁')->assertSee('<td><strong>G30</strong></td>', false)
-            ->assertDontSee('<td><strong>E8</strong></td>', false)->assertDontSee('#evaluation-attendance');
-        $this->get($url.'?month=2026-09')->assertOk()->assertSee('2026-09 出缺勤紀錄')
+        $this->get($url.'?p=2')->assertOk()->assertSee('<div class="month-label">2026-10</div>', false)
+            ->assertSee('共 3 個月 / 第 2 頁')->assertSee('<span class="tag tag-g">G30</span>', false)
+            ->assertDontSee('<span class="tag tag-e">E8</span>', false)->assertDontSee('#evaluation-attendance')->assertDontSee('出缺勤紀錄</div>', false);
+        $this->get($url.'?month=2026-09')->assertOk()->assertSee('<div class="month-label">2026-09</div>', false)
             ->assertSee('共 3 個月 / 第 3 頁')->assertSee('Native matchup');
     }
 

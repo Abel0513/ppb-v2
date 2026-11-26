@@ -1,0 +1,31 @@
+/* 出缺勤 — legacy attendanceRecord look (content area only). */
+.ppb-att{max-width:1160px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft JhengHei',sans-serif}
+.ppb-att .month-label{font-size:22px;font-weight:800;color:#1e3a7a;margin-bottom:20px}
+.ppb-att .table-container{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.04)}
+.ppb-att .thead{display:flex;align-items:center;background:#f1f5f9;border-bottom:2px solid #e2e8f0;padding:12px 8px;gap:8px}
+.ppb-att .thead span{font-size:.9rem;font-weight:700;color:#475569;text-align:center}
+.ppb-att .row{display:flex;align-items:center;gap:8px;padding:10px 8px;border-bottom:1px solid #f1f5f9;transition:background .15s;margin:0}
+.ppb-att .row:last-child{border-bottom:0}
+.ppb-att .row:hover{background:#f8fafc}
+.ppb-att .c-action{flex:0 0 36px;display:flex;justify-content:center;min-height:34px;align-items:center}
+.ppb-att .c-game{flex:0 0 60px;display:flex;justify-content:center}
+.ppb-att .c-analyst{flex:0 0 140px;display:flex;justify-content:center}
+.ppb-att .c-matchup{flex:0 0 340px;font-size:14px;font-weight:600;color:#1f2937;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ppb-att .thead .c-matchup{color:#475569;font-size:.9rem;font-weight:700}
+.ppb-att .c-status{flex:0 0 80px;display:flex;justify-content:center}
+.ppb-att .tag{color:#fff;border-radius:4px;padding:3px 8px;font-size:13px;font-weight:700;display:inline-block}
+.ppb-att .tag-g{background:#4A6EDB}
+.ppb-att .tag-e{background:#E5533D}
+.ppb-att .analyst-tag{display:inline-block;width:120px;padding:4px 10px;border-radius:4px;font-size:13px;font-weight:700;text-align:center;background:#f3f4f6;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ppb-att .status-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:700;white-space:nowrap}
+.ppb-att .status-late{background:#fef3c7;color:#92400e}
+.ppb-att .status-absent{background:#fee2e2;color:#991b1b}
+.ppb-att .btn-action{width:34px;height:34px;border-radius:6px;border:1px solid #e5e7eb;background:#f8fafc;display:flex;align-items:center;justify-content:center;font-size:15px;color:#64748b;text-decoration:none;transition:all .15s ease}
+.ppb-att .btn-action:hover{background:#eef2ff;border-color:#c7d2fe}
+.ppb-att .empty-hint{padding:50px;text-align:center;color:#9ca3af;font-size:15px}
+.ppb-att .pagination-bar{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin:20px 0 0;padding-bottom:10px;flex-wrap:wrap}
+.ppb-att .pagination-info{display:inline-flex;align-items:center;height:40px;padding:0 14px;font-size:15px;font-weight:600;color:#445;background:#fff;border:1px solid #e3e6ea;border-radius:8px;white-space:nowrap}
+.ppb-att .pagination-wrap{display:flex;align-items:center;gap:10px;height:40px}
+.ppb-att .pagination-wrap a,.ppb-att .pagination-wrap span{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:40px;padding:0 14px;border-radius:8px;border:1px solid #e3e6ea;background:#fff;color:#445;font-size:15px;font-weight:600;text-decoration:none}
+.ppb-att .pagination-wrap span.current{background:#2f66c9;color:#fff;border-color:#2f66c9}
+@media (max-width:760px){.ppb-att .table-container{overflow-x:auto}.ppb-att .thead,.ppb-att .row{min-width:700px}}
