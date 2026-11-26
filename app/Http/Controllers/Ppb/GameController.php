@@ -4,12 +4,20 @@ namespace App\Http\Controllers\Ppb;
 use App\Http\Controllers\Controller;
 use App\Models\PpbAnalyst;
 use App\Models\PpbGame;
+use App\Services\Ppb\Evaluation\EvaluationInputs;
+use App\Services\Ppb\Evaluation\EvaluationSubjects;
+use App\Services\Ppb\Evaluation\LegacyPickRows;
+use App\Services\Ppb\Evaluation\LocalEvaluationData;
+use App\Services\Ppb\LegacyUnsettledCount;
 use App\Services\Ppb\ScheduleManager;
+use App\Services\Ppb\SchedulePickDisplay;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -277,6 +285,18 @@ class GameController extends Controller
         return $fixtures;
     }
 
+    public function unsettledCount(LegacyUnsettledCount $legacy, SchedulePickDisplay $display): JsonResponse
+    {
+        try {
+            $count = $legacy->count();
+        } catch (\Throwable $error) {
+            report($error);
+            $count = $display->unsettledCount();
+        }
+
+        return response()->json(['count' => $count], 200, ['Cache-Control' => 'private, no-store']);
+    }
+
     private function absenceCounts(): array
     {
         try {
@@ -293,38 +313,46 @@ class GameController extends Controller
     {
         $start = CarbonImmutable::now('Asia/Taipei')->startOfMonth();
         $end = $start->addMonth();
-        $native = [];
-        if (\Illuminate\Support\Facades\Schema::hasTable('ppb_evaluation_attendance')) {
-            $data = app(\App\Services\Ppb\Evaluation\LocalEvaluationData::class);
-            $inputs = app(\App\Services\Ppb\Evaluation\EvaluationInputs::class);
-            $native = $inputs->attendanceRows($data->records($start, $end, true), $data->corrections($start, $end));
+        $maps = app(EvaluationSubjects::class)->mappings();
+        $counts = [];
+        if (Schema::hasTable('ppb_evaluation_attendance')) {
+            $data = app(LocalEvaluationData::class);
+            $inputs = app(EvaluationInputs::class);
+            $native = collect($inputs->attendanceRows($data->records($start, $end, true), $data->corrections($start, $end)));
+            $games = PpbGame::query()->whereIntegerInRaw('id', $native->pluck('gid')->unique()->all())
+                ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('ppb_legacy_pick_contents as archive')
+                    ->whereColumn('archive.game_id', 'ppb_games.id'))
+                ->get(['id', 'notes'])->reject(fn ($game) => json_decode((string) $game->notes, true)['_ppb_legacy_game_v1'] ?? false)
+                ->keyBy('id');
+            $normalize = fn ($row) => $row['subject_type'] === 'v2' ? $row['subject_id'] : ($maps[$row['subject_id']] ?? null);
+            $counts = $native->filter(fn ($row) => $games->has($row['gid']) && $normalize($row) !== null)
+                ->keyBy(fn ($row) => $row['gid'].':'.$normalize($row))
+                ->filter(fn ($row) => $row['attendance_status'] === 2)->countBy($normalize)->all();
         }
-        $maps = app(\App\Services\Ppb\Evaluation\EvaluationSubjects::class)->mappings();
-        $normalize = fn ($row) => $row['subject_type'] === 'v2' ? $row['subject_id'] : ($maps[$row['subject_id']] ?? null);
-        $nativeByGame = collect($native)->filter(fn ($row) => $normalize($row) !== null)
-            ->keyBy(fn ($row) => $row['gid'].':'.$normalize($row));
-        $counts = $nativeByGame->filter(fn ($row) => $row['attendance_status'] === 2)
-            ->countBy($normalize)->all();
 
-        $source = app(\App\Services\Ppb\Evaluation\LegacyAttendanceSource::class);
         try {
-            $legacy = collect($source->rows());
-        } catch (\Exception $error) {
+            $legacy = Cache::remember('ppb:legacy-pick-absences:v1:'.$start->format('Y-m'), 300, function () use ($start, $end) {
+                $counts = [];
+                foreach (app(LegacyPickRows::class)->select(['is_substitute'], [
+                    ['column' => 'recommended_time', 'op' => '>=', 'value' => $start->toDateTimeString()],
+                    ['column' => 'recommended_time', 'op' => '<=', 'value' => $end->subSecond()->toDateTimeString()],
+                    ['column' => 'is_substitute', 'op' => '>', 'value' => 1],
+                ]) as $row) {
+                    $id = (int) $row['is_substitute'];
+                    $counts[$id] = ($counts[$id] ?? 0) + 1;
+                }
+
+                return $counts;
+            });
+        } catch (\Throwable $error) {
             report($error);
 
             return $counts;
         }
 
-        $absences = $legacy->filter(fn ($row) => $row['attendance_status'] === 2
-            && str_starts_with($row['recommended_time'], $start->format('Y-m').'-')
-            && $normalize($row) !== null)->unique(fn ($row) => $row['gid'].':'.$normalize($row));
-        $games = PpbGame::whereIntegerInRaw('id', $absences->pluck('gid')->unique()->all())->get()->keyBy('id');
-        foreach ($absences as $row) {
-            $id = $normalize($row);
-            if ($nativeByGame->has($row['gid'].':'.$id) && $source->matchesImportedGame($row, $games->get($row['gid']))) {
-                continue;
-            }
-            $counts[$id] = ($counts[$id] ?? 0) + 1;
+        foreach (array_intersect_key($legacy, $maps) as $legacyId => $count) {
+            $id = $maps[$legacyId];
+            $counts[$id] = ($counts[$id] ?? 0) + $count;
         }
 
         return $counts;
