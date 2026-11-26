@@ -151,19 +151,72 @@ class LegacySnapshotImportTest extends TestCase
         $this->assertSame('V2 edited matchup', $game->matchup_text);
     }
 
-    public function test_a_nonmatching_occupied_number_rolls_back_all_writes(): void
+    public function test_a_nonmatching_occupied_number_is_reported_and_skipped(): void
     {
         $this->seedGame([]);
-        try {
-            $this->import();
-            $this->fail('Expected a slot conflict.');
-        } catch (RuntimeException $error) {
-            $this->assertStringContainsString('occupied V2 slot 2026-11 E17', $error->getMessage());
-        }
+        $output = $this->import();
+        $this->assertStringContainsString('"games":1', $output);
+        $this->assertStringContainsString('"picks_of_skipped_games":2', $output);
         $this->assertDatabaseCount('ppb_games', 1);
-        $this->assertDatabaseCount('ppb_schedule_scopes', 0);
-        $this->assertDatabaseCount('ppb_sport_fixtures', 0);
+        $this->assertSame('V2 edited matchup', DB::table('ppb_games')->value('matchup_text'));
+        $this->assertSame('[]', DB::table('ppb_games')->value('notes'));
         $this->assertDatabaseCount('ppb_legacy_pick_contents', 0);
+        $this->assertDatabaseCount('ppb_submissions', 0);
+        // Unrelated snapshot rows still import.
+        $this->assertDatabaseCount('ppb_sport_fixtures', 1);
+        $this->assertDatabaseCount('ppb_evaluation_videos', 1);
+    }
+
+    public function test_reassigned_legacy_author_reconciles_text_and_keeps_existing_rows(): void
+    {
+        $this->import();
+        // Simulate legacy pick 11001 imported earlier under another author (e.g. 3988 一萬哥 -> 饒爸).
+        DB::table('ppb_legacy_pick_contents')->where('source_pick_id', 11001)->update(['legacy_analyst_id' => 99, 'legacy_is_win' => null]);
+        $submission = DB::table('ppb_submissions')->where('legacy_source_pick_id', 11001)->first();
+        $assignments = DB::table('ppb_assignments')->get();
+
+        $this->fixture['picks'][0]['analysis'] = 'Reconciled analysis';
+        $this->fixture['picks'][0]['recommend'] = 'Reconciled pick';
+        $output = $this->import();
+
+        $this->assertStringContainsString('"picks_reconciled_author":1', $output);
+        $pick = DB::table('ppb_legacy_pick_contents')->where('source_pick_id', 11001)->first();
+        $this->assertSame(99, (int) $pick->legacy_analyst_id);
+        $this->assertNull($pick->legacy_is_win);
+        $this->assertSame('Reconciled analysis', $pick->short_analysis);
+        $this->assertSame('Reconciled pick', $pick->recommend_pick);
+        $this->assertSame((int) $submission->game_id, (int) $pick->game_id);
+        $this->assertEquals($submission, DB::table('ppb_submissions')->where('legacy_source_pick_id', 11001)->first());
+        $this->assertEquals($assignments, DB::table('ppb_assignments')->get());
+        $this->assertDatabaseCount('ppb_legacy_pick_contents', 2);
+        $this->assertDatabaseCount('ppb_submissions', 2);
+
+        // Idempotent: a second run changes nothing and still reports the reconciliation.
+        $hash = $pick->source_sha256;
+        $output = $this->import();
+        $this->assertStringContainsString('"picks_reconciled_author":1', $output);
+        $this->assertSame($hash, DB::table('ppb_legacy_pick_contents')->where('source_pick_id', 11001)->value('source_sha256'));
+    }
+
+    public function test_pick_lineage_on_another_game_is_reported_and_left_untouched(): void
+    {
+        $this->import();
+        DB::table('ppb_legacy_pick_contents')->where('source_pick_id', 11001)->update(['kind' => 'bonus']);
+        $this->fixture['picks'][0]['analysis'] = 'Should not be written';
+        $output = $this->import();
+        $this->assertStringContainsString('"picks_skipped_lineage":1', $output);
+        $pick = DB::table('ppb_legacy_pick_contents')->where('source_pick_id', 11001)->first();
+        $this->assertSame('bonus', $pick->kind);
+        $this->assertSame('First analysis', $pick->short_analysis);
+    }
+
+    public function test_unknown_week_label_skips_only_that_video(): void
+    {
+        $this->fixture['videos'][0]['week_label'] = '第九周';
+        $output = $this->import();
+        $this->assertStringContainsString('"videos":1', $output);
+        $this->assertDatabaseCount('ppb_evaluation_videos', 0);
+        $this->assertDatabaseCount('ppb_games', 1);
     }
 
     public function test_video_and_fixture_upserts_keep_the_same_v2_ids(): void
@@ -207,10 +260,10 @@ class LegacySnapshotImportTest extends TestCase
         ]);
     }
 
-    private function import(): void
+    private function import(): string
     {
         $this->writeFixture();
-        $this->runImport();
+        return $this->runImport();
     }
 
     private function writeFixture(): void
@@ -225,14 +278,15 @@ class LegacySnapshotImportTest extends TestCase
         File::put($this->fixtureDirectory.'/manifest.json', json_encode($manifest, JSON_THROW_ON_ERROR));
     }
 
-    private function runImport(): void
+    private function runImport(): string
     {
         $migration = require database_path('migrations/'.self::MIGRATION);
         ob_start();
         try {
             $migration->importSnapshot($this->fixtureDirectory);
         } finally {
-            ob_end_clean();
+            $output = (string) ob_get_clean();
         }
+        return $output;
     }
 }
