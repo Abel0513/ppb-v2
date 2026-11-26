@@ -1,10 +1,10 @@
 [
-  {"operation": "db_permissions"},
-  {"operation": "select", "table": "pay.pay_attendance_record", "columns": ["id", "gid", "uid", "attendance_status"], "limit": 50, "offset": 0},
-  {"operation": "select", "table": "pay.pay_schedule", "columns": ["id", "game_id", "game_type", "recommended_time", "reviewer", "market_type"], "filters": [{"column": "recommended_time", "op": ">=", "value": "2026-11-26 00:00:00"}], "limit": 10, "offset": 0},
-  {"operation": "select", "table": "pay.pay_analyst_pick", "columns": ["id", "gid", "analyst_name", "recommended_time", "is_win", "is_bonus", "is_long", "is_substitute"], "filters": [{"column": "recommended_time", "op": ">=", "value": "2026-11-26 00:00:00"}], "limit": 10, "offset": 0},
-  {"operation": "select", "table": "pay.pay_video_schedule", "columns": ["id", "schedule_date"], "limit": 10, "offset": 0},
-  {"operation": "select", "table": "pay.pay_schedule", "columns": ["id", "lottery_no"], "filters": [{"column": "recommended_time", "op": ">=", "value": "2026-11-26 00:00:00"}], "limit": 5, "offset": 0},
-  {"operation": "source", "path": "Application/Admin/Controller/AdminScheduleController.class.php", "offset": 463, "limit": 140},
-  {"operation": "source", "path": "Application/Admin/Controller/AdminScheduleController.class.php", "offset": 1815, "limit": 100}
+  {"operation": "search", "query": "unsettle", "limit": 30},
+  {"operation": "search", "query": "is_win IS NULL", "limit": 30},
+  {"operation": "search", "query": "isnull(is_win)", "limit": 30},
+  {"operation": "search", "query": "'is_win' => array('exp'", "limit": 30},
+  {"operation": "search", "query": "public function shift(", "limit": 10},
+  {"operation": "search", "query": "_initialize", "limit": 20},
+  {"operation": "search", "query": "pendingCount", "limit": 20},
+  {"operation": "search", "query": "is_win', 0", "limit": 30}
 ]
