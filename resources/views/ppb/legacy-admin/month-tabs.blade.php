@@ -7,7 +7,7 @@
   if ($selectedDate->lessThan($top->subMonths($span))) $top = $selectedDate;
 @endphp
 <nav class="ppb-segments ppb-list-tabs" aria-label="月份">
-  @if($top->lessThan($latest))
+  @if($top->lessThan($latest) && ! ($plainTabs ?? false))
     <a aria-label="較新的月份" href="{{ request()->fullUrlWithQuery(['month' => $top->addMonth()->format('Y-m')]) }}">‹</a>
   @endif
   @foreach(range(0, $span) as $offset)
@@ -17,5 +17,7 @@
     <a href="{{ request()->fullUrlWithQuery(['month' => $tab->format('Y-m')]) }}"
       @if($tab->format('Y-m') === $month) aria-current="page" @endif>{{ ($ratingTabs ?? false) ? $tab->format('Y年n月') : $tab->format('Y/n月') }}</a>
   @endforeach
+  @unless($plainTabs ?? false)
   <a aria-label="較早的月份" href="{{ request()->fullUrlWithQuery(['month' => $top->subMonths($span + 1)->format('Y-m')]) }}">›</a>
+  @endunless
 </nav>

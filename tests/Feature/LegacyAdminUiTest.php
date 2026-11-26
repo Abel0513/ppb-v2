@@ -1118,6 +1118,8 @@ class LegacyAdminUiTest extends TestCase
             ->assertSee('<span class="person-role">來賓 3</span>', false)
             ->assertSee('<span class="editor-name">BONBON</span>', false)
             ->assertSee('＋ 新增班表')
+            ->assertSee('<div class="title">影音<span>班表</span></div>', false)
+            ->assertDontSee('aria-label="較早的月份"', false)
             ->getContent();
         self::assertStringContainsString('ppb-videos-legacy.css', $html);
         self::assertFileExists(public_path('assets/ppb/people/'.substr(sha1('BONBON'), 0, 12).'.webp'));
