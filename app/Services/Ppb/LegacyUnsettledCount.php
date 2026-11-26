@@ -34,7 +34,7 @@ class LegacyUnsettledCount
     {
         $today = CarbonImmutable::today('Asia/Taipei')->toDateTimeString();
 
-        $snapshot = Cache::remember('ppb:legacy-unsettled:v2:'.$today, 300, function () use ($today) {
+        $snapshot = Cache::remember('ppb:legacy-unsettled:v3:'.$today, 300, function () use ($today) {
             $times = [];
             foreach ($this->picks->select(['gid', 'is_win', 'recommended_time'], [
                 ['column' => 'recommended_time', 'op' => '>=', 'value' => self::WINDOW_START],
@@ -105,7 +105,7 @@ class LegacyUnsettledCount
 
         usort($games, fn ($left, $right) => $left['at'] <=> $right['at']);
         foreach ($games as &$game) {
-            $game['at'] = $game['at']->format('Y/m/d H:i');
+            $game['at'] = $game['at']->format('m/d H:i');
         }
 
         return $games;

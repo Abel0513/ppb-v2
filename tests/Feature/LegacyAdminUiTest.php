@@ -870,9 +870,9 @@ class LegacyAdminUiTest extends TestCase
             ['id' => 57, 'gid' => null, 'is_win' => 0, 'recommended_time' => '2026-10-24 11:00:00'],
         ]]);
         $games = [
-            ['code' => 'E24', 'at' => '2026/10/22 16:00', 'matchup' => '奧蘭多魔術@鳳凰城太陽', 'url' => '/admin/games/116'],
-            ['code' => '#19', 'at' => '2026/10/24 11:00', 'matchup' => null, 'url' => null],
-            ['code' => 'G15', 'at' => '2026/10/27 11:00', 'matchup' => 'Fixture', 'url' => '/admin/games/15'],
+            ['code' => 'E24', 'at' => '10/22 16:00', 'matchup' => '奧蘭多魔術@鳳凰城太陽', 'url' => '/admin/games/116'],
+            ['code' => '#19', 'at' => '10/24 11:00', 'matchup' => null, 'url' => null],
+            ['code' => 'G15', 'at' => '10/27 11:00', 'matchup' => 'Fixture', 'url' => '/admin/games/15'],
         ];
         $expected = ['count' => count($games), 'games' => $games];
         $this->getJson($url)->assertOk()->assertExactJson($expected);
