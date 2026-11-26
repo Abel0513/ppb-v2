@@ -1205,3 +1205,11 @@ a.admin-unsettled-row:focus-visible{outline:2px solid #1d4ed8;outline-offset:-2p
     .admin-page-breadcrumb{display:none}
     .admin-page-heading .admin-page-title{font-size:16px}
 }
+
+/* PPB UNIFORM CONTENT PADDING | owner request 2026-11-27.
+   Single standard for every admin page = the 賽事排班 (/admin/games) values. */
+:root{--admin-content-pad:18px 20px 32px;--admin-content-pad-mobile:8px 8px 20px}
+.admin-content,
+.admin-main .admin-content{padding:var(--admin-content-pad)}
+@media(max-width:840px){.admin-content,.admin-main .admin-content{padding:var(--admin-content-pad)}}
+@media(max-width:640px){.admin-content,.admin-main .admin-content{padding:var(--admin-content-pad-mobile)}}
