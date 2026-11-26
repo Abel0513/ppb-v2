@@ -32,7 +32,7 @@
         <a class="admin-submenu-item {{ request()->routeIs('ppb.schedule.articles') ? 'active' : '' }}" href="{{ route('ppb.schedule.articles') }}">分析文排班</a>
         <a class="admin-submenu-item {{ request()->routeIs('ppb.schedule.videos') ? 'active' : '' }}" href="{{ route('ppb.schedule.videos') }}">影音排班</a>
         <a class="admin-submenu-item {{ request()->routeIs('ppb.schedule.attendance') ? 'active' : '' }}" href="{{ route('ppb.schedule.attendance') }}">出缺勤紀錄表</a>
-        <a class="admin-submenu-item {{ request()->routeIs('ppb.analysts.*') ? 'active' : '' }}" href="{{ route('ppb.analysts.index') }}">分析師資料</a>
+        <a class="admin-submenu-item {{ request()->routeIs('ppb.analyst-list', 'ppb.analysts.*') ? 'active' : '' }}" href="{{ route('ppb.analyst-list') }}">分析師列表</a>
       </div>
     </div>
     <div class="admin-menu-group" data-admin-menu-group="reports">
@@ -40,7 +40,6 @@
         <span class="admin-menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4v16h16M8 16v-4m5 4V8m5 8V5"/></svg></span><span>報表</span><span class="admin-menu-group-arrow">›</span>
       </button>
       <div class="admin-submenu">
-        <a class="admin-submenu-item {{ request()->routeIs('ppb.analyst-list') ? 'active' : '' }}" href="{{ route('ppb.analyst-list') }}">分析師列表</a>
         <a class="admin-submenu-item {{ request()->routeIs('ppb.performance') ? 'active' : '' }}" href="{{ route('ppb.performance') }}">戰績排行榜</a>
       </div>
     </div>

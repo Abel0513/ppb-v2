@@ -210,7 +210,7 @@ class LegacyAdminController extends Controller
             $legacyLineNames = DB::table('ppb_legacy_analyst_profiles')->pluck('line_name', 'legacy_analyst_id')->all();
         }
 
-        return response()->view('ppb.legacy-admin.report', compact(
+        return response()->view($kind === 'analyst-list' ? 'ppb.legacy-admin.analyst-list' : 'ppb.legacy-admin.report', compact(
             'kind', 'title', 'month', 'roster', 'profiles', 'canSeeLineName', 'canSeeWork', 'unavailable', 'values', 'isPay',
             'legacyLineNames'
         ))->header('Cache-Control', 'private, no-store');
