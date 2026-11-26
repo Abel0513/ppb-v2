@@ -315,14 +315,22 @@ class LegacyAdminUiTest extends TestCase
                 ->assertSee('<h1 class="admin-page-title">'.$label.'</h1>', false)
                 ->assertSee('active" href="'.self::HOST.$path.'"', false);
         }
-        $this->get(self::HOST.'/admin/analyst-list')->assertOk()
-            ->assertSee('本月勝率')->assertSee('資深分析師')->assertSee('Line名稱');
+        $list = $this->get(self::HOST.'/admin/analyst-list')->assertOk()
+            ->assertSee('本月勝率')->assertSee('資深分析師')->assertSee('Line名稱')
+            ->assertSee('ppb-analyst-list-legacy.css')->assertSee('class="table-container"', false)
+            ->assertSee('class="type-senior"', false)->assertSee('placeholder="搜尋分析師名稱"', false)
+            ->assertDontSee('分析師資料管理')->assertDontSee('>分析師資料<', false)
+            ->assertSee('<span>管理後台</span><span>作業管理</span>', false);
+        // 作業管理 now owns the single 分析師列表 entry (the old 報表 duplicate is gone).
+        self::assertSame(1, substr_count($list->getContent(), '>分析師列表</a>'));
         $this->get(self::HOST.'/admin/performance')->assertOk()->assertSee('本月戰績')
             ->assertDontSee('>薪資與評級<', false)->assertDontSee('>系統設定<', false);
         $this->get(self::HOST.'/admin/rating/index')->assertForbidden();
         $this->get(self::HOST.'/admin/rating/summary/legacy/4')->assertForbidden();
 
         $this->actor(['schedules.view', 'schedules.manage', 'evaluations.view']);
+        $this->get(self::HOST.'/admin/analyst-list')->assertOk()
+            ->assertSee('分析師資料管理')->assertSee('class="analyst-link" href="', false);
         $this->get(self::HOST.'/admin/games/readonly')->assertOk()
             ->assertDontSee('新增賽事')->assertDontSee('編輯／補齊人員')
             ->assertDontSee('id="ppbCancelGameForm"', false);

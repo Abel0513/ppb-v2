@@ -55,6 +55,15 @@
     refresh();
   });
 
+  // 分析師列表 (t60u): legacy badge classes, thresholds read from the old page.
+  function decorate(cell, value) {
+    const style = cell.dataset.legacyStyle;
+    if (!style) return;
+    if (value == null) cell.className = 'no-data';
+    else if (style === 'month_rate') cell.className = 'rate-badge ' + (value >= 55 ? 'rate-high' : value >= 45 ? 'rate-mid' : 'rate-low');
+    else cell.className = style === 'score' ? 'score' : 'rank';
+  }
+
   const pending = rows.filter(row => row.element.dataset.reportUrl);
   let next = 0;
 
@@ -69,10 +78,11 @@
         const value = values[field];
         const rate = field.endsWith('_rate') && Number.isFinite(value);
         cell.textContent = rate ? value + '%' : (value ?? cell.dataset.empty);
+        decorate(cell, value);
       }
     } else if (row.element.hasAttribute('aria-busy')) {
       row.values = {};
-      for (const cell of cells) cell.textContent = '讀取失敗';
+      for (const cell of cells) { cell.textContent = '讀取失敗'; if (cell.dataset.legacyStyle) cell.className = 'cell-pending'; }
     }
     row.done = true;
     row.element.removeAttribute('aria-busy');

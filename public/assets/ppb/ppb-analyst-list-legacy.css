@@ -1,0 +1,42 @@
+/* t60u 2026-11-27 | Copied from the legacy AdminSchedule_analystlist inline <style> (read-only capture). */
+.ppb-al{max-width:1160px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft JhengHei',sans-serif;color:#334155}
+.ppb-al .top-row{display:flex;align-items:center;justify-content:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:12px}
+.ppb-al .search-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:0}
+.ppb-al .search-input,.ppb-al .search-select{height:38px;padding:0 14px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;background:#fff;font-family:inherit;color:#111827;box-shadow:none;margin:0}
+.ppb-al .search-input{width:200px}
+.ppb-al .search-select{cursor:pointer;width:auto}
+.ppb-al .search-btn,.ppb-al .reset-btn{height:38px;padding:0 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;line-height:normal}
+.ppb-al .search-btn{background:#4f46e5;color:#fff;border:none}
+.ppb-al .reset-btn{background:#fff;color:#64748b;border:1px solid #e5e7eb}
+.ppb-al .tabs{display:flex;gap:10px;flex-wrap:wrap}
+.ppb-al .tab{border:1px solid #e5e7eb;background:#fff;color:#374151;padding:10px 14px;border-radius:999px;font-weight:800;font-size:13px;line-height:normal;text-decoration:none;transition:.15s ease;user-select:none}
+.ppb-al .tab:hover{transform:translateY(-1px)}
+.ppb-al .tab.active{border-color:#c7d2fe;background:#eef2ff;color:#3730a3;box-shadow:0 6px 18px rgba(0,0,0,.05)}
+.ppb-al .manage-link{margin-left:auto;height:38px;display:inline-flex;align-items:center;padding:0 16px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;color:#64748b;font-size:14px;font-weight:600;text-decoration:none}
+.ppb-al .table-container{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.04)}
+.ppb-al table{width:100%;border-collapse:collapse;table-layout:auto}
+.ppb-al thead th{background:#f1f5f9;color:#475569;font-weight:700;font-size:14.4px;padding:14px 20px;text-align:center;border-bottom:2px solid #e2e8f0;line-height:normal;letter-spacing:normal;text-transform:none}
+.ppb-al thead th:first-child{text-align:left}
+.ppb-al thead th:nth-child(1){width:13%}
+.ppb-al thead th:nth-child(2),.ppb-al thead th:nth-child(3),.ppb-al thead th:nth-child(5),.ppb-al thead th:nth-child(6){width:16%}
+.ppb-al thead th:nth-child(4){width:20%}
+.ppb-al .sort-btn{all:unset;cursor:pointer;font:inherit;color:inherit}
+.ppb-al tbody tr{transition:background .15s ease}
+.ppb-al tbody tr:hover{background:#f8fafc}
+.ppb-al tbody tr:not(:last-child){border-bottom:1px solid #f1f5f9}
+.ppb-al td{padding:16px 20px;font-size:15.2px;color:#334155;text-align:center;line-height:normal;border:0}
+.ppb-al td:first-child{text-align:left}
+.ppb-al .analyst-link{font-weight:600;color:#3730a3;text-decoration:none}
+.ppb-al a.analyst-link:hover{color:#4f46e5;text-decoration:underline}
+.ppb-al .type-senior,.ppb-al .type-new{font-size:13.6px;font-weight:900}
+.ppb-al .type-senior{color:#0369a1}
+.ppb-al .type-new{color:#0ea5e9}
+.ppb-al .rate-badge{display:inline-flex;align-items:center;justify-content:center;padding:4px 12px;border-radius:20px;font-weight:600;font-size:13.6px;min-width:55px}
+.ppb-al .rate-high{background:#dcfce7;color:#166534}
+.ppb-al .rate-mid{background:#fef3c7;color:#92400e}
+.ppb-al .rate-low{background:#fee2e2;color:#991b1b}
+.ppb-al .score{font-weight:700}
+.ppb-al .rank{font-weight:700;font-size:16px;color:#3730a3}
+.ppb-al .no-data{color:#94a3b8;font-style:italic;font-size:13.6px}
+.ppb-al .cell-pending{color:#94a3b8;font-size:13.6px}
+@media (max-width:760px){.ppb-al .table-container{overflow-x:auto}.ppb-al table{min-width:720px}.ppb-al .manage-link{margin-left:0}}

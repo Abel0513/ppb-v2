@@ -6,7 +6,7 @@
     @php
       // Section label for the heading breadcrumb, matching the sidebar groups.
       $ppbSection = match (true) {
-          request()->routeIs('ppb.analyst-list', 'ppb.performance', 'ppb.performance.*') => ['報表', 'chart'],
+          request()->routeIs('ppb.performance', 'ppb.performance.*') => ['報表', 'chart'],
           request()->routeIs('ppb.evaluations.*') => ['月評鑑與薪酬', 'doc'],
           request()->routeIs('ppb.rating.*') => ['薪資與評級', 'doc'],
           request()->routeIs('ppb.evalpreview.*') => ['月評鑑預覽', 'doc'],

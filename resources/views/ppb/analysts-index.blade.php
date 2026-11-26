@@ -1,11 +1,11 @@
 {{-- PPB U2 2026-11-03 | structural-only conversion to CSDA actual admin shell. --}}
 {{-- PPB AN2 | 2026-11-04 | Legacy analyst type labels from column COMMENT; status distinct from role. --}}
 @extends('ppb.layout')
-@section('title','分析師資料')
+@section('title','分析師資料管理')
 @section('body')
 <div class="admin-layout">@include('ppb.partials.sidebar')
 <div class="admin-main">@include('ppb.partials.topbar')<main class="admin-content"><div class="admin-content-inner">
-<div class="eyebrow">ANALYST DIRECTORY</div><h1 class="heading">分析師資料</h1><p class="sub">分析師身分與登入帳號分開管理；不使用舊系統混用的識別欄位。</p>
+<div class="eyebrow">ANALYST DIRECTORY</div><h1 class="heading">分析師資料管理</h1><p class="sub">分析師身分與登入帳號分開管理；不使用舊系統混用的識別欄位。</p>
 @if(session('status'))<div class="notice">{{ session('status') }}</div>@endif
 <div class="card"><div class="toolbar"><form method="get" class="search-row"><input name="q" class="field" value="{{ $keyword }}" maxlength="80" placeholder="搜尋姓名／顯示名稱"><button class="action" type="submit">搜尋</button></form>
 @if(auth('ppb')->user()->hasPpbPermission('schedules.manage'))<a class="action" href="{{ route('ppb.analysts.create') }}">＋ 新增分析師</a>@endif</div>
