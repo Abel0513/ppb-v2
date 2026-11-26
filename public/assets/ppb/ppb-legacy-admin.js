@@ -69,8 +69,6 @@
         const value = values[field];
         const rate = field.endsWith('_rate') && Number.isFinite(value);
         cell.textContent = rate ? value + '%' : (value ?? cell.dataset.empty);
-        cell.classList.toggle('legacy-win-rate', rate);
-        cell.classList.toggle('legacy-negative', Number.isFinite(value) && value < 0);
       }
     } else if (row.element.hasAttribute('aria-busy')) {
       row.values = {};

@@ -23,11 +23,11 @@
       'next_rating' => $date->addMonth()->month.'月評級', 'rating' => $date->month.'月評級', 'change' => '評級異動',
       'score_0' => $date->month.'月評分', 'score_1' => $date->subMonth()->month.'月評分', 'score_2' => $date->subMonths(2)->month.'月評分',
   ];
-  $palette = config('ppb_legacy_colors', []);
 @endphp
-<div class="legacy-report-controls">
+@if($unavailable)<p class="notice">讀取失敗</p>@endif
+<div class="card">
 @if(!$isPerformance)
-<form class="card toolbar legacy-filters" data-report-filters>
+<form class="toolbar ppb-list-filters" data-report-filters>
   <input type="search" name="name" class="field" aria-label="分析師" placeholder="搜尋分析師名稱">
   @if($isAnalystList || $showRatings)
   <select class="field" name="rating" aria-label="所有評級">
@@ -44,7 +44,7 @@
   </select>
   @endif
   <button type="submit" class="action">搜尋</button>
-  <button type="reset" class="link">重置</button>
+  <button type="reset" class="admin-button admin-button-secondary">重置</button>
   @if($showRatings)<button type="button" class="action" disabled>更新當月評級</button>@endif
   @if($isRating && $canSeeWork)
     <a class="link" href="{{ route('ppb.evaluations.index', ['month' => $month]) }}">月評鑑與薪酬</a>
@@ -52,15 +52,13 @@
 </form>
 @endif
 @include('ppb.legacy-admin.month-tabs', ['ratingTabs' => $isRating])
-</div>
-@if($unavailable)<p class="notice">讀取失敗</p>@endif
-<div class="card table-scroll">
+<div class="table-scroll">
 <table class="data-table" data-legacy-report="{{ $kind }}" @if($unavailable) data-roster-unavailable @endif>
   <thead><tr><th>分析師</th>
     @foreach($headers as $field => $header)
-      <th @class(['legacy-salary-total' => $field === 'total']) @if(($isAnalystList && in_array($field, ['month_rate', 'score', 'rating'], true)) || ($isPerformance && $field === 'month_rate')) aria-sort="none" @endif>
+      <th @if(($isAnalystList && in_array($field, ['month_rate', 'score', 'rating'], true)) || ($isPerformance && $field === 'month_rate')) aria-sort="none" @endif>
         @if(($isAnalystList && in_array($field, ['month_rate', 'score', 'rating'], true)) || ($isPerformance && $field === 'month_rate'))
-          <button type="button" class="legacy-sort" data-sort="{{ $field }}">{{ $header }} ⇅</button>
+          <button type="button" class="ppb-report-sort" data-sort="{{ $field }}">{{ $header }} <span aria-hidden="true">⇅</span></button>
         @else
           {{ $header }}
         @endif
@@ -72,7 +70,6 @@
     @foreach($roster as $subject)
       @php
         $profile = $profiles->get($subject['native_id']);
-        $fallback = $subject['type'] === 'legacy' ? ($palette[$subject['id']] ?? null) : null;
         $row = $values->get($subject['type'].':'.$subject['id']);
         $loading = $row === null;
         $pending = $loading || ($row['_stale'] ?? false);
@@ -81,7 +78,7 @@
       @endphp
       <tr data-report-values="{{ json_encode($row ?? [], JSON_THROW_ON_ERROR) }}" data-analyst-name="{{ $subject['label'] }}"
         @if($pending) data-report-url="{{ route($isPay ? 'ppb.rating.summary' : 'ppb.performance.summary', $key) }}" @endif @if($loading) aria-busy="true" @endif>
-        <td>@include('ppb.legacy-admin.name-pill', ['name' => $subject['label'], 'colors' => $profile ? $profile->scheduleColors($fallback) : $fallback])</td>
+        <td><strong>{{ $subject['label'] }}</strong></td>
         @foreach($headers as $field => $header)
           @if($field === 'type')
             <td>{{ \App\Services\Ppb\LegacyDisplayLabels::analystType($subject['analyst_level'] ?? null) }}</td>
@@ -95,7 +92,7 @@
                   ? '無資料' : (str_starts_with($field, 'recent_') ? '未達10場' : '未分析');
               $display = $loading ? '載入中...' : ($failed ? '讀取失敗' : ($value ?? $empty));
             @endphp
-            <td @class(['legacy-salary-total' => $field === 'total'])><span data-report-field="{{ $field }}" data-empty="{{ $empty }}" @class(['legacy-win-rate' => $isRate, 'legacy-negative' => is_numeric($value) && $value < 0])>{{ $display }}{{ $isRate ? '%' : '' }}</span></td>
+            <td class="ppb-report-number"><span data-report-field="{{ $field }}" data-empty="{{ $empty }}">{{ $display }}{{ $isRate ? '%' : '' }}</span></td>
           @endif
         @endforeach
         @if($isRating && $canSeeWork)<td><a class="link" href="{{ route('ppb.evaluations.show', $key) }}">評鑑・薪酬・稿件</a></td>@endif
@@ -112,8 +109,9 @@
   @endif
 </table>
 </div>
+</div>
 @endsection
 
 @section('legacy-scripts')
-<script src="{{ asset('assets/ppb/ppb-legacy-admin.js') }}?v=report-queue-20261126" defer></script>
+<script src="{{ asset('assets/ppb/ppb-legacy-admin.js') }}?v=v2-style-20261126" defer></script>
 @endsection

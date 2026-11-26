@@ -157,9 +157,9 @@
       originalReceiptUrl = raw ? form.elements.guest_1.selectedOptions[0]?.dataset.receiptUrl : null;
       if (cancelling) form.elements.cancelled.value = '1';
       video.querySelector('[data-video-fields]').hidden = cancelling;
-      title.textContent = cancelling ? '取消班表' : raw ? '修改班表' : '新增班表';
-      submit.textContent = cancelling ? '確定取消班表' : raw ? '確定修改' : '確定新增';
-      status.textContent = cancelling ? '取消後仍會保留班表紀錄。' : '';
+      title.textContent = cancelling ? '取消影音排班' : raw ? '編輯影音排班' : '新增影音排班';
+      submit.textContent = cancelling ? '確認取消排班' : raw ? '儲存變更' : '建立排班';
+      status.textContent = cancelling ? '取消後仍會保留排班紀錄。' : '';
       video.showModal();
     };
     for (const button of document.querySelectorAll('[data-open-video], [data-cancel-video]')) {

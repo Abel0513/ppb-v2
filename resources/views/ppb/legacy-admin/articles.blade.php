@@ -1,34 +1,40 @@
 @extends('ppb.legacy-admin.layout')
-@section('title', '分析文班表總覽')
+@section('title', '分析文排班')
 
 @section('legacy-content')
 @php
   $weekdays = ['日','一','二','三','四','五','六'];
-  $previousDay = null;
-  $palette = config('ppb_legacy_colors', []);
+  $previousDate = null;
 @endphp
-@if($month)
-  <h2>{{ (int) substr($month, 0, 4) }} 年 {{ (int) substr($month, 5) }} 月</h2>
-@endif
-<section class="card legacy-date-group">
-@forelse($games as $game)
-  @php
-    $date = $game->recommended_at?->timezone('Asia/Taipei');
-    $analyst = $game->assignments->first()?->currentAnalyst;
-  @endphp
-  <div class="legacy-game-row">
-    <span class="legacy-day">@if($date && $previousDay !== $date->day){{ $date->format('m/d') }}（{{ $weekdays[$date->dayOfWeek] }}）@endif</span>
-    @include('ppb.legacy-admin.game-pill', ['code' => $game->display_code])
-    @include('ppb.legacy-admin.name-pill', [
-        'name' => ($analyst?->display_name ?: $analyst?->name) ?? '未指派',
-        'colors' => $analyst?->scheduleColors($palette[$analyst->id] ?? null),
-    ])
-    <strong>@include('ppb.legacy-admin.matchup')</strong>
+<section class="card">
+  @if($month)
+    <h2 class="card-title">{{ (int) substr($month, 0, 4) }} 年 {{ (int) substr($month, 5) }} 月</h2>
+  @endif
+  <div class="table-scroll">
+    <table class="data-table">
+      <thead><tr><th>推薦日期</th><th>賽事</th><th>分析師</th><th>對戰組合</th></tr></thead>
+      <tbody>
+      @forelse($games as $game)
+        @php
+          $date = $game->recommended_at?->timezone('Asia/Taipei');
+          $dateKey = $date?->format('Y-m-d');
+          $analyst = $game->assignments->first()?->currentAnalyst;
+        @endphp
+        <tr>
+          <td>@if($date && $previousDate !== $dateKey){{ $date->format('m/d') }}（{{ $weekdays[$date->dayOfWeek] }}）@endif</td>
+          <td><strong>{{ $game->display_code }}</strong></td>
+          <td>{{ ($analyst?->display_name ?: $analyst?->name) ?? '未指派' }}</td>
+          <td>@include('ppb.legacy-admin.matchup')</td>
+        </tr>
+        @php
+          $previousDate = $dateKey;
+        @endphp
+      @empty
+        <tr><td colspan="4" class="empty">目前查詢條件下沒有賽事。</td></tr>
+      @endforelse
+      </tbody>
+    </table>
   </div>
-  @php($previousDay = $date?->day)
-@empty
-  <p class="notice">目前查詢條件下沒有賽事。</p>
-@endforelse
+  @include('ppb.legacy-admin.pager', ['paginator' => $pager, 'unit' => '個月'])
 </section>
-@include('ppb.legacy-admin.pager', ['games' => $pager, 'unit' => '個月'])
 @endsection

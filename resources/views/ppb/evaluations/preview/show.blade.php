@@ -12,7 +12,9 @@
 <h1 class="heading">{{ $report['subject']['label'] }}｜{{ $report['month'] }} 評鑑預覽</h1>
 <div class="toolbar no-print"><a class="link" href="{{ route('ppb.evalpreview.index',['month'=>$report['month']]) }}">返回列表</a><button class="action" type="button" onclick="window.print()">列印預覽</button></div>
 <p class="notice">只顯示舊系統唯讀來源；尚未包含 V2 人工評分、原生投稿、影片、缺勤更正。薪酬為試算，不代表正式應發金額。此頁沒有儲存入口。</p>
-@php($now=$report['current'])
+@php
+    $now = $report['current'];
+@endphp
 <section class="card eval-preview-section"><h2>本月評鑑</h2><div class="table-scroll"><table class="data-table">
 <thead><tr><th>項目</th><th>統計口徑</th><th>評級口徑</th></tr></thead><tbody>
 @foreach(['score_delivery_time'=>'交稿','score_compliance'=>'字數與格式','score_professionalism'=>'專業度','score_interaction_avg'=>'週互動平均','score_initiative'=>'主動性','score_winrate_bonus'=>'勝率加分','score_extra_adjustment'=>'額外調整','total_score'=>'總分'] as $f=>$label)

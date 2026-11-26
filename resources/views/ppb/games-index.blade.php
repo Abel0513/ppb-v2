@@ -1,20 +1,20 @@
 {{-- PPB UI6 | 2026-11-04 | Zero-flow insert entry, existing ScheduleManager validation retained. --}}
 @extends('ppb.layout')
-@section('title','分析師輪值表')
+@section('title', $readOnly ? '賽事排班（唯讀）' : '賽事排班')
 @push('styles')
-<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-schedule-dialogs.css') }}?v=rating-dialog">
+<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-schedule-dialogs.css') }}?v=v2-style-20261126">
 <link rel="stylesheet" href="{{ asset('assets/ppb/ppb-shift-ui4.css') }}?v=20261105-op1">
 @endpush
 @section('body')
 @php
     $weekdays = ['日','一','二','三','四','五','六'];
     $canManage = !$readOnly && auth('ppb')->user()->hasPpbPermission('schedules.manage');
-    $plays = [1=>'推 讓分',2=>'推 不讓分',3=>'推 大小分',4=>'特殊玩法',5=>'手動玩法'];
+    $plays = [1=>'讓分',2=>'不讓分',3=>'大小分',4=>'特殊玩法',5=>'手動玩法'];
     $legacyColors = config('ppb_legacy_colors', []);
     $archivedPickByGameSlot = $pickDisplay['archived'] ?? [];
     $archivedAnalystIds = collect($archivedPickByGameSlot)->flatMap(fn ($slots) => array_values($slots))->pluck('analyst_id')->unique()->all();
     $pickColor = static fn ($pick) => match ((int) ($pick['is_win'] ?? 0)) {
-        1 => '#22c55e', 2 => '#ef4444', default => '#2f66c9',
+        1 => '#22c55e', 2 => '#ef4444', default => null,
     };
     $archivedAnalysts = $archivedAnalystIds
         ? \App\Models\PpbAnalyst::query()->whereIn('id',array_values($archivedAnalystIds))
@@ -96,24 +96,19 @@
             {{-- PPB OP1 2026-11-05 | Compact actions, preserving original routes and permissions. --}}
             @unless($readOnly)
             <div class="ppb-shift-actions">
-              @if($canManage && !$isCancelled)
-                <a class="ppb-shift-action ppb-open-game-modal" href="{{ route('ppb.games.edit',$game) }}"
-                  data-create-url="{{ route('ppb.games.edit',[$game,'modal'=>'1']) }}"
-                  data-dialog-title="修改賽事" aria-label="修改賽事" title="修改賽事">✏️</a>
-                  <a class="ppb-shift-action" href="{{ route('ppb.games.show',$game) }}#delete-game"
-                    aria-label="刪除賽事" title="刪除賽事">🗑️</a>
-              @endif
               <details class="ppb-shift-manage">
                 <summary class="ppb-shift-action ppb-shift-manage-toggle" aria-label="管理 {{ $game->display_code }}" title="管理賽事">⋯</summary>
                 <div class="ppb-shift-manage-menu">
-                  @if($canManage)
-                    @if(!$isCancelled)
-                      <button type="button" class="ppb-shift-cancel-open"
-                        data-cancel-url="{{ route('ppb.games.cancel',$game) }}"
-                        data-game-code="{{ $game->display_code }}"
-                        data-revision="{{ \App\Services\Ppb\ScheduleVersion::game($game) }}"
-                        data-wp-hold="{{ $locked ? '1' : '0' }}">取消賽事</button>
-                    @endif
+                  @if($canManage && !$isCancelled)
+                    <a class="ppb-open-game-modal" href="{{ route('ppb.games.edit',$game) }}"
+                      data-create-url="{{ route('ppb.games.edit',[$game,'modal'=>'1']) }}"
+                      data-dialog-title="編輯賽事" aria-haspopup="dialog">編輯／補齊人員</a>
+                    <button type="button" class="ppb-shift-cancel-open"
+                      data-cancel-url="{{ route('ppb.games.cancel',$game) }}"
+                      data-game-code="{{ $game->display_code }}"
+                      data-revision="{{ \App\Services\Ppb\ScheduleVersion::game($game) }}"
+                      data-wp-hold="{{ $locked ? '1' : '0' }}">取消賽事</button>
+                    <a href="{{ route('ppb.games.show',$game) }}#delete-game">刪除賽事</a>
                   @endif
                   <a href="{{ route('ppb.games.show',$game) }}">歷史紀錄／進階管理</a>
                   @if($locked)
@@ -142,11 +137,12 @@
                   $legacyPreview = $legacyArchived['preview'];
                   $nameColor=$legacyColors[(int)$legacyArchived['analyst_id']] ?? null;
               }
+              $previewColor = $pickColor($legacyPreview);
             @endphp
             <div class="ppb-shift-row">
               <span class="ppb-shift-label">推薦＋短文</span>
               @include('ppb.partials.schedule-rating-trigger', ['slotAssignment' => $assignment, 'archivedName' => $archiveName, 'pick' => $legacyPreview, 'colors' => $nameColor])
-              <span class="ppb-shift-pick" style="background-color:{{ $pickColor($legacyPreview) }}">{{ ($assignment || $legacyArchived || $unlinkedShort) ? (($legacyPreview['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未指派' }}</span>
+              <span class="ppb-shift-pick" @if($previewColor) style="background-color:{{ $previewColor }}" @endif>{{ ($assignment || $legacyArchived || $unlinkedShort) ? (($legacyPreview['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未指派' }}</span>
               <span class="ppb-shift-note">{{ ($legacyPreview['short_analysis'] ?? null) ?: (($assignment || $legacyArchived || $unlinkedShort) ? '分析內容…' : '—') }}</span>
             </div>
           @endfor
@@ -154,11 +150,12 @@
             $bonusColor=$bonus?->currentAnalyst?->scheduleColors($legacyColors[(int)$bonus->current_analyst_id] ?? null);
             $unlinkedBonus = $bonus ? null : ($pickDisplay['unlinked'][$game->id]['bonus'][1] ?? null);
             $legacyBonus = $pickDisplay['assigned'][$bonus?->id] ?? $unlinkedBonus['preview'] ?? [];
+            $bonusPickColor = $pickColor($legacyBonus);
           @endphp
           <div class="ppb-shift-row">
             <span class="ppb-shift-label ppb-shift-label-bonus">BONUS</span>
             @include('ppb.partials.schedule-rating-trigger', ['slotAssignment' => $bonus, 'archivedName' => $unlinkedBonus['name'] ?? null, 'pick' => $legacyBonus, 'colors' => $bonusColor])
-            <span class="ppb-shift-pick" style="background-color:{{ $pickColor($legacyBonus) }}">{{ ($bonus || $unlinkedBonus) ? (($legacyBonus['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未指派' }}</span>
+            <span class="ppb-shift-pick" @if($bonusPickColor) style="background-color:{{ $bonusPickColor }}" @endif>{{ ($bonus || $unlinkedBonus) ? (($legacyBonus['recommend_pick'] ?? null) ?: '尚未推薦') : '尚未指派' }}</span>
             <span class="ppb-shift-note">{{ ($legacyBonus['short_analysis'] ?? null) ?: (($bonus || $unlinkedBonus) ? '分析內容…' : '—') }}</span>
           </div>
           @if($game->has_long_article)
@@ -185,7 +182,6 @@
       @empty
         <div class="ppb-shift-empty">目前查詢條件下沒有賽事。請確認賽事編號或日期。</div>
       @endforelse
-      {{-- PPB PG2 2026-11-05 | Old shift.tpl style: total / current page + compact numbered navigation. --}}
       @if($canManage)
       {{-- PPB OP1 2026-11-05 | Submit to existing protected cancel route. No state mutation via JS. --}}
       <dialog id="ppbCancelGameDialog" class="ppb-shift-cancel-dialog" aria-labelledby="ppbCancelTitle">
@@ -203,7 +199,42 @@
         </form>
       </dialog>
       @endif
-      @include('ppb.legacy-admin.pager')
+      <div class="ppb-shift-pagination" role="navigation" aria-label="賽事分頁">
+        <div class="ppb-shift-pagination-info">共 {{ $games->total() }} 筆 / 第 {{ $games->currentPage() }} 頁</div>
+        @if($games->hasPages())
+          <div class="ppb-shift-pagination-links">
+            @if($games->onFirstPage())
+              <span aria-disabled="true">上一頁</span>
+            @else
+              <a href="{{ $games->previousPageUrl() }}" rel="prev">上一頁</a>
+            @endif
+            @php
+              $firstPage = max(1, $games->currentPage()-2);
+              $lastPage = min($games->lastPage(), $games->currentPage()+2);
+            @endphp
+            @if($firstPage > 1)
+              <a href="{{ $games->url(1) }}" aria-label="第 1 頁">1</a>
+              @if($firstPage > 2)<span class="ppb-shift-pagination-ellipsis">…</span>@endif
+            @endif
+            @foreach($games->getUrlRange($firstPage,$lastPage) as $number=>$url)
+              @if($number == $games->currentPage())
+                <span class="current" aria-current="page">{{ $number }}</span>
+              @else
+                <a href="{{ $url }}" aria-label="第 {{ $number }} 頁">{{ $number }}</a>
+              @endif
+            @endforeach
+            @if($lastPage < $games->lastPage())
+              @if($lastPage + 1 < $games->lastPage())<span class="ppb-shift-pagination-ellipsis">…</span>@endif
+              <a href="{{ $games->url($games->lastPage()) }}" aria-label="最後一頁">{{ $games->lastPage() }}</a>
+            @endif
+            @if($games->hasMorePages())
+              <a href="{{ $games->nextPageUrl() }}" rel="next">下一頁</a>
+            @else
+              <span aria-disabled="true">下一頁</span>
+            @endif
+          </div>
+        @endif
+      </div>
       @if($canManage)
       {{-- PPB INS2 | Explain blocked positions; never pretend a protected renumber worked. --}}
       <dialog id="ppbInsertHoldDialog" class="ppb-shift-cancel-dialog ppb-insert-hold-dialog" aria-labelledby="ppbInsertHoldTitle">
@@ -214,7 +245,7 @@
       </dialog>
       {{-- PPB UI5 | Keep existing secured V2 form and backend validation inside a legacy-style modal. --}}
       <dialog id="ppbAddGameDialog" class="ppb-shift-modal" aria-labelledby="ppbAddGameTitle">
-        <div class="ppb-shift-modal-header"><strong id="ppbAddGameTitle">新增賽事</strong><button type="button" class="ppb-shift-modal-close" aria-label="關閉新增賽事視窗">×</button></div>
+        <div class="ppb-shift-modal-header"><strong id="ppbAddGameTitle">新增賽事</strong><button type="button" class="ppb-shift-modal-close" aria-label="關閉賽事表單">×</button></div>
         <iframe class="ppb-shift-modal-frame" title="新增賽事表單" data-src="{{ route('ppb.games.create', ['modal'=>'1']) }}" referrerpolicy="same-origin"></iframe>
       </dialog>
       <script>
@@ -271,7 +302,9 @@
         dialog.addEventListener('close',()=>frame.removeAttribute('src'));
         document.querySelectorAll('.ppb-open-game-modal').forEach(button=>button.addEventListener('click',event=>{
           event.preventDefault();
-          button.closest('details')?.removeAttribute('open');
+          const menu=button.closest('details');
+          menu?.querySelector('summary')?.focus();
+          menu?.removeAttribute('open');
           const title=button.dataset.dialogTitle || '新增賽事';
           dialog.querySelector('strong').textContent=title;
           frame.title=title;
@@ -308,5 +341,5 @@
     </div></main>
   </div>
 </div>
-<script src="{{ asset('assets/ppb/ppb-schedule-dialogs.js') }}?v=rating-dialog" defer></script>
+<script src="{{ asset('assets/ppb/ppb-schedule-dialogs.js') }}?v=v2-style-20261126" defer></script>
 @endsection

@@ -1,34 +1,77 @@
 .ppb-schedule-dialog {
-  width: min(660px, calc(100% - 24px));
+  box-sizing: border-box;
+  width: min(660px, calc(100vw - 30px));
   max-height: 90vh;
   overflow: auto;
-  padding: 20px;
-  border: 0;
-  border-radius: 12px;
-  color: #1e293b;
+  margin: auto;
+  padding: 22px;
+  border: 1px solid var(--admin-border);
+  border-radius: 16px;
+  background: #fff;
+  color: #273242;
+  box-shadow: 0 14px 44px rgba(0, 0, 0, .25);
 }
-.ppb-schedule-dialog::backdrop { background: #17274490; }
-.ppb-schedule-dialog header,
-.ppb-schedule-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.ppb-schedule-dialog h2, .ppb-schedule-dialog h3 { margin: 0 0 8px; }
+.ppb-schedule-dialog::backdrop { background: rgba(0, 0, 0, .42); }
+.ppb-dialog-header,
+.ppb-schedule-dialog footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ppb-dialog-header h2 { margin: 0; font-size: 19px; }
 .ppb-schedule-dialog footer { justify-content: flex-end; margin-top: 16px; }
+.ppb-schedule-dialog .ppb-dialog-icon { min-width: 34px; min-height: 34px; padding: 0 8px; font-size: 16px; }
 .ppb-schedule-dialog [hidden] { display: none; }
+.ppb-schedule-dialog [data-dialog-status]:empty { display: none; }
+.ppb-schedule-dialog [data-dialog-status] { color: #596579; font-size: 13px; }
 .ppb-schedule-dialog fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
-.ppb-schedule-rating-summary, .ppb-rating-section, .ppb-rating-bonus {
-  background: #f3f6fc;
+.ppb-schedule-rating-summary,
+.ppb-rating-section,
+.ppb-rating-bonus {
+  background: #f7f8fb;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
   padding: 12px;
-  margin: 10px 0;
-  border-radius: 8px;
+  margin: 12px 0;
+}
+.ppb-schedule-rating-summary { font-size: 13px; overflow-wrap: anywhere; }
+.ppb-schedule-rating-summary p { margin: 5px 0; }
+.ppb-rating-game { margin-right: 8px; font-weight: 750; color: var(--admin-primary); }
+.ppb-rating-section h3 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
 }
 .ppb-rating-options { display: flex; gap: 6px; flex-wrap: wrap; }
-.ppb-rating-options legend { padding: 8px 0 4px; }
+.ppb-rating-options legend { padding: 8px 0 4px; font-size: 13px; }
 .ppb-rating-options label { position: relative; cursor: pointer; }
 .ppb-rating-options input { position: absolute; opacity: 0; }
-.ppb-rating-options span { display: inline-block; border-radius: 5px; background: white; padding: 6px 10px; }
-.ppb-rating-options input:checked + span { background: #315eca; color: white; }
-.ppb-rating-options input:focus-visible + span { outline: 2px solid #1e293b; }
-.ppb-rating-bonus { background: #fff6d8; }
-.ppb-rating-bonus input { width: 4em; text-align: center; }
-.ppb-rating-section h3 { display: flex; justify-content: space-between; align-items: center; }
-.ppb-rating-score { background: #315eca; color: white; border-radius: 999px; padding: 2px 10px; }
+.ppb-rating-options span {
+  display: inline-block;
+  border: 1px solid #dde3ed;
+  border-radius: 9px;
+  background: #fff;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.ppb-rating-options input:checked + span { background: #edf0fb; color: var(--admin-primary); border-color: #9faed3; }
+.ppb-rating-options input:focus-visible + span { outline: 2px solid var(--admin-primary); outline-offset: 2px; }
+.ppb-rating-bonus label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 750; }
+.ppb-rating-bonus .field { width: 4em; height: 34px; text-align: center; }
+.ppb-rating-score {
+  background: #edf0fb;
+  color: var(--admin-primary);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 750;
+}
+.ppb-rating-score:empty { display: none; }
 button.ppb-shift-name { cursor: pointer; }
+@media (max-width: 640px) {
+  .ppb-schedule-dialog { padding: 16px; }
+}
