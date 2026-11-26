@@ -2,7 +2,7 @@
    Values follow the old AdminSchedule scheduleOverview page; sidebar/topbar stay V2. */
 .ppb-ov{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;color:#1f2937}
 .ppb-ov .search-card{background:#fff;border-radius:10px;padding:16px 20px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
-.ppb-ov .search-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.ppb-ov .search-row,.admin-content-inner .ppb-ov .search-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap;max-width:none}
 .ppb-ov .search-field{display:flex;align-items:center;gap:10px;margin:0}
 .ppb-ov .search-label{font-size:14px;font-weight:600;color:#555}
 .ppb-ov .search-field input{width:200px;height:36px;padding:6px 10px;border-radius:6px;border:1px solid #ccd5e0;background:#f7f8fa;font-size:14px;color:#1f2937}
