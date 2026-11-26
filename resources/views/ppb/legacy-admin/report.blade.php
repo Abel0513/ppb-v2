@@ -86,7 +86,7 @@
           @if($field === 'type')
             <td>{{ \App\Services\Ppb\LegacyDisplayLabels::analystType($subject['analyst_level'] ?? null) }}</td>
           @elseif($field === 'line')
-            <td>{{ $canSeeLineName ? $profile?->line_name : '' }}</td>
+            <td>{{ $canSeeLineName ? ($profile?->line_name ?: ($subject['type'] === 'legacy' ? ($legacyLineNames[$subject['id']] ?? '') : '')) : '' }}</td>
           @else
             @php
               $value = $row[$field] ?? null;
