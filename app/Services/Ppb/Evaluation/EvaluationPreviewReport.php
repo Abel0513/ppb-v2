@@ -16,6 +16,7 @@ class EvaluationPreviewReport
         $snapshot=$this->reader->snapshot((int)$subject['id'],$month);
         $prior=$date->modify('-1 month')->format('Y-m');
         if(($snapshot['previous_month']??null)!==$prior)throw new \RuntimeException('PREVIEW_MONTH_SCOPE');
+        $snapshot=(new AttendanceDeletions)->filterSnapshot($snapshot,(int)$subject['id']);
         $now=$this->period($snapshot,$month,(int)$subject['id']);
         $previous=$this->period($snapshot,$prior,(int)$subject['id']);
         $level=$now['level']??(int)($snapshot['profile']['rating_level']??2);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Ppb;
 use App\Http\Controllers\Controller;
 use App\Models\PpbAnalyst;
 use App\Models\PpbGame;
+use App\Services\Ppb\Evaluation\AttendanceDeletions;
 use App\Services\Ppb\Evaluation\EvaluationInputs;
 use App\Services\Ppb\Evaluation\EvaluationService;
 use App\Services\Ppb\Evaluation\EvaluationSubjects;
@@ -144,7 +145,7 @@ class LegacyAdminController extends Controller
             ];
         });
 
-        return view('ppb.legacy-admin.attendance', compact('month', 'ready', 'attendance', 'pager', 'unavailable'));
+        return view('ppb.legacy-admin.attendance', compact('month', 'ready', 'attendance', 'pager', 'unavailable', 'canCorrect'));
     }
 
     public function report(Request $request, EvaluationSubjects $subjects, LocalEvaluationData $data, EvaluationService $service)
@@ -165,8 +166,9 @@ class LegacyAdminController extends Controller
             ? $data->context(CarbonImmutable::createFromFormat('!Y-m', $month, 'Asia/Taipei'))
             : null;
         $legacySubjects = $roster->where('type', 'legacy');
+        $cacheVersion = $legacySubjects->isEmpty() ? '' : (new AttendanceDeletions)->reportCacheVersion();
         $cacheKeys = $legacySubjects->flatMap(fn ($subject) => [
-            $this->summaryCacheKey($subject, $month), $this->lastSummaryCacheKey($subject, $month),
+            $this->summaryCacheKey($subject, $month, $cacheVersion), $this->lastSummaryCacheKey($subject, $month, $cacheVersion),
         ]);
         try {
             $cached = $cacheKeys->isEmpty() ? [] : Cache::many($cacheKeys->values()->all());
@@ -174,14 +176,14 @@ class LegacyAdminController extends Controller
             report($error);
             $cached = [];
         }
-        $values = $roster->mapWithKeys(function (array $subject) use ($service, $context, $month, $isPay, $cached) {
+        $values = $roster->mapWithKeys(function (array $subject) use ($service, $context, $month, $isPay, $cached, $cacheVersion) {
             $key = $subject['type'].':'.$subject['id'];
             if ($subject['type'] === 'legacy') {
-                $summary = $cached[$this->summaryCacheKey($subject, $month)] ?? null;
+                $summary = $cached[$this->summaryCacheKey($subject, $month, $cacheVersion)] ?? null;
                 if ($summary === null) {
                     // Show the last known values at once and let the browser refresh them;
                     // only a never-loaded row starts as 載入中.
-                    $last = $cached[$this->lastSummaryCacheKey($subject, $month)] ?? null;
+                    $last = $cached[$this->lastSummaryCacheKey($subject, $month, $cacheVersion)] ?? null;
                     return [$key => is_array($last)
                         ? $this->reportCells($last[$isPay ? 'rating' : 'schedule'], $isPay) + ['_stale' => true]
                         : null];
@@ -221,10 +223,11 @@ class LegacyAdminController extends Controller
         try {
             $subject = $subjects->get($type, $id);
             if ($subject['type'] === 'legacy') {
+                $cacheVersion = (new AttendanceDeletions)->reportCacheVersion();
                 $ttl = $month === now('Asia/Taipei')->format('Y-m') ? 300 : 600;
-                $summary = Cache::remember($this->summaryCacheKey($subject, $month), $ttl,
+                $summary = Cache::remember($this->summaryCacheKey($subject, $month, $cacheVersion), $ttl,
                     fn () => $this->reportSummary($service->load($subject, $month), $subject, $month));
-                Cache::put($this->lastSummaryCacheKey($subject, $month), $summary, now()->addDays(2));
+                Cache::put($this->lastSummaryCacheKey($subject, $month, $cacheVersion), $summary, now()->addDays(2));
             } elseif ($data->ready()) {
                 $summary = $this->reportSummary($service->loadLocal($subject, $month), $subject, $month);
             }
@@ -246,14 +249,14 @@ class LegacyAdminController extends Controller
         return response()->json($values, 200, $headers);
     }
 
-    private function lastSummaryCacheKey(array $subject, string $month): string
+    private function lastSummaryCacheKey(array $subject, string $month, string $cacheVersion): string
     {
-        return 'ppb:report:last:v1:'.LegacyReader::SNAPSHOT_FORMAT.':'.$subject['type'].':'.$subject['id'].':'.$month;
+        return 'ppb:report:last:v1:'.LegacyReader::SNAPSHOT_FORMAT.':'.$subject['type'].':'.$subject['id'].':'.$month.':'.$cacheVersion;
     }
 
-    private function summaryCacheKey(array $subject, string $month): string
+    private function summaryCacheKey(array $subject, string $month, string $cacheVersion): string
     {
-        return 'ppb:report:v1:'.LegacyReader::SNAPSHOT_FORMAT.':'.$subject['type'].':'.$subject['id'].':'.$month;
+        return 'ppb:report:v1:'.LegacyReader::SNAPSHOT_FORMAT.':'.$subject['type'].':'.$subject['id'].':'.$month.':'.$cacheVersion;
     }
 
     private function reportSummary(array $report, array $subject, string $month): array

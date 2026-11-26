@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Ppb\AttendanceDeleteController;
 use App\Http\Controllers\Ppb\AdminController;
 use App\Http\Controllers\Ppb\AccountController;
 use App\Http\Controllers\Ppb\RoleController;
@@ -90,6 +91,10 @@ Route::prefix('admin')->middleware([
             ->whereIn('type', ['legacy', 'v2'])->whereNumber('id')->defaults('kind', 'schedule')->name('ppb.performance.summary');
         Route::get('/csda/users', [LegacyAdminController::class, 'csda'])->name('ppb.csda.users');
     });
+    Route::post('/schedule/attendance/delete', AttendanceDeleteController::class)
+        ->middleware([PpbCan::class.':evaluations.view', PpbCan::class.':evaluations.manage', 'throttle:30,1'])
+        ->name('ppb.schedule.attendance.delete');
+
     Route::prefix('rating')->middleware(PpbCan::class.':evaluations.view')->group(function () {
         foreach (['index' => 'rating-salary', 'salary' => 'salary', 'change' => 'rating'] as $path => $kind) {
             Route::get('/'.$path, [LegacyAdminController::class, 'report'])->defaults('kind', $kind)->name('ppb.rating.'.$path);

@@ -79,6 +79,7 @@ class EvaluationService
         if($subject['type']==='legacy'){
             $older=$this->reader->snapshot($subject['id'],$prior);
             $snapshot=$this->history($snapshot,$older,$prior);
+            $snapshot=(new AttendanceDeletions)->filterSnapshot($snapshot,(int)$subject['id']);
         }
         $rows=$this->selector->legacyRows($snapshot);$schedules=[];
         foreach($snapshot['schedules'] as $s){$s['_display_code']=((int)$s['game_type']===1?'G':'E').($s['game_id']??'?');$schedules['legacy:'.$s['id']]=$s;}

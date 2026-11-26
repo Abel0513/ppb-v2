@@ -17,7 +17,10 @@ class LegacyAttendanceSource
 
     public function rows(): array
     {
-        return Cache::remember('ppb:legacy-attendance:v1', 600, fn () => $this->load());
+        $rows = Cache::remember('ppb:legacy-attendance:v2', 600, fn () => $this->load());
+        $deletions = new AttendanceDeletions;
+
+        return $deletions->filterLegacyRows($rows, $deletions->deletedLegacyIds(), 'legacy_record_id');
     }
 
     public function matchesImportedGame(array $row, ?PpbGame $game): bool
@@ -94,23 +97,48 @@ class LegacyAttendanceSource
 
         $rows = [];
         foreach ($attendance as $record) {
-            $schedule = $schedules[$record['gid']] ?? null;
-            $status = (int) $record['attendance_status'];
-            if (!$schedule || empty($schedule['recommended_time']) || !in_array($status, [1, 2], true)) {
-                continue;
+            $row = $this->row($record, $schedules[$record['gid']] ?? null);
+            if ($row !== null) {
+                $rows[] = $row;
             }
-            $rows[] = [
-                'gid' => (int) $record['gid'],
-                'subject_type' => 'legacy',
-                'subject_id' => (int) $record['uid'],
-                'attendance_status' => $status,
-                'recommended_time' => $schedule['recommended_time'],
-                'code' => ((int) $schedule['game_type'] === 1 ? 'G' : 'E').$schedule['game_id'],
-                'source' => 'legacy',
-            ];
         }
 
         return $rows;
+    }
+
+    public function find(int $id): ?array
+    {
+        // Verify the target against the reader, bypassing the list cache.
+        $record = $this->select('pay.pay_attendance_record', ['id', 'gid', 'uid', 'attendance_status'],
+            [self::filter('id', '=', $id)])[0] ?? null;
+        if ($record === null || (int) $record['id'] !== $id) {
+            return null;
+        }
+
+        $schedule = $this->select('pay.pay_schedule', ['id', 'game_id', 'game_type', 'recommended_time', 'reviewer', 'market_type'],
+            [self::filter('id', '=', (int) $record['gid'])])[0] ?? null;
+
+        return $this->row($record, $schedule);
+    }
+
+    private function row(array $record, ?array $schedule): ?array
+    {
+        $status = (int) $record['attendance_status'];
+        if (!$schedule || (int) $schedule['id'] !== (int) $record['gid']
+            || empty($schedule['recommended_time']) || !in_array($status, [1, 2], true)) {
+            return null;
+        }
+
+        return [
+            'legacy_record_id' => (int) $record['id'],
+            'gid' => (int) $record['gid'],
+            'subject_type' => 'legacy',
+            'subject_id' => (int) $record['uid'],
+            'attendance_status' => $status,
+            'recommended_time' => $schedule['recommended_time'],
+            'code' => ((int) $schedule['game_type'] === 1 ? 'G' : 'E').$schedule['game_id'],
+            'source' => 'legacy',
+        ];
     }
 
     private static function filter(string $column, string $op, int|string $value): array
