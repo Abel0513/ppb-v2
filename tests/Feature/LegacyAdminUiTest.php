@@ -763,6 +763,38 @@ class LegacyAdminUiTest extends TestCase
         self::assertSame(1, $pick['is_win']);
     }
 
+    public function test_csda_users_render_read_only_like_the_legacy_page(): void
+    {
+        (require database_path('migrations/2026_11_26_000016_import_csda_users_line_names_and_reassign_picks.php'))->createTables();
+        foreach (range(1, 23) as $id) {
+            DB::table('ppb_csda_users')->insert([
+                'legacy_id' => $id, 'name' => 'Synthetic '.$id, 'type' => $id <= 20 ? 1 : 2, 'line_id' => 'Usyn'.$id,
+                'remark' => $id === 1 ? 'memo' : null, 'is_listen' => $id % 2, 'is_active' => true,
+                'is_paid' => $id === 2, 'is_dealer' => $id === 21,
+            ]);
+        }
+        $url = self::HOST.'/admin/csda/users';
+
+        $this->actor(['schedules.view']);
+        $this->get($url)->assertOk()->assertSee('需要排班管理及帳號管理權限')->assertDontSee('Synthetic 1');
+
+        $this->actor(['schedules.view', 'schedules.manage', 'accounts.manage']);
+        $page = $this->get($url)->assertOk()
+            ->assertSeeInOrder(['全部用戶', '23', '個人', '20', '群組', '3', '已開通', '23', '付費會員', '1'])
+            ->assertSeeInOrder(['名稱', '類型', 'LINE ID', '備註', '監聽狀態', '開通', '付費', '經銷商'])
+            ->assertSee('Synthetic 1')->assertSee('Usyn1')->assertSee('memo')->assertSee('監聽中')->assertSee('★ 付費')
+            ->assertSee('共 23 筆，第 1 / 2 頁')->assertDontSee('Synthetic 21');
+        $html = $page->getContent();
+        self::assertStringNotContainsString('toggleActive', $html);
+        self::assertStringNotContainsString('<form method="post"', strtolower($html));
+        self::assertStringContainsString('disabled', $html);
+
+        $this->get($url.'?page=2')->assertOk()->assertSee('Synthetic 21')->assertSee('經銷');
+        $this->get($url.'?filter=group_dealer')->assertOk()->assertSee('Synthetic 21')->assertDontSee('Synthetic 22')
+            ->assertSee('共 1 筆');
+        $this->get($url.'?q=usyn22')->assertOk()->assertSee('Synthetic 22')->assertDontSee('Synthetic 2<', false);
+    }
+
     public function test_unsettled_badge_loads_asynchronously_and_counts_distinct_legacy_games(): void
     {
         $this->actor(['schedules.view']);

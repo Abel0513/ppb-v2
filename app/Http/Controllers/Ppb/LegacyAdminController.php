@@ -210,9 +210,14 @@ class LegacyAdminController extends Controller
             $profiles = PpbAnalyst::whereIn('id', $ids)->get($columns)->keyBy('id');
         }
         $canSeeWork = $request->user('ppb')->hasPpbPermission('evaluations.view');
+        $legacyLineNames = [];
+        if ($canSeeLineName && Schema::hasTable('ppb_legacy_analyst_profiles')) {
+            $legacyLineNames = DB::table('ppb_legacy_analyst_profiles')->pluck('line_name', 'legacy_analyst_id')->all();
+        }
 
         return response()->view('ppb.legacy-admin.report', compact(
-            'kind', 'title', 'month', 'roster', 'profiles', 'canSeeLineName', 'canSeeWork', 'unavailable', 'values', 'isPay'
+            'kind', 'title', 'month', 'roster', 'profiles', 'canSeeLineName', 'canSeeWork', 'unavailable', 'values', 'isPay',
+            'legacyLineNames'
         ))->header('Cache-Control', 'private, no-store');
     }
 
@@ -301,8 +306,55 @@ class LegacyAdminController extends Controller
         return $row;
     }
 
-    public function csda()
+    private const CSDA_FILTERS = [
+        'all' => ['全部', null, null], 'person_all' => ['全部個人', 1, null], 'person_dealer' => ['經銷個人', 1, true],
+        'person_normal' => ['非經銷個人', 1, false], 'group_all' => ['全部群組', 2, null],
+        'group_dealer' => ['經銷群組', 2, true], 'group_normal' => ['非經銷群組', 2, false],
+    ];
+
+    /** Read-only copy of the legacy CSDA 用戶管理 list (owner-approved import); never writes to legacy. */
+    public function csda(Request $request)
     {
-        return view('ppb.legacy-admin.csda');
+        $user = $request->user('ppb');
+        if (!Schema::hasTable('ppb_csda_users')) {
+            return view('ppb.legacy-admin.csda', ['ready' => false, 'denied' => false]);
+        }
+        // Personal data: same gate as Line名稱 on the analyst list.
+        if (!($user->hasPpbPermission('schedules.manage') && $user->hasPpbPermission('accounts.manage'))) {
+            return view('ppb.legacy-admin.csda', ['ready' => false, 'denied' => true]);
+        }
+        $filter = array_key_exists((string) $request->query('filter'), self::CSDA_FILTERS) ? (string) $request->query('filter') : 'all';
+        $q = mb_substr(trim((string) $request->query('q', '')), 0, 100);
+        $apply = function ($query, string $key) {
+            [, $type, $dealer] = self::CSDA_FILTERS[$key];
+            if ($type !== null) {
+                $query->where('type', $type);
+            }
+            if ($dealer !== null) {
+                $query->where('is_dealer', $dealer);
+            }
+            return $query;
+        };
+        $all = DB::table('ppb_csda_users');
+        $stats = [
+            'all' => (clone $all)->count(), 'person' => (clone $all)->where('type', 1)->count(),
+            'group' => (clone $all)->where('type', 2)->count(), 'active' => (clone $all)->where('is_active', true)->count(),
+            'paid' => (clone $all)->where('is_paid', true)->count(),
+        ];
+        $counts = [];
+        foreach (array_keys(self::CSDA_FILTERS) as $key) {
+            $counts[$key] = $apply(DB::table('ppb_csda_users'), $key)->count();
+        }
+        $query = $apply(DB::table('ppb_csda_users'), $filter);
+        if ($q !== '') {
+            $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], mb_strtolower($q)).'%';
+            $query->where(fn ($w) => $w->whereRaw('LOWER(name) LIKE ?', [$like])->orWhereRaw('LOWER(line_id) LIKE ?', [$like]));
+        }
+        $users = $query->orderBy('legacy_id')->paginate(20, ['*'], 'page')->withQueryString();
+
+        return response()->view('ppb.legacy-admin.csda', [
+            'ready' => true, 'denied' => false, 'users' => $users, 'stats' => $stats, 'counts' => $counts,
+            'filters' => self::CSDA_FILTERS, 'filter' => $filter, 'q' => $q,
+        ])->header('Cache-Control', 'private, no-store');
     }
 }
