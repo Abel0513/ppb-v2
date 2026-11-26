@@ -1321,4 +1321,29 @@ class LegacyAdminUiTest extends TestCase
             self::assertLessThanOrEqual(64, strlen($index['name']));
         }
     }
+
+    public function test_attendance_deletions_migration_adds_all_indexes_to_primary_only_table(): void
+    {
+        // Live state after the failed first attempt: all columns, PRIMARY only.
+        Schema::create('ppb_attendance_deletions', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('legacy_record_id');
+            $table->unsignedBigInteger('legacy_gid');
+            $table->string('subject_type', 12);
+            $table->unsignedBigInteger('subject_id');
+            $table->tinyInteger('attendance_status');
+            $table->dateTime('recommended_time');
+            $table->unsignedBigInteger('actor_id')->nullable();
+            $table->uuid('request_id');
+            $table->timestamp('deleted_at');
+            $table->timestamp('restored_at')->nullable();
+            $table->timestamps();
+        });
+        (require database_path('migrations/2026_11_27_000019_create_ppb_attendance_deletions.php'))->up();
+        foreach (['ppb_attendance_deletions_legacy_record_id_unique', 'ppb_attendance_deletions_request_id_unique',
+            'ppb_att_del_subject_restored_idx'] as $name) {
+            self::assertTrue(Schema::hasIndex('ppb_attendance_deletions', $name), $name);
+        }
+        self::assertCount(13, Schema::getColumnListing('ppb_attendance_deletions'));
+    }
 }
