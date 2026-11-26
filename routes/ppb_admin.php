@@ -18,6 +18,19 @@ use Illuminate\Support\Facades\Route;
 Route::redirect('/admin/preview', 'https://v2.csdatw.xyz/admin', 302)->name('ppb.preview');
 Route::redirect('/admin/preview/accounts', 'https://v2.csdatw.xyz/admin/accounts', 302)->name('ppb.preview.accounts');
 Route::redirect('/admin/preview/operations', 'https://v2.csdatw.xyz/admin/games', 302)->name('ppb.preview.operations');
+// Public, read-only 賽事排班總覽 (owner request 2026-11-26), same content as the old
+// public eveonline_AdminSchedule_scheduleOverview page. No session, cookies or forms with CSRF.
+Route::get('/schedule-overview', [GameController::class, 'index'])
+    ->middleware(['throttle:60,1', 'cache.headers:public;max_age=60;etag'])
+    ->withoutMiddleware([
+        \Illuminate\Session\Middleware\StartSession::class,
+        \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+        \Illuminate\Cookie\Middleware\EncryptCookies::class,
+        \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+        \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+        \Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class,
+    ])
+    ->name('ppb.public.overview');
 Route::get('/admin/login', [AdminController::class, 'loginForm'])->name('login');
 Route::post('/admin/login', [AdminController::class, 'login'])
     ->middleware([PpbRequireSecureHost::class, 'throttle:6,1'])

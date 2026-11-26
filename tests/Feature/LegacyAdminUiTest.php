@@ -1020,4 +1020,38 @@ class LegacyAdminUiTest extends TestCase
             ->assertSee('East@West', false);
         self::assertSame(1, substr_count($response->getContent(), '<span class="article-tag">分析文</span>'));
     }
+
+    public function test_public_schedule_overview_is_read_only_for_guests(): void
+    {
+        PpbGame::unguarded(fn () => PpbGame::query()->create([
+            'id' => 41, 'month_key' => '2026-11', 'recommended_at' => '2026-11-01 03:00:00',
+            'game_type' => 1, 'game_number' => 41, 'status' => 'scheduled', 'matchup_text' => 'Guest@Host',
+            'play_type' => 2, 'has_long_article' => true, 'notes' => json_encode(['lottery_no' => '777']),
+        ]));
+        $response = $this->get(self::HOST.'/schedule-overview')->assertOk()
+            ->assertSee('<title>賽事排班總覽</title>', false)
+            ->assertSee('<span class="tag tag-g">G41</span>', false)
+            ->assertSee('>推 不讓分</span>', false)
+            ->assertSee('<span class="lottery" title="台彩賽事編號">777</span>', false)
+            ->assertSee('<span class="article-tag">分析文</span>', false)
+            ->assertSee('<div class="ss-row">', false);
+        $html = $response->getContent();
+        self::assertStringNotContainsString('/admin', $html);
+        self::assertStringNotContainsString('_token', $html);
+        self::assertStringNotContainsString('admin-sidebar', $html);
+        self::assertStringNotContainsString('admin-topbar', $html);
+        self::assertStringNotContainsString('method="post"', strtolower($html));
+        self::assertStringContainsString('public', (string) $response->headers->get('Cache-Control'));
+        self::assertSame([], $response->headers->getCookies());
+        $this->get(self::HOST.'/schedule-overview?p=2')->assertOk();
+        $this->get(self::HOST.'/schedule-overview?match_no=G41')->assertOk()->assertSee('G41');
+    }
+
+    public function test_admin_schedule_pages_still_require_login_after_public_overview(): void
+    {
+        foreach (['/admin/schedule/overview', '/admin/games', '/admin/games/41', '/admin/analyst-list', '/admin/games/unsettled-count'] as $path) {
+            $status = $this->get(self::HOST.$path)->getStatusCode();
+            self::assertContains($status, [302, 401], $path);
+        }
+    }
 }
