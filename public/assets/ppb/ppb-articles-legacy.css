@@ -1,0 +1,25 @@
+/* 分析文排班 content in old-system style (owner request 2026-11-27).
+   Values follow the old AdminSchedule analysisScheduleOverview page. */
+.ppb-an{font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif;color:#1f2937}
+.ppb-an .month-title{font-size:22px;font-weight:700;color:#1e3a7a;margin:0 0 14px}
+.ppb-an .ss-row{display:grid;grid-template-columns:90px 52px 120px 1fr;align-items:center;gap:15px;padding:4px 10px;border-radius:6px;margin-bottom:1px;background:#fff;border:.5px solid #e5e7eb}
+.ppb-an .ss-row.new-date{margin-top:2px}
+.ppb-an .ss-row:hover{background:#f5f7ff}
+.ppb-an .date-label{font-size:13px;font-weight:700;color:#1e3a7a;white-space:nowrap;text-align:right;padding-right:6px;border-right:2px solid #c7d3f0;min-height:1.2em}
+.ppb-an .tag{color:#fff;border-radius:5px;padding:3px 10px;font-size:13px;font-weight:700;display:inline-block;text-align:center}
+.ppb-an .tag-g{background:#4a6edb}
+.ppb-an .tag-e{background:#e5533d}
+.ppb-an .analyst-tag{border-radius:5px;padding:3px 10px;font-size:13px;font-weight:600;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:#eef2ff;color:#3730a3}
+.ppb-an .matchup{font-size:13px;font-weight:600;color:#1f2937;min-width:0}
+.ppb-an .an-empty{padding:18px 10px;color:#64748b;font-size:14px;background:#fff;border-radius:6px}
+.ppb-an .ppb-list-pager{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin:16px 0 0;padding-bottom:4px;flex-wrap:wrap}
+.ppb-an .ppb-page-count{display:inline-flex;align-items:center;height:40px;padding:0 14px;font-size:15px;font-weight:600;color:#445;background:#fff;border:1px solid #e3e6ea;border-radius:8px;white-space:nowrap}
+.ppb-an .ppb-segments{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ppb-an .ppb-segments a,.ppb-an .ppb-segments span{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:40px;padding:0 14px;border-radius:8px;border:1px solid #e3e6ea;background:#fff;color:#445;font-size:15px;font-weight:600;text-decoration:none}
+.ppb-an .ppb-segments span[aria-current=page]{background:#2f66c9;color:#fff;border-color:#2f66c9}
+.ppb-an .ppb-segments span[aria-disabled=true]{color:#a0a7b4}
+.ppb-an .ppb-segments .ppb-page-ellipsis{border:none;background:none;min-width:auto;padding:0 2px}
+@media(max-width:640px){
+  .ppb-an .ss-row{grid-template-columns:78px 46px 1fr;gap:6px 8px}
+  .ppb-an .matchup{grid-column:1/-1}
+}

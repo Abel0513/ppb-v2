@@ -31,6 +31,18 @@ Route::get('/schedule-overview', [GameController::class, 'index'])
         \Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class,
     ])
     ->name('ppb.public.overview');
+// Public, read-only 分析文排班 (owner request 2026-11-27), old analysisScheduleOverview equivalent.
+Route::get('/analysis-schedule', [LegacyAdminController::class, 'articles'])
+    ->middleware(['throttle:60,1', 'cache.headers:public;max_age=60;etag'])
+    ->withoutMiddleware([
+        \Illuminate\Session\Middleware\StartSession::class,
+        \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+        \Illuminate\Cookie\Middleware\EncryptCookies::class,
+        \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+        \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+        \Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class,
+    ])
+    ->name('ppb.public.articles');
 Route::get('/admin/login', [AdminController::class, 'loginForm'])->name('login');
 Route::post('/admin/login', [AdminController::class, 'login'])
     ->middleware([PpbRequireSecureHost::class, 'throttle:6,1'])

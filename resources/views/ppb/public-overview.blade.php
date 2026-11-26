@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive">
 <meta name="color-scheme" content="light">
 <title>賽事排班總覽</title>
 <link rel="stylesheet" href="{{ asset('assets/ppb/ppb-overview-legacy.css') }}?v=20261126-3">

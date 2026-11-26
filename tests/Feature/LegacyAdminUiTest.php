@@ -1054,4 +1054,50 @@ class LegacyAdminUiTest extends TestCase
             self::assertContains($status, [302, 401], $path);
         }
     }
+
+    private function seedArticleGames(): void
+    {
+        DB::table('ppb_analysts')->insert(['id' => 61, 'name' => 'Writer', 'color' => '#ffcfc9', 'background' => '#b10202', 'line_id' => 'Uprivate']);
+        foreach ([[51, '2026-11-01 03:00:00', 1], [52, '2026-11-01 08:00:00', 2], [53, '2026-11-02 08:00:00', 3]] as [$id, $at, $number]) {
+            PpbGame::unguarded(fn () => PpbGame::query()->create([
+                'id' => $id, 'month_key' => '2026-11', 'recommended_at' => $at, 'game_type' => 1, 'game_number' => $number,
+                'status' => 'scheduled', 'matchup_text' => 'Match '.$id, 'has_long_article' => true,
+            ]));
+            DB::table('ppb_assignments')->insert(['game_id' => $id, 'current_analyst_id' => 61, 'kind' => 'long', 'status' => 'active']);
+        }
+    }
+
+    public function test_articles_page_uses_old_system_rows(): void
+    {
+        $this->actor(['schedules.view']);
+        $this->seedArticleGames();
+        $html = $this->get(self::HOST.'/admin/schedule/articles')->assertOk()
+            ->assertSee('<div class="month-title">2026 年 11 月</div>', false)
+            ->assertSee('<span class="date-label">11/01（日）</span>', false)
+            ->assertSee('<span class="tag tag-g">G1</span>', false)
+            ->assertSee('<span class="analyst-tag" style="background:#b10202;color:#ffcfc9">Writer</span>', false)
+            ->assertSee('<div class="ss-row new-date">', false)
+            ->assertSee('Match 53', false)
+            ->getContent();
+        self::assertSame(1, substr_count($html, '<span class="date-label"></span>'));
+    }
+
+    public function test_public_analysis_schedule_is_read_only_for_guests(): void
+    {
+        $this->seedArticleGames();
+        $response = $this->get(self::HOST.'/analysis-schedule')->assertOk()
+            ->assertSee('<title>分析文排班總覽</title>', false)
+            ->assertSee('<meta name="robots" content="noindex, nofollow, noarchive">', false)
+            ->assertSee('<span class="tag tag-g">G2</span>', false)
+            ->assertSee('Writer', false);
+        $html = $response->getContent();
+        foreach (['/admin', '_token', 'admin-sidebar', 'admin-topbar', 'Uprivate'] as $needle) {
+            self::assertStringNotContainsString($needle, $html);
+        }
+        self::assertStringNotContainsString('method="post"', strtolower($html));
+        self::assertStringContainsString('public', (string) $response->headers->get('Cache-Control'));
+        self::assertSame([], $response->headers->getCookies());
+        $this->get(self::HOST.'/analysis-schedule?p=2')->assertOk();
+        self::assertContains($this->get(self::HOST.'/admin/schedule/articles')->getStatusCode(), [302, 401]);
+    }
 }
