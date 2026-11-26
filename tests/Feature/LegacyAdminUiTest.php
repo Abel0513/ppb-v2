@@ -1295,4 +1295,30 @@ class LegacyAdminUiTest extends TestCase
         self::assertStringContainsString('ppb-videos-legacy.css', $html);
         self::assertFileExists(public_path('assets/ppb/people/'.substr(sha1('BONBON'), 0, 12).'.webp'));
     }
+
+    public function test_attendance_deletions_migration_recovers_partial_first_attempt(): void
+    {
+        Schema::create('ppb_attendance_deletions', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('legacy_record_id')->unique();
+            $table->unsignedBigInteger('legacy_gid');
+            $table->string('subject_type', 12);
+            $table->unsignedBigInteger('subject_id');
+            $table->tinyInteger('attendance_status');
+            $table->dateTime('recommended_time');
+            $table->unsignedBigInteger('actor_id')->nullable();
+            $table->uuid('request_id')->unique();
+            $table->timestamp('deleted_at')->nullable();
+            $table->timestamp('restored_at')->nullable();
+            $table->timestamps();
+        });
+        $migration = require database_path('migrations/2026_11_27_000019_create_ppb_attendance_deletions.php');
+        $migration->up();
+        $migration->up();
+        self::assertTrue(Schema::hasIndex('ppb_attendance_deletions', 'ppb_att_del_subject_restored_idx'));
+        self::assertTrue(Schema::hasIndex('ppb_attendance_deletions', 'ppb_attendance_deletions_request_id_unique'));
+        foreach (Schema::getIndexes('ppb_attendance_deletions') as $index) {
+            self::assertLessThanOrEqual(64, strlen($index['name']));
+        }
+    }
 }
