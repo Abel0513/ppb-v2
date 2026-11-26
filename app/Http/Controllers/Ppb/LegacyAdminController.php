@@ -140,6 +140,7 @@ class LegacyAdminController extends Controller
             return $row + [
                 'name' => $subject['label'] ?? LegacyDisplayLabels::unmappedAnalyst($row['subject_id']),
                 'correctionUrl' => $correctionUrl,
+                'native_id' => $subject['native_id'] ?? null,
             ];
         });
 
