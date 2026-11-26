@@ -42,9 +42,10 @@ class LocalEvaluationData
             && Schema::hasTable('ppb_evaluation_videos') && Schema::hasTable('ppb_evaluation_ratings');
     }
 
-    public function records(?CarbonImmutable $start = null, ?CarbonImmutable $end = null, bool $attendanceOnly = false)
+    public function records(?CarbonImmutable $start = null, ?CarbonImmutable $end = null, bool $attendanceOnly = false, ?int $gameId = null)
     {
-        $range = fn ($query) => $query->when($start, fn ($q) => $q->where('g.recommended_at', '>=', $start->utc()->toDateTimeString()))
+        $range = fn ($query) => $query->when($gameId !== null, fn ($q) => $q->where('g.id', $gameId))
+            ->when($start, fn ($q) => $q->where('g.recommended_at', '>=', $start->utc()->toDateTimeString()))
             ->when($end, fn ($q) => $q->where('g.recommended_at', '<', $end->utc()->toDateTimeString()));
         $native = $range(DB::table('ppb_submissions as p')->join('ppb_games as g', 'g.id', '=', 'p.game_id')
             ->join('ppb_assignments as a', 'a.id', '=', 'p.assignment_id')
@@ -104,9 +105,10 @@ class LocalEvaluationData
         ];
     }
 
-    public function corrections(?CarbonImmutable $start = null, ?CarbonImmutable $end = null)
+    public function corrections(?CarbonImmutable $start = null, ?CarbonImmutable $end = null, ?int $gameId = null)
     {
         return DB::table('ppb_evaluation_attendance as a')->join('ppb_games as g', 'g.id', '=', 'a.game_id')
+            ->when($gameId !== null, fn ($q) => $q->where('a.game_id', $gameId))
             ->when($start, fn ($q) => $q->where('g.recommended_at', '>=', $start->utc()->toDateTimeString()))
             ->when($end, fn ($q) => $q->where('g.recommended_at', '<', $end->utc()->toDateTimeString()))
             ->orderBy('a.game_id')->orderBy('a.id')->get(['a.*', 'g.recommended_at']);

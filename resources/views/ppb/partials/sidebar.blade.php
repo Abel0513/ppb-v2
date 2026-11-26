@@ -31,7 +31,7 @@
         <a class="admin-submenu-item {{ request()->routeIs('ppb.schedule.overview') ? 'active' : '' }}" href="{{ route('ppb.schedule.overview') }}">排班總覽</a>
         <a class="admin-submenu-item {{ request()->routeIs('ppb.schedule.articles') ? 'active' : '' }}" href="{{ route('ppb.schedule.articles') }}">分析文排班</a>
         <a class="admin-submenu-item {{ request()->routeIs('ppb.schedule.videos') ? 'active' : '' }}" href="{{ route('ppb.schedule.videos') }}">影音排班</a>
-        <a class="admin-submenu-item {{ request()->routeIs('ppb.schedule.attendance') ? 'active' : '' }}" href="{{ route('ppb.schedule.attendance') }}">出缺勤</a>
+        <a class="admin-submenu-item {{ request()->routeIs('ppb.schedule.attendance') ? 'active' : '' }}" href="{{ route('ppb.schedule.attendance') }}">出缺勤紀錄表</a>
         <a class="admin-submenu-item {{ request()->routeIs('ppb.analysts.*') ? 'active' : '' }}" href="{{ route('ppb.analysts.index') }}">分析師資料</a>
       </div>
     </div>

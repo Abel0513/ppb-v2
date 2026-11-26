@@ -87,23 +87,45 @@ class EvaluationInputs
         $out=[];foreach($rows as $r)$out[(int)$r->id]=['id'=>(int)$r->id,'recommended_time'=>CarbonImmutable::parse($r->recommended_at,'UTC')->tz('Asia/Taipei')->format('Y-m-d H:i:s')];return $out;
     }
 
+    public function writeAttendance(array $subject, int $gameId, int|string|null $status, int $actor): array
+    {
+        $query = DB::table('ppb_evaluation_attendance')->where('subject_type', $subject['type'])
+            ->where('subject_id', $subject['id'])->where('game_id', $gameId);
+        $old = $query->lockForUpdate()->first();
+        $values = [
+            'attendance_status' => $status, 'actor_id' => $actor,
+            'revision' => $old ? (int) $old->revision + 1 : 1, 'updated_at' => now(),
+            'waived_submission_id' => null,
+        ];
+        if ($status === null) {
+            // Original attendanceRecordDelete resets only ONE linked pick.
+            $values['waived_submission_id'] = DB::table('ppb_submissions as p')
+                ->join('ppb_assignments as a', 'a.id', '=', 'p.assignment_id')
+                ->where('p.game_id', $gameId)->whereColumn('p.game_id', 'a.game_id')
+                ->where('a.original_analyst_id', (int) $subject['native_id'])
+                ->whereColumn('p.submitted_analyst_id', '!=', 'a.original_analyst_id')
+                ->whereIn('p.status', ['submitted', 'approved', 'changes_requested'])
+                ->whereNotNull('p.submitted_at')->whereNull('p.legacy_source_pick_id')
+                ->orderBy('p.id')->value('p.id');
+        }
+        if ($old) {
+            $query->update($values);
+        } else {
+            DB::table('ppb_evaluation_attendance')->insert($values + [
+                'subject_type' => $subject['type'], 'subject_id' => $subject['id'],
+                'game_id' => $gameId, 'created_at' => now(),
+            ]);
+        }
+
+        return ['before' => $old ? (array) $old : null, 'after' => $values + ['game_id' => $gameId]];
+    }
+
     public function write(array $subject,string $month,array $payload,array $inputs,int $actor,bool $local=false): array
     {
         abort_unless(in_array($payload['input_kind'],['attendance','video'],true),422);
         if($payload['input_kind']==='attendance'){
             $gid=(int)$payload['game_id'];abort_unless(isset($inputs['games'][$gid]),422,'僅能登錄此分析師當月的 V2 原生賽事；舊出勤紀錄唯讀。');
-            $query=DB::table('ppb_evaluation_attendance')->where('subject_type',$subject['type'])->where('subject_id',$subject['id'])->where('game_id',$gid);
-            $old=$query->lockForUpdate()->first();$values=['attendance_status'=>$payload['attendance_status'],'actor_id'=>$actor,'revision'=>$old?(int)$old->revision+1:1,'updated_at'=>now()];
-            $values['waived_submission_id']=null;
-            if($payload['attendance_status']===null){
-                // Original attendanceRecordDelete resets only ONE linked pick.
-                // Preserve that cardinality; retain the exact V2 lineage in audit.
-                $values['waived_submission_id']=DB::table('ppb_submissions as p')->join('ppb_assignments as a','a.id','=','p.assignment_id')
-                    ->where('p.game_id',$gid)->whereColumn('p.game_id','a.game_id')->where('a.original_analyst_id',(int)$subject['native_id'])
-                    ->whereColumn('p.submitted_analyst_id','!=','a.original_analyst_id')->whereIn('p.status',['submitted','approved','changes_requested'])->whereNotNull('p.submitted_at')->whereNull('p.legacy_source_pick_id')->orderBy('p.id')->value('p.id');
-            }
-            if($old)$query->update($values);else DB::table('ppb_evaluation_attendance')->insert($values+['subject_type'=>$subject['type'],'subject_id'=>$subject['id'],'game_id'=>$gid,'created_at'=>now()]);
-            return ['before'=>$old?(array)$old:null,'after'=>$values+['game_id'=>$gid]];
+            return $this->writeAttendance($subject, $gid, $payload['attendance_status'], $actor);
         }
         $key=$subject['type'].':'.$subject['id'];$guests=[$payload['guest_1'],$payload['guest_2']??null,$payload['guest_3']??null];
         abort_unless(($local && !empty($payload['video_id'])) || in_array($key,$guests,true),422,'此影片必須包含目前分析師。');

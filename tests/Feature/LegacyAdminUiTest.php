@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\PpbAccount;
 use App\Models\PpbAnalyst;
 use App\Models\PpbGame;
+use App\Services\Ppb\Evaluation\EvaluationPreviewReport;
+use App\Services\Ppb\Evaluation\EvaluationService;
 use App\Services\Ppb\Evaluation\EvaluationSubjects;
 use App\Services\Ppb\Evaluation\LegacyReader;
 use App\Services\Ppb\Evaluation\LegacyScheduleCalculator;
@@ -14,6 +16,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -22,12 +25,14 @@ class LegacyAdminUiTest extends TestCase
 {
     private const HOST = 'https://v2.csdatw.xyz';
 
+    private const ATTENDANCE = self::HOST.'/admin/schedule/attendance';
+
     private const PAGES = [
         '/admin/games/readonly' => '賽事排班（唯讀）',
         '/admin/schedule/overview' => '排班總覽',
         '/admin/schedule/articles' => '分析文排班',
         '/admin/schedule/videos' => '影音排班',
-        '/admin/schedule/attendance' => '出缺勤',
+        '/admin/schedule/attendance' => '出缺勤紀錄表',
         '/admin/analyst-list' => '分析師列表',
         '/admin/performance' => '戰績排行榜',
         '/admin/csda/users' => 'CSDA 用戶（唯讀）',
@@ -156,6 +161,10 @@ class LegacyAdminUiTest extends TestCase
             $table->unsignedBigInteger('game_id');
             $table->tinyInteger('attendance_status')->nullable();
             $table->unsignedBigInteger('waived_submission_id')->nullable();
+            $table->unsignedBigInteger('actor_id')->nullable();
+            $table->unsignedBigInteger('revision')->default(1);
+            $table->unique(['subject_type', 'subject_id', 'game_id']);
+            $table->timestamps();
         });
         Schema::create('ppb_evaluation_videos', function (Blueprint $table) {
             $table->increments('id');
@@ -218,6 +227,16 @@ class LegacyAdminUiTest extends TestCase
             $table->unsignedBigInteger('game_id')->nullable();
             $table->string('event')->nullable();
             $table->text('detail_json')->nullable();
+            $table->unsignedBigInteger('actor_id')->nullable();
+            $table->timestamp('created_at')->nullable();
+        });
+        Schema::create('ppb_auth_audits', function (Blueprint $table) {
+            $table->increments('id');
+            $table->unsignedBigInteger('account_id')->nullable();
+            $table->string('event', 48);
+            $table->string('ip', 45)->nullable();
+            $table->string('user_agent', 255)->nullable();
+            $table->timestamp('created_at');
         });
     }
 
@@ -390,7 +409,7 @@ class LegacyAdminUiTest extends TestCase
 
         $url = self::HOST.'/admin/schedule/attendance';
         $first = $this->get($url)->assertOk()
-            ->assertSee('<div class="month-label">2026-11</div>', false)->assertSee('共 3 個月 / 第 1 頁')
+            ->assertSee('<div class="page-title"><span class="page-title-month">2026-11</span> 出缺勤紀錄</div>', false)->assertSee('共 3 個月 / 第 1 頁')
             ->assertSee('<span class="tag tag-g">G15</span>', false)->assertSee('<span class="tag tag-e">E8</span>', false)
             ->assertSee('<span class="analyst-tag" style="background:#ABCDEF;color:#142536">Mapped analyst</span>', false)->assertDontSee('background-color:#ABCDEF')
             ->assertSee('舊分析師 #77')->assertSee('Imported matchup')->assertSee('<div class="c-matchup">—</div>', false)
@@ -398,10 +417,10 @@ class LegacyAdminUiTest extends TestCase
             ->assertDontSee('Unrelated local matchup')->assertDontSee('<span class="tag tag-g">G30</span>', false);
         self::assertSame(1, substr_count($first->getContent(), '#evaluation-attendance'));
         self::assertSame(1, substr_count($first->getContent(), 'Mapped analyst'));
-        $this->get($url.'?p=2')->assertOk()->assertSee('<div class="month-label">2026-10</div>', false)
+        $this->get($url.'?p=2')->assertOk()->assertSee('<div class="page-title"><span class="page-title-month">2026-10</span> 出缺勤紀錄</div>', false)
             ->assertSee('共 3 個月 / 第 2 頁')->assertSee('<span class="tag tag-g">G30</span>', false)
-            ->assertDontSee('<span class="tag tag-e">E8</span>', false)->assertDontSee('#evaluation-attendance')->assertDontSee('出缺勤紀錄</div>', false);
-        $this->get($url.'?month=2026-09')->assertOk()->assertSee('<div class="month-label">2026-09</div>', false)
+            ->assertDontSee('<span class="tag tag-e">E8</span>', false)->assertDontSee('#evaluation-attendance');
+        $this->get($url.'?month=2026-09')->assertOk()->assertSee('<div class="page-title"><span class="page-title-month">2026-09</span> 出缺勤紀錄</div>', false)
             ->assertSee('共 3 個月 / 第 3 頁')->assertSee('Native matchup');
     }
 
@@ -429,6 +448,158 @@ class LegacyAdminUiTest extends TestCase
         $this->get($url)->assertOk()->assertSee('舊系統出缺勤暫時無法讀取')
             ->assertSee('Native analyst')->assertSee('Fallback matchup')->assertSee('曠職')->assertDontSee('#evaluation-attendance');
         $this->get($url)->assertOk()->assertDontSee('舊系統出缺勤暫時無法讀取')->assertSee('Fallback matchup');
+    }
+
+    private function migrateAttendanceDeletions(): void
+    {
+        (require database_path('migrations/2026_11_27_000019_create_ppb_attendance_deletions.php'))->up();
+    }
+
+    private function mockLegacyAttendance(LegacyReader $reader): void
+    {
+        $reader->shouldReceive('query')->with(Mockery::on(fn ($query) =>
+            $query['operation'] === 'select' && $query['table'] === 'pay.pay_attendance_record'))
+            ->andReturnUsing(function ($query) {
+                $id = $query['filters'][0]['value'] ?? 106;
+                return ['rows' => $id === 106
+                    ? [['id' => 106, 'gid' => 320, 'uid' => 4, 'attendance_status' => 2]]
+                    : []];
+            });
+        $reader->shouldReceive('query')->with(Mockery::on(fn ($query) =>
+            $query['operation'] === 'select' && $query['table'] === 'pay.pay_schedule'))
+            ->andReturnUsing(fn ($query) => ['rows' => $query['filters'][0]['op'] === '>=' ? [] : [[
+                'id' => 320, 'game_id' => 71, 'game_type' => 1, 'recommended_time' => '2026-10-06 08:00:00',
+            ]]]);
+    }
+
+    public function test_attendance_delete_requires_both_permissions_and_keeps_web_csrf(): void
+    {
+        $reader = Mockery::mock(LegacyReader::class);
+        $this->mockLegacyAttendance($reader);
+        $this->app->instance(LegacyReader::class, $reader);
+        $payload = ['source' => 'legacy', 'legacy_record_id' => 106, 'request_id' => (string) Str::uuid()];
+        foreach ([['schedules.view'], ['schedules.view', 'evaluations.view'], ['schedules.view', 'evaluations.manage']] as $permissions) {
+            $this->actor($permissions);
+            $this->get(self::ATTENDANCE)->assertOk()->assertSee('哆啦')->assertDontSee('class="btn-delete"', false);
+            $this->postJson(self::ATTENDANCE.'/delete', $payload)->assertForbidden();
+        }
+
+        $router = $this->app['router'];
+        $route = $router->getRoutes()->getByName('ppb.schedule.attendance.delete');
+        self::assertContains('web', $route->gatherMiddleware());
+        $middleware = $router->gatherRouteMiddleware($route);
+        self::assertNotEmpty(array_intersect($middleware, [
+            \Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class,
+            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+        ]));
+    }
+
+    public function test_legacy_attendance_delete_is_read_only_at_source_and_recalculates_salary(): void
+    {
+        $this->actor(['schedules.view', 'evaluations.view', 'evaluations.manage']);
+        $this->migrateAttendanceDeletions();
+        $reader = $this->bindReportReader();
+        $this->mockLegacyAttendance($reader);
+        $reader->shouldReceive('snapshot')->with(4, '2026-09')->andReturn($this->reportSnapshot('2026-09'));
+        $reader->shouldReceive('snapshot')->with(4, '2026-10')
+            ->andReturn($this->reportSnapshot('2026-10') + ['previous_month' => '2026-09']);
+
+        $salary = self::HOST.'/admin/rating/summary/legacy/4?month=2026-10';
+        $this->getJson($salary)->assertOk()->assertJsonPath('salary.absent', -100)->assertJsonPath('salary.total', 850);
+        $service = $this->app->make(EvaluationService::class);
+        $subject = ['type' => 'legacy', 'id' => 4, 'native_id' => null];
+        $before = $service->load($subject, '2026-10');
+        $this->get(self::ATTENDANCE)->assertOk()->assertSee('G71')->assertSee('class="btn-delete"', false);
+
+        $payload = ['source' => 'legacy', 'legacy_record_id' => 106, 'request_id' => (string) Str::uuid()];
+        $receipt = ['request_id' => $payload['request_id']];
+        $this->postJson(self::ATTENDANCE.'/delete', $payload)->assertOk()->assertExactJson($receipt);
+        $this->postJson(self::ATTENDANCE.'/delete', $payload)->assertOk()->assertExactJson($receipt);
+        $this->postJson(self::ATTENDANCE.'/delete', array_replace($payload, ['legacy_record_id' => 999]))->assertConflict();
+        $this->postJson(self::ATTENDANCE.'/delete', array_replace($payload, [
+            'request_id' => (string) Str::uuid(),
+        ]))->assertConflict();
+
+        $this->assertDatabaseCount('ppb_attendance_deletions', 1);
+        $this->assertDatabaseHas('ppb_attendance_deletions', [
+            'legacy_record_id' => 106, 'legacy_gid' => 320, 'subject_type' => 'legacy', 'subject_id' => 4,
+            'attendance_status' => 2, 'recommended_time' => '2026-10-06 08:00:00', 'actor_id' => 71,
+            'request_id' => $payload['request_id'], 'restored_at' => null,
+        ]);
+        $this->assertDatabaseCount('ppb_auth_audits', 1);
+        $this->assertDatabaseHas('ppb_auth_audits', ['account_id' => 71, 'event' => 'attendance.deleted#legacy:106']);
+        $this->get(self::ATTENDANCE)->assertOk()->assertDontSee('G71')->assertSee('本月無出缺勤紀錄');
+        $this->getJson($salary)->assertOk()->assertJsonPath('salary.absent', 0)->assertJsonPath('salary.total', 950);
+        $after = $service->load($subject, '2026-10');
+        self::assertNotSame($before['source_sha256'], $after['source_sha256']);
+        self::assertSame(0, $after['current']['salary']['absent']);
+        $preview = $this->app->make(EvaluationPreviewReport::class)->load($subject, '2026-10');
+        self::assertSame(0, $preview['current']['salary']['absent']);
+    }
+
+    public function test_attendance_delete_rejects_unknown_and_unmigrated_legacy_targets(): void
+    {
+        $this->actor(['schedules.view', 'evaluations.view', 'evaluations.manage']);
+        $payload = ['source' => 'legacy', 'legacy_record_id' => 999, 'request_id' => (string) Str::uuid()];
+        $this->postJson(self::ATTENDANCE.'/delete', $payload)->assertStatus(503);
+
+        $this->migrateAttendanceDeletions();
+        $reader = Mockery::mock(LegacyReader::class);
+        $reader->shouldReceive('query')->once()->with(Mockery::on(fn ($query) =>
+            $query['operation'] === 'select' && $query['table'] === 'pay.pay_attendance_record'
+            && $query['filters'] === [['column' => 'id', 'op' => '=', 'value' => 999]]))->andReturn(['rows' => []]);
+        $this->app->instance(LegacyReader::class, $reader);
+        $this->postJson(self::ATTENDANCE.'/delete', $payload)->assertNotFound();
+        $this->postJson(self::ATTENDANCE.'/delete', array_replace($payload, ['request_id' => 'bad']))->assertUnprocessable();
+        $this->assertDatabaseCount('ppb_attendance_deletions', 0);
+        $this->assertDatabaseCount('ppb_auth_audits', 0);
+    }
+
+    public static function nativeAttendanceSources(): array
+    {
+        return ['derived substitution' => [false], 'V2 correction' => [true]];
+    }
+
+    #[DataProvider('nativeAttendanceSources')]
+    public function test_v2_attendance_delete_writes_one_waiver_and_clears_the_salary_deduction(bool $corrected): void
+    {
+        $this->actor(['schedules.view', 'evaluations.view', 'evaluations.manage']);
+        DB::table('ppb_analysts')->insert([['id' => 9, 'name' => 'Original analyst'], ['id' => 10, 'name' => 'Substitute']]);
+        DB::table('ppb_games')->insert([
+            'id' => 7, 'game_type' => 1, 'game_number' => 66, 'recommended_at' => '2026-11-01 00:00:00',
+        ]);
+        DB::table('ppb_assignments')->insert(['id' => 8, 'game_id' => 7, 'kind' => 'pick', 'original_analyst_id' => 9, 'current_analyst_id' => 10]);
+        foreach ([11, 12] as $pick) {
+            DB::table('ppb_submissions')->insert([
+                'id' => $pick, 'game_id' => 7, 'assignment_id' => 8, 'kind' => 'pick', 'submitted_analyst_id' => 10,
+                'submitted_at' => '2026-11-01 00:00:00', 'status' => 'submitted',
+            ]);
+        }
+        if ($corrected) {
+            DB::table('ppb_evaluation_attendance')->insert([
+                'game_id' => 7, 'subject_type' => 'v2', 'subject_id' => 9, 'attendance_status' => 2, 'revision' => 3,
+            ]);
+        }
+        $service = $this->app->make(EvaluationService::class);
+        $subject = ['type' => 'v2', 'id' => 9, 'native_id' => 9];
+        self::assertSame(-100, $service->loadLocal($subject, '2026-11')['current']['salary']['absent']);
+        $this->get(self::ATTENDANCE)->assertOk()->assertSeeInOrder(['class="btn-delete"', '#evaluation-attendance'], false);
+        $payload = ['source' => 'v2', 'subject_type' => 'v2', 'subject_id' => 9, 'game_id' => 7, 'request_id' => (string) Str::uuid()];
+        $receipt = ['request_id' => $payload['request_id']];
+        $this->postJson(self::ATTENDANCE.'/delete', $payload)->assertOk()->assertExactJson($receipt);
+        $this->postJson(self::ATTENDANCE.'/delete', $payload)->assertOk()->assertExactJson($receipt);
+        $this->postJson(self::ATTENDANCE.'/delete', array_replace($payload, [
+            'request_id' => (string) Str::uuid(),
+        ]))->assertNotFound();
+        $this->assertDatabaseCount('ppb_evaluation_attendance', 1);
+        $this->assertDatabaseHas('ppb_evaluation_attendance', [
+            'game_id' => 7, 'subject_type' => 'v2', 'subject_id' => 9, 'attendance_status' => null,
+            'revision' => $corrected ? 4 : 1, 'actor_id' => 71, 'waived_submission_id' => 11,
+        ]);
+        $this->assertDatabaseCount('ppb_auth_audits', 1);
+        $this->assertDatabaseHas('ppb_auth_audits', ['account_id' => 71, 'event' => 'attendance.deleted#v2:v2:9:7']);
+        $this->get(self::ATTENDANCE)->assertOk()->assertDontSee('G66')->assertSee('本月無出缺勤紀錄');
+        self::assertSame(0, $service->loadLocal($subject, '2026-11')['current']['salary']['absent']);
     }
 
     public function test_analyst_list_only_reads_line_name_with_both_master_permissions(): void
@@ -781,7 +952,7 @@ class LegacyAdminUiTest extends TestCase
         $reader = $this->bindReportReader();
         $reader->shouldReceive('snapshot')->once()->with(4, '2026-11')->andReturn($source);
         $reader->shouldReceive('snapshot')->once()->with(4, '2026-10')->andReturn($this->reportSnapshot('2026-10'));
-        $report = app(\App\Services\Ppb\Evaluation\EvaluationService::class)
+        $report = app(EvaluationService::class)
             ->load(['type' => 'legacy', 'id' => 4, 'native_id' => null], '2026-11');
         $pick = collect($report['current']['selected']['records'])->firstWhere('_source_id', 9001);
         self::assertSame(40, $pick['score_word_count']);

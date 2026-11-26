@@ -1,6 +1,7 @@
 /* 出缺勤 — legacy attendanceRecord look (content area only). */
 .ppb-att{max-width:1160px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft JhengHei',sans-serif}
-.ppb-att .month-label{font-size:22px;font-weight:800;color:#1e3a7a;margin-bottom:20px}
+.ppb-att .page-title{font-size:22px;font-weight:400;color:#1e3a7a;margin-bottom:20px}
+.ppb-att .page-title-month{font-weight:800}
 .ppb-att .table-container{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.04)}
 .ppb-att .thead{display:flex;align-items:center;background:#f1f5f9;border-bottom:2px solid #e2e8f0;padding:12px 8px;gap:8px}
 .ppb-att .thead span{font-size:.9rem;font-weight:700;color:#475569;text-align:center}
@@ -28,4 +29,20 @@
 .ppb-att .pagination-wrap{display:flex;align-items:center;gap:10px;height:40px}
 .ppb-att .pagination-wrap a,.ppb-att .pagination-wrap span{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:40px;padding:0 14px;border-radius:8px;border:1px solid #e3e6ea;background:#fff;color:#445;font-size:15px;font-weight:600;text-decoration:none}
 .ppb-att .pagination-wrap span.current{background:#2f66c9;color:#fff;border-color:#2f66c9}
-@media (max-width:760px){.ppb-att .table-container{overflow-x:auto}.ppb-att .thead,.ppb-att .row{min-width:700px}}
+.ppb-att .table-container{overflow-x:auto}
+.ppb-att .thead,.ppb-att .row{min-width:700px}
+.ppb-att.can-correct .thead,.ppb-att.can-correct .row{min-width:760px}
+
+.ppb-att.can-correct .c-action{flex-basis:72px;justify-content:flex-start;gap:4px}
+.ppb-att .btn-delete{width:34px;height:34px;flex:none;display:grid;place-items:center;padding:0;border:1px solid #e5e7eb;border-radius:6px;background:#f8fafc;font-size:16px;cursor:pointer}
+.ppb-att .btn-delete:hover{background:#fef2f2;border-color:#fecaca;color:#991b1b}
+.ppb-att .delete-dialog{box-sizing:border-box;width:260px;max-width:calc(100% - 32px);padding:20px;border:0;border-radius:16px;background:#fff;color:#1f2937;text-align:center}
+.ppb-att .delete-dialog::backdrop{background:rgba(0,0,0,.45)}
+.ppb-att .delete-icon{font-size:26px;margin-bottom:8px}
+.ppb-att .delete-title{font-size:17px;font-weight:800;color:#991b1b}
+.ppb-att .delete-dialog p{margin:10px 0 16px}
+.ppb-att .delete-error{color:#991b1b;overflow-wrap:anywhere}
+.ppb-att .delete-actions{display:flex;justify-content:center;gap:8px}
+.ppb-att .delete-actions button{padding:8px 12px;border:1px solid #e5e7eb;border-radius:6px;background:#f8fafc;color:#1f2937;cursor:pointer}
+.ppb-att .delete-actions [data-confirm]{background:#b91c1c;border-color:#b91c1c;color:#fff}
+.ppb-att .delete-actions button:disabled{opacity:.65;cursor:wait}
