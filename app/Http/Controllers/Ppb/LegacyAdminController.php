@@ -167,14 +167,27 @@ class LegacyAdminController extends Controller
         $context = $roster->contains('type', 'v2') && $data->ready()
             ? $data->context(CarbonImmutable::createFromFormat('!Y-m', $month, 'Asia/Taipei'))
             : null;
-        $cacheKeys = $roster->where('type', 'legacy')->map(fn ($subject) => $this->summaryCacheKey($subject, $month));
-        $cached = $cacheKeys->isEmpty() ? [] : Cache::many($cacheKeys->all());
+        $legacySubjects = $roster->where('type', 'legacy');
+        $cacheKeys = $legacySubjects->flatMap(fn ($subject) => [
+            $this->summaryCacheKey($subject, $month), $this->lastSummaryCacheKey($subject, $month),
+        ]);
+        try {
+            $cached = $cacheKeys->isEmpty() ? [] : Cache::many($cacheKeys->values()->all());
+        } catch (\Throwable $error) {
+            report($error);
+            $cached = [];
+        }
         $values = $roster->mapWithKeys(function (array $subject) use ($service, $context, $month, $isPay, $cached) {
             $key = $subject['type'].':'.$subject['id'];
             if ($subject['type'] === 'legacy') {
                 $summary = $cached[$this->summaryCacheKey($subject, $month)] ?? null;
                 if ($summary === null) {
-                    return [$key => null]; // The browser fills a cold legacy row.
+                    // Show the last known values at once and let the browser refresh them;
+                    // only a never-loaded row starts as 載入中.
+                    $last = $cached[$this->lastSummaryCacheKey($subject, $month)] ?? null;
+                    return [$key => is_array($last)
+                        ? $this->reportCells($last[$isPay ? 'rating' : 'schedule'], $isPay) + ['_stale' => true]
+                        : null];
                 }
             } elseif ($context === null) {
                 return [$key => ['failed' => true]];
@@ -210,9 +223,10 @@ class LegacyAdminController extends Controller
         try {
             $subject = $subjects->get($type, $id);
             if ($subject['type'] === 'legacy') {
-                $ttl = $month === now('Asia/Taipei')->format('Y-m') ? 120 : 600;
+                $ttl = $month === now('Asia/Taipei')->format('Y-m') ? 300 : 600;
                 $summary = Cache::remember($this->summaryCacheKey($subject, $month), $ttl,
                     fn () => $this->reportSummary($service->load($subject, $month), $subject, $month));
+                Cache::put($this->lastSummaryCacheKey($subject, $month), $summary, now()->addDays(2));
             } elseif ($data->ready()) {
                 $summary = $this->reportSummary($service->loadLocal($subject, $month), $subject, $month);
             }
@@ -232,6 +246,11 @@ class LegacyAdminController extends Controller
         $values = $summary[$kind];
         $values['cells'] = $this->reportCells($values, $kind === 'rating');
         return response()->json($values, 200, $headers);
+    }
+
+    private function lastSummaryCacheKey(array $subject, string $month): string
+    {
+        return 'ppb:report:last:v1:'.LegacyReader::SNAPSHOT_FORMAT.':'.$subject['type'].':'.$subject['id'].':'.$month;
     }
 
     private function summaryCacheKey(array $subject, string $month): string

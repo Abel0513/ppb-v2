@@ -74,12 +74,13 @@
         $profile = $profiles->get($subject['native_id']);
         $fallback = $subject['type'] === 'legacy' ? ($palette[$subject['id']] ?? null) : null;
         $row = $values->get($subject['type'].':'.$subject['id']);
-        $pending = $row === null;
+        $loading = $row === null;
+        $pending = $loading || ($row['_stale'] ?? false);
         $failed = $row['failed'] ?? false;
         $key = ['type' => $subject['type'], 'id' => $subject['id'], 'month' => $month];
       @endphp
       <tr data-report-values="{{ json_encode($row ?? [], JSON_THROW_ON_ERROR) }}" data-analyst-name="{{ $subject['label'] }}"
-        @if($pending) data-report-url="{{ route($isPay ? 'ppb.rating.summary' : 'ppb.performance.summary', $key) }}" aria-busy="true" @endif>
+        @if($pending) data-report-url="{{ route($isPay ? 'ppb.rating.summary' : 'ppb.performance.summary', $key) }}" @endif @if($loading) aria-busy="true" @endif>
         <td>@include('ppb.legacy-admin.name-pill', ['name' => $subject['label'], 'colors' => $profile ? $profile->scheduleColors($fallback) : $fallback])</td>
         @foreach($headers as $field => $header)
           @if($field === 'type')
@@ -92,7 +93,7 @@
               $isRate = str_ends_with($field, '_rate') && is_numeric($value);
               $empty = in_array($field, ['rating', 'next_rating', 'change'], true) || str_starts_with($field, 'score_')
                   ? '無資料' : (str_starts_with($field, 'recent_') ? '未達10場' : '未分析');
-              $display = $pending ? '載入中...' : ($failed ? '讀取失敗' : ($value ?? $empty));
+              $display = $loading ? '載入中...' : ($failed ? '讀取失敗' : ($value ?? $empty));
             @endphp
             <td @class(['legacy-salary-total' => $field === 'total'])><span data-report-field="{{ $field }}" data-empty="{{ $empty }}" @class(['legacy-win-rate' => $isRate, 'legacy-negative' => is_numeric($value) && $value < 0])>{{ $display }}{{ $isRate ? '%' : '' }}</span></td>
           @endif
@@ -114,5 +115,5 @@
 @endsection
 
 @section('legacy-scripts')
-<script src="{{ asset('assets/ppb/ppb-legacy-admin.js') }}?v=acceptance-round3" defer></script>
+<script src="{{ asset('assets/ppb/ppb-legacy-admin.js') }}?v=report-queue-20261126" defer></script>
 @endsection
