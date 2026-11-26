@@ -27,7 +27,8 @@ class GameController extends Controller
 {
     public function index(Request $request): View {
         $readOnly = $request->routeIs('ppb.games.readonly');
-        $overview = $request->routeIs('ppb.schedule.overview');
+        $public = $request->routeIs('ppb.public.overview');
+        $overview = $public || $request->routeIs('ppb.schedule.overview');
         $matchNo=trim((string)$request->query('match_no',''));
         $matchDate=trim((string)$request->query('match_date',''));
         // PPB PG2 2026-11-05 | No default month filter: 2026-10-15+ and future schedules are visible.
@@ -44,7 +45,7 @@ class GameController extends Controller
         $dateValid=$matchDate!=='' && preg_match('/^20\d{2}-(0[1-9]|1[0-2])-([0-3]\d)$/',$matchDate)
             && checkdate((int)substr($matchDate,5,2),(int)substr($matchDate,8,2),(int)substr($matchDate,0,4));
         $codeValid=$matchNo!=='' && preg_match('/^([GE])([1-9]\d{0,5})$/i',$matchNo,$codeParts);
-        $games=PpbGame::query()->with(['assignments.currentAnalyst'])
+        $games=PpbGame::query()->when(!$overview,fn($q)=>$q->with(['assignments.currentAnalyst']))
             ->withCount(['assignments','submissions','publications'])
             ->when($month!=='',fn($q)=>$q->where('month_key',$month))
             ->when(in_array($type,['1','2'],true),fn($q)=>$q->where('game_type',(int)$type))
@@ -128,7 +129,8 @@ class GameController extends Controller
         }
         if ($overview) {
             $resultCount = $total ?? $games->total();
-            return view('ppb.legacy-admin.overview', compact('games','matchNo','matchDate','resultCount'));
+            return view($public ? 'ppb.public-overview' : 'ppb.legacy-admin.overview',
+                compact('games','matchNo','matchDate','resultCount','public'));
         }
         $ids=$games->getCollection()->pluck('reviewer_analyst_id')->filter()->unique()->values();
         $reviewers=$ids->isEmpty()?collect():PpbAnalyst::whereIn('id',$ids)->get()->keyBy('id');
