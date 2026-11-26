@@ -2,7 +2,7 @@
 @section('title', '排班總覽')
 
 @push('styles')
-<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-overview-legacy.css') }}?v=20261126-1">
+<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-overview-legacy.css') }}?v=20261126-2">
 @endpush
 
 @section('legacy-content')
