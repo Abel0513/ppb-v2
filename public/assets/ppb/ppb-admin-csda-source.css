@@ -1121,6 +1121,13 @@
    Keep ORIGINAL logo 44px, title 17px and collapse button 30px. */
 .admin-sidebar-brand{height:54px}
 
-.admin-association { color: inherit; text-decoration: none; text-align: center; font-weight: 700; }
-.admin-association small { display: block; font-size: .65rem; }
-@media (max-width: 840px) { .admin-association { display: none; } }
+.admin-page-heading{min-width:0}
+.admin-mobile-menu-button{flex-shrink:0}
+.admin-topbar-right{display:flex;align-items:center;gap:8px}
+.admin-unsettled-chip{
+    display:inline-flex;align-items:center;gap:4px;white-space:nowrap;
+    padding:4px 8px;border-radius:999px;background:#edf0fb;color:#3f528f;
+    font-size:11px;font-weight:750;text-decoration:none;
+}
+.admin-unsettled-chip:hover{background:#e1e7f6}
+.admin-unsettled-chip:focus-visible{outline:2px solid var(--admin-primary);outline-offset:2px}

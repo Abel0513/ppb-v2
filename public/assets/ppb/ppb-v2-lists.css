@@ -1,0 +1,85 @@
+/* Shared controls for V2 table pages. */
+.admin-content-inner .ppb-list-filters { justify-content: flex-start; align-items: end; }
+.ppb-list-filters .field-label { margin: 0; }
+.ppb-list-filters .field-label .field { display: block; margin-top: 5px; }
+.ppb-list-filters .action:disabled { opacity: .55; cursor: default; }
+
+.ppb-segments {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.ppb-list-tabs { margin-bottom: 18px; }
+.ppb-segments a,
+.ppb-segments span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--admin-primary);
+  font-size: 13px;
+  font-weight: 750;
+  text-decoration: none;
+}
+.ppb-segments a:hover,
+.ppb-segments [aria-current="page"] {
+  background: #edf0fb;
+  color: #2f4391;
+  border-color: #cfd7e5;
+}
+.ppb-segments [aria-disabled="true"] { color: var(--admin-muted); background: #f7f8fb; }
+.ppb-segments .ppb-page-ellipsis {
+  min-width: 0;
+  padding: 0 3px;
+  border: 0;
+  background: transparent;
+}
+.ppb-list-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ppb-page-count { color: var(--admin-muted); font-size: 13px; white-space: nowrap; }
+
+.admin-content-inner .status-neutral { background: #edf0fb; color: #3f528f; }
+.ppb-users-table td { overflow-wrap: anywhere; }
+.admin-content-inner .ppb-user-stats {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
+}
+
+[data-legacy-report] tr[hidden] { display: none; }
+[data-legacy-report] tfoot td { font-weight: 750; }
+.ppb-report-sort {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--admin-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.ppb-report-number { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.ppb-video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 18px;
+}
+.ppb-video-grid .toolbar .card-title { margin: 0; }
+.ppb-video-people {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px 14px;
+  margin: 0;
+  font-size: 13px;
+}
+.ppb-video-people dt { color: var(--admin-muted); }
+.ppb-video-people dd { margin: 0; overflow-wrap: anywhere; }
+.ppb-video-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.ppb-video-actions .admin-button { min-height: 34px; padding: 0 10px; }

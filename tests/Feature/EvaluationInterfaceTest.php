@@ -55,6 +55,8 @@ class EvaluationInterfaceTest extends TestCase
         $service=Mockery::mock(EvaluationService::class);$service->shouldReceive('load')->once()->andReturn($this->report());$this->app->instance(EvaluationService::class,$service);
         $response=$this->get('https://v2.csdatw.xyz/admin/evaluations/legacy/2?month=2026-05');
         $response->assertOk()->assertSee('&lt;script&gt;not executable&lt;/script&gt;',false)->assertDontSee('<script>not executable</script>',false)->assertSee('name="request_id"',false)->assertSee('name="source_sha256"',false)->assertSee('儲存人工評分')->assertSee('確認並保存下月評級')->assertSee('保存出勤更正')->assertSee('保存影片參與')->assertSee('2026-05-12T12:00',false);
+        $response->assertSee('class="admin-menu-item active" href="https://v2.csdatw.xyz/admin/evaluations"', false)
+            ->assertSee('class="card eval-section"', false)->assertSee('class="data-table"', false);
     }
     public function test_missing_monthly_grade_renders_no_data_in_detail_and_summary(): void
     {

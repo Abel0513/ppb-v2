@@ -25,7 +25,7 @@ class LegacyAdminController extends Controller
     private const REPORT_TITLES = [
         'analyst-list' => '分析師列表',
         'performance' => '戰績排行榜',
-        'rating-salary' => '薪資/評級異動',
+        'rating-salary' => '薪資／評級異動',
         'salary' => '分析師薪資',
         'rating' => '分析師評級異動',
     ];
@@ -128,21 +128,16 @@ class LegacyAdminController extends Controller
         ]);
         $month = $pager->getCollection()->first() ?? $current;
         $selected = $byMonth->get($month, collect())->sortBy(['recommended_time', 'gid']);
-        $analysts = PpbAnalyst::whereIntegerInRaw('id', $selected->map(fn ($row) =>
-            $roster->get($row['subject_type'].':'.$row['subject_id'])['native_id'] ?? null)->filter()->all())->get()->keyBy('id');
         $actor = $request->user('ppb');
         $canCorrect = $actor->hasPpbPermission('evaluations.view') && $actor->hasPpbPermission('evaluations.manage');
-        $attendance = $selected->map(function ($row) use ($roster, $analysts, $canCorrect, $month) {
+        $attendance = $selected->map(function ($row) use ($roster, $canCorrect, $month) {
             $subject = $roster->get($row['subject_type'].':'.$row['subject_id']);
-            $analyst = $analysts->get($subject['native_id'] ?? 0);
-            $palette = $row['subject_type'] === 'legacy' ? config('ppb_legacy_colors.'.$row['subject_id']) : null;
             $correctionUrl = $canCorrect && $row['source'] !== 'legacy'
                 ? route('ppb.evaluations.show', ['type' => $row['subject_type'], 'id' => $row['subject_id'], 'month' => $month]).'#evaluation-attendance'
                 : null;
 
             return $row + [
                 'name' => $subject['label'] ?? LegacyDisplayLabels::unmappedAnalyst($row['subject_id']),
-                'colors' => $analyst?->scheduleColors($palette) ?? $palette,
                 'correctionUrl' => $correctionUrl,
             ];
         });
@@ -202,12 +197,8 @@ class LegacyAdminController extends Controller
             && $request->user('ppb')->hasPpbPermission('accounts.manage');
         $ids = $roster->pluck('native_id')->filter()->unique();
         $profiles = collect();
-        if ($ids->isNotEmpty()) {
-            // The master field migrations may still be pending on a no-migrate release.
-            $available = Schema::getColumnListing('ppb_analysts');
-            $permitted = $canSeeLineName ? ['color', 'background', 'line_name'] : ['color', 'background'];
-            $columns = ['id', ...array_values(array_intersect($permitted, $available))];
-            $profiles = PpbAnalyst::whereIn('id', $ids)->get($columns)->keyBy('id');
+        if ($canSeeLineName && $ids->isNotEmpty() && Schema::hasColumn('ppb_analysts', 'line_name')) {
+            $profiles = PpbAnalyst::whereIn('id', $ids)->get(['id', 'line_name'])->keyBy('id');
         }
         $canSeeWork = $request->user('ppb')->hasPpbPermission('evaluations.view');
         $legacyLineNames = [];

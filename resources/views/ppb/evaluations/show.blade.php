@@ -3,8 +3,10 @@
 @push('styles')<style>.eval-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}.eval-grid label{display:flex;flex-direction:column;gap:5px}.eval-score{width:90px}.eval-section{margin-block:24px}details summary{cursor:pointer}@media print{.admin-sidebar,.admin-topbar,button,.no-print,form.rate-form{display:none!important}.admin-main{margin:0!important}.table-scroll{overflow:visible}}</style>@endpush
 @section('body')
 <div class="admin-layout">@include('ppb.partials.sidebar')<div class="admin-main">@include('ppb.partials.topbar')<main class="admin-content"><div class="admin-content-inner">
-@php($current=$report['current'])
-@php($manage=auth('ppb')->user()->hasPpbPermission('evaluations.manage'))
+@php
+    $current = $report['current'];
+    $manage = auth('ppb')->user()->hasPpbPermission('evaluations.manage');
+@endphp
 <h1 class="heading">{{ $report['subject']['label'] }}・{{ $report['month'] }} 評鑑</h1>
 <div class="toolbar no-print"><a class="link" href="{{ route('ppb.evaluations.index',['month'=>$report['month']]) }}">分析師列表</a><a class="link" href="{{ route('ppb.evaluations.show',[$report['subject']['type'],$report['subject']['id'],'month'=>$report['month'],'format'=>'csv']) }}">薪酬 CSV</a><button class="action" type="button" onclick="window.print()">列印</button></div>
 <form method="get" class="search-row no-print"><input class="field" type="month" name="month" value="{{ $report['month'] }}" required><button class="action">切換月份</button></form>
@@ -34,7 +36,9 @@
 @foreach($current['deductions']['deductions'] as $amount)<span>缺勤／遲到 {{ $amount }}　</span>@endforeach
 <p>保存的是當時的薪酬計算快照，不會發款、傳送 LINE 或修改舊系統。後續來源或評分變動不會覆寫歷史快照。</p>
 @if($report['saved_salary']??null)
-@php($savedSalary=$report['saved_salary'])
+@php
+    $savedSalary = $report['saved_salary'];
+@endphp
 <p>已保存版本 {{ $savedSalary['revision'] }}・{{ $savedSalary['created_at'] }}・合計 {{ $savedSalary['snapshot']['salary']['total'] }}・請求 {{ $savedSalary['request_id'] }}。</p>
 @if($savedSalary['revision']!==$report['revision'] || $savedSalary['snapshot']['source_sha256']!==$report['source_sha256'])<p class="notice">目前資料已不同於已保存快照，請核對後另存新版本。</p>@endif
 @else<p>本月份尚未保存薪酬快照。</p>@endif
@@ -50,7 +54,14 @@
 <details id="evaluation-video-{{ $video['id'] ?? 'new' }}"><summary>{{ $video?'影片 #'.$video['id'].'・'.Carbon\CarbonImmutable::parse($video['scheduled_at'],'UTC')->tz('Asia/Taipei')->format('m/d H:i'): '新增 V2 影片' }}</summary>
 <form method="post" action="{{ route('ppb.evaluations.save',[$report['subject']['type'],$report['subject']['id']]) }}">@include('ppb.evaluations.request')<input type="hidden" name="operation" value="input"><input type="hidden" name="input_kind" value="video">@if($video)<input type="hidden" name="video_id" value="{{ $video['id'] }}">@endif
 <div class="eval-grid"><label>日期時間（台北）<input class="field" type="datetime-local" name="scheduled_at" value="{{ $video?Carbon\CarbonImmutable::parse($video['scheduled_at'],'UTC')->tz('Asia/Taipei')->format('Y-m-d\TH:i'):$report['month'].'-01T12:00' }}" required></label>
-@foreach(range(1,3) as $slot)<label>來賓 {{ $slot }}<select class="field" name="guest_{{ $slot }}" @required($slot===1)><option value="">無</option>@foreach($subjects as $guest)@php($guestKey=$guest['type'].':'.$guest['id'])<option value="{{ $guestKey }}" @selected(($video['guest_'.$slot]??($slot===1?$report['subject']['type'].':'.$report['subject']['id']:null))===$guestKey)>{{ $guest['label'] }}</option>@endforeach</select></label>@endforeach</div>
+@foreach(range(1,3) as $slot)<label>來賓 {{ $slot }}<select class="field" name="guest_{{ $slot }}" @required($slot===1)><option value="">無</option>
+@foreach($subjects as $guest)
+    @php
+        $guestKey = $guest['type'].':'.$guest['id'];
+    @endphp
+    <option value="{{ $guestKey }}" @selected(($video['guest_'.$slot]??($slot===1?$report['subject']['type'].':'.$report['subject']['id']:null))===$guestKey)>{{ $guest['label'] }}</option>
+@endforeach
+</select></label>@endforeach</div>
 <input type="hidden" name="cancelled" value="0"><label><input type="checkbox" name="cancelled" value="1" @checked($video['cancelled']??false)>取消此影片計酬（保留歷程）</label><button class="action">保存影片參與</button></form></details>@endforeach</section>
 @endif
 <section class="card eval-section"><h2>當月稿件與評分</h2>

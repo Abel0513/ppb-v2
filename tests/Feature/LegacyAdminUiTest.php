@@ -22,14 +22,14 @@ class LegacyAdminUiTest extends TestCase
     private const HOST = 'https://v2.csdatw.xyz';
 
     private const PAGES = [
-        '/admin/games/readonly' => '分析師輪值表',
-        '/admin/schedule/overview' => '賽事排班總覽',
-        '/admin/schedule/articles' => '分析文班表總覽',
-        '/admin/schedule/videos' => '影音班表',
-        '/admin/schedule/attendance' => '出缺勤紀錄表',
-        '/admin/analyst-list' => '本月勝率',
-        '/admin/performance' => '本月戰績',
-        '/admin/csda/users' => 'CSDA 用戶管理',
+        '/admin/games/readonly' => '賽事排班（唯讀）',
+        '/admin/schedule/overview' => '排班總覽',
+        '/admin/schedule/articles' => '分析文排班',
+        '/admin/schedule/videos' => '影音排班',
+        '/admin/schedule/attendance' => '出缺勤',
+        '/admin/analyst-list' => '分析師列表',
+        '/admin/performance' => '戰績排行榜',
+        '/admin/csda/users' => 'CSDA 用戶（唯讀）',
     ];
 
     protected function setUp(): void
@@ -246,7 +246,9 @@ class LegacyAdminUiTest extends TestCase
         }
 
         $first = $this->get(self::HOST.'/admin/games')->assertOk()
-            ->assertSee('分析師輪值表')->assertSee('共 '.$total.' 筆 / 第 1 頁')
+            ->assertSee('<h1 class="admin-page-title">賽事排班</h1>', false)
+            ->assertSee('class="ppb-shift-pagination" role="navigation" aria-label="賽事分頁"', false)
+            ->assertSee('共 '.$total.' 筆 / 第 1 頁')
             ->assertDontSee('目前查詢條件下沒有賽事');
         $first->assertViewHas('games', function ($pager) use ($future, $history, $total, $lastPage) {
             $expected = $future ? range(101, 100 + $future) : range($history - 9, $history);
@@ -254,6 +256,7 @@ class LegacyAdminUiTest extends TestCase
                 && $pager->getCollection()->pluck('id')->all() === $expected;
         });
         if ($history) {
+            $first->assertSee('aria-disabled="true">上一頁</span>', false)->assertSee('rel="next">下一頁</a>', false);
             $end = $future ? $history : $history - 10;
             $this->get(self::HOST.'/admin/games?p=2')->assertOk()->assertViewHas('games',
                 fn ($pager) => $pager->getCollection()->pluck('id')->all() === range($end - 9, $end)
@@ -286,14 +289,21 @@ class LegacyAdminUiTest extends TestCase
 
         $this->actor(['schedules.view']);
         foreach (self::PAGES as $path => $label) {
-            $this->get(self::HOST.$path)->assertOk()->assertSee($label);
+            $this->get(self::HOST.$path)->assertOk()
+                ->assertSee('<h1 class="admin-page-title">'.$label.'</h1>', false)
+                ->assertSee('active" href="'.self::HOST.$path.'"', false);
         }
-        $this->get(self::HOST.'/admin/analyst-list')->assertOk()->assertSee('資深分析師')->assertSee('Line名稱');
+        $this->get(self::HOST.'/admin/analyst-list')->assertOk()
+            ->assertSee('本月勝率')->assertSee('資深分析師')->assertSee('Line名稱');
+        $this->get(self::HOST.'/admin/performance')->assertOk()->assertSee('本月戰績')
+            ->assertDontSee('>薪資與評級<', false)->assertDontSee('>系統設定<', false);
         $this->get(self::HOST.'/admin/rating/index')->assertForbidden();
         $this->get(self::HOST.'/admin/rating/summary/legacy/4')->assertForbidden();
 
         $this->actor(['schedules.view', 'schedules.manage', 'evaluations.view']);
-        $this->get(self::HOST.'/admin/games/readonly')->assertOk()->assertDontSee('新增賽事')->assertDontSee('修改賽事');
+        $this->get(self::HOST.'/admin/games/readonly')->assertOk()
+            ->assertDontSee('新增賽事')->assertDontSee('編輯／補齊人員')
+            ->assertDontSee('id="ppbCancelGameForm"', false);
         $this->get(self::HOST.'/admin/rating/index')->assertOk()->assertSee('更新當月評級')->assertSee('評鑑・薪酬・稿件');
         $this->get(self::HOST.'/admin/rating/salary')->assertOk()->assertSee('總計');
         $this->get(self::HOST.'/admin/rating/change')->assertOk()->assertSee('評級異動');
@@ -378,14 +388,16 @@ class LegacyAdminUiTest extends TestCase
         $url = self::HOST.'/admin/schedule/attendance';
         $first = $this->get($url)->assertOk()
             ->assertSee('2026-11 出缺勤紀錄')->assertSee('共 3 個月 / 第 1 頁')
-            ->assertSee('G15')->assertSee('E8')->assertSee('Mapped analyst')->assertSee('background-color:#ABCDEF')
+            ->assertSee('<td><strong>G15</strong></td>', false)->assertSee('<td><strong>E8</strong></td>', false)
+            ->assertSee('<td>Mapped analyst</td>', false)->assertDontSee('background-color:#ABCDEF')
             ->assertSee('舊分析師 #77')->assertSee('Imported matchup')->assertSee('<td>—</td>', false)
-            ->assertSee('class="legacy-absent">曠職', false)->assertSee('class="legacy-late">遲到', false)
-            ->assertDontSee('Unrelated local matchup')->assertDontSee('G30');
+            ->assertSee('class="status disabled">曠職', false)->assertSee('class="status status-neutral">遲到', false)
+            ->assertDontSee('Unrelated local matchup')->assertDontSee('<td><strong>G30</strong></td>', false);
         self::assertSame(1, substr_count($first->getContent(), '#evaluation-attendance'));
         self::assertSame(1, substr_count($first->getContent(), 'Mapped analyst'));
         $this->get($url.'?p=2')->assertOk()->assertSee('2026-10 出缺勤紀錄')
-            ->assertSee('共 3 個月 / 第 2 頁')->assertSee('G30')->assertDontSee('E8')->assertDontSee('#evaluation-attendance');
+            ->assertSee('共 3 個月 / 第 2 頁')->assertSee('<td><strong>G30</strong></td>', false)
+            ->assertDontSee('<td><strong>E8</strong></td>', false)->assertDontSee('#evaluation-attendance');
         $this->get($url.'?month=2026-09')->assertOk()->assertSee('2026-09 出缺勤紀錄')
             ->assertSee('共 3 個月 / 第 3 頁')->assertSee('Native matchup');
     }
@@ -540,7 +552,9 @@ class LegacyAdminUiTest extends TestCase
         $this->actor(['evaluations.view']);
         $headers = ['11月評級', '10月評級', '評級異動', '10月評分', '9月評分', '8月評分'];
         foreach (['index', 'salary', 'change'] as $page) {
-            $response = $this->get(self::HOST.'/admin/rating/'.$page)->assertOk()->assertViewHas('month', '2026-10');
+            $response = $this->get(self::HOST.'/admin/rating/'.$page)->assertOk()->assertViewHas('month', '2026-10')
+                ->assertSee('class="ppb-segments ppb-list-tabs" aria-label="月份"', false);
+            self::assertMatchesRegularExpression('/aria-current="page"\s*>2026年10月<\/a>/u', $response->getContent());
             preg_match_all('/2026年[0-9]+月/u', $response->getContent(), $tabs);
             self::assertSame(['2026年10月', '2026年9月', '2026年8月', '2026年7月', '2026年6月'], $tabs[0]);
 
@@ -658,20 +672,24 @@ class LegacyAdminUiTest extends TestCase
             ->assertSee('主隊讓分')->assertSee('看好前場籃板')
             ->assertDontSee('尚未串接投稿')->assertDontSee('稿件內容尚未接入新版')
             ->assertSee('1234')->assertDontSee('彩券號 —')
-            ->assertSee('修改賽事')->assertSee('刪除賽事')
-            ->assertSee('! 未結算場次')
-            ->assertSee('分析師評鑑');
+            ->assertSee('編輯／補齊人員')->assertSee('#delete-game">刪除賽事</a>', false)
+            ->assertSee('data-dialog-title="編輯賽事"', false)
+            ->assertSee('class="admin-unsettled-chip"', false)->assertSee('未結算 <span id="ppbUnsettledCount"', false)
+            ->assertSee('<p class="admin-sidebar-label">MAIN</p>', false)->assertSee('安全登出')
+            ->assertDontSee('首页')->assertDontSee('定時廣播')->assertDontSee('中華民國運動彩券發展協會')
+            ->assertSee('data-open-rating', false)->assertSee('id="ppbScheduleRatingTitle">分析師評鑑</h2>', false);
         $shift->assertViewHas('games', fn ($pager) => $pager->getCollection()->pluck('id')->all() === [15]);
 
         $this->get(self::HOST.'/admin/games/create?modal=1')->assertOk()
-            ->assertSee('盤口類型')->assertSee('手動填寫玩法')->assertSee('BOUNS-分析師');
+            ->assertSee('盤口類型')->assertSee('手動填寫玩法')->assertSee('BONUS 分析師')
+            ->assertDontSee('id="ppbUnsettledCount"', false);
 
         $this->get(self::HOST.'/admin/rating/index')->assertOk()
             ->assertSee('11月評級')->assertSee('10月評級')->assertDontSee('載入中...')
             ->assertDontSee('12月評級');
         $this->get(self::HOST.'/admin/performance')->assertOk()->assertDontSee('載入中...');
         $this->get(self::HOST.'/admin/schedule/videos')->assertOk()
-            ->assertSee('影音班表')->assertSee('新增班表')->assertSee('週次');
+            ->assertSee('影音排班')->assertSee('新增影音排班')->assertSee('週次');
         $this->get(self::HOST.'/admin/csda/users')->assertOk()->assertSee('CSDA 用戶資料目前未匯入 V2');
     }
 
@@ -763,7 +781,7 @@ class LegacyAdminUiTest extends TestCase
         self::assertSame(1, $pick['is_win']);
     }
 
-    public function test_csda_users_render_read_only_like_the_legacy_page(): void
+    public function test_csda_users_render_in_v2_tables_with_read_only_statuses(): void
     {
         (require database_path('migrations/2026_11_26_000016_import_csda_users_line_names_and_reassign_picks.php'))->createTables();
         foreach (range(1, 23) as $id) {
@@ -782,13 +800,16 @@ class LegacyAdminUiTest extends TestCase
         $page = $this->get($url)->assertOk()
             ->assertSeeInOrder(['全部用戶', '23', '個人', '20', '群組', '3', '已開通', '23', '付費會員', '1'])
             ->assertSeeInOrder(['名稱', '類型', 'LINE ID', '備註', '監聽狀態', '開通', '付費', '經銷商'])
-            ->assertSee('Synthetic 1')->assertSee('Usyn1')->assertSee('memo')->assertSee('監聽中')->assertSee('★ 付費')
-            ->assertSee('共 23 筆，第 1 / 2 頁')->assertDontSee('Synthetic 21');
+            ->assertSee('class="data-table ppb-users-table"', false)
+            ->assertSee('Synthetic 1')->assertSee('Usyn1')->assertSee('memo')->assertSee('監聽中')
+            ->assertSee('class="status enabled">付費</span>', false)
+            ->assertSee('共 23 筆 / 第 1 頁')->assertSee('rel="next">下一頁</a>', false)
+            ->assertDontSee('Synthetic 21');
         $html = $page->getContent();
         self::assertStringNotContainsString('toggleActive', $html);
         $block = substr($html, strpos($html, 'data-csda-readonly'));
         self::assertStringNotContainsString('method="post"', strtolower(substr($block, 0, strpos($block, '</main>') ?: strlen($block))));
-        self::assertStringContainsString('disabled', $html);
+        self::assertStringNotContainsString('type="checkbox"', $block);
 
         $this->get($url.'?page=2')->assertOk()->assertSee('Synthetic 21')->assertSee('經銷');
         $this->get($url.'?filter=group_dealer')->assertOk()->assertSee('Synthetic 21')->assertDontSee('Synthetic 22')
