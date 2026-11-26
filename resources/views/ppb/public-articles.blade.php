@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <meta name="color-scheme" content="light">
 <title>分析文排班總覽</title>
-<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-articles-legacy.css') }}?v=20261127-1">
+<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-articles-legacy.css') }}?v=20261127-2">
 <style>
 *{box-sizing:border-box}
 body{margin:0;padding:20px;background:#f0f0f0;font-family:"Microsoft JhengHei","Noto Sans TC",sans-serif}
