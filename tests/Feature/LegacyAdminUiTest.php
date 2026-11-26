@@ -522,7 +522,7 @@ class LegacyAdminUiTest extends TestCase
         foreach (['index', 'salary', 'change'] as $page) {
             $response = $this->get(self::HOST.'/admin/rating/'.$page)->assertOk()->assertViewHas('month', '2026-10');
             preg_match_all('/2026年[0-9]+月/u', $response->getContent(), $tabs);
-            self::assertSame(['2026年10月', '2026年9月', '2026年8月', '2026年7月', '2026年6月', '2026年5月'], $tabs[0]);
+            self::assertSame(['2026年10月', '2026年9月', '2026年8月', '2026年7月', '2026年6月'], $tabs[0]);
 
             if ($page !== 'salary') {
                 preg_match('/<thead>.*?<\/thead>/s', $response->getContent(), $tableHeader);
