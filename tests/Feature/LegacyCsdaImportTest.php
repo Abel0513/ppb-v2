@@ -127,6 +127,46 @@ class LegacyCsdaImportTest extends TestCase
         $this->assertSame(['inserted' => 0, 'updated' => 1, 'unchanged' => 1], $this->import()['csda_users']);
     }
 
+    public function test_follow_up_moves_unlinked_slot_to_the_reassigned_author_and_fills_line_names_by_name(): void
+    {
+        // Earlier-import shape: the pick submission is not linked to the slot assignment.
+        DB::table('ppb_submissions')->where('legacy_source_pick_id', 3988)->update(['assignment_id' => null]);
+        $this->pick(5002, 24, 7, 3, 645); // Keeps the previous author's legacy mapping.
+        DB::table('ppb_analysts')->insert(['id' => 10, 'name' => 'Legacy Only', 'line_name' => null]);
+        $this->fixture['analyst_line_names.json'][] = ['legacy_analyst_id' => 6, 'line_name' => 'Line Six'];
+        $this->import();
+        $slot = DB::table('ppb_assignments')->where('game_id', 644)->where('slot_no', 4)->first();
+        $this->assertSame(7, (int) $slot->current_analyst_id); // 000016 alone leaves the slot behind.
+
+        $roster = $this->dir.'/analysts.json';
+        File::put($roster, json_encode([
+            ['id' => 6, 'name' => 'Legacy Only'], ['id' => 15, 'name' => 'New Author'], ['id' => 24, 'name' => 'Old Author'],
+        ], JSON_THROW_ON_ERROR));
+        $counts = $this->run17($roster);
+        $this->assertSame(1, $counts['slots']['moved']);
+        $this->assertSame(1, $counts['slots']['missing']); // 4008 is not in this fixture.
+        $this->assertSame(1, $counts['line_names_by_name']['filled']);
+
+        $slot = DB::table('ppb_assignments')->where('id', $slot->id)->first();
+        $this->assertSame(8, (int) $slot->current_analyst_id);
+        $this->assertSame(8, (int) $slot->original_analyst_id);
+        $this->assertSame('Line Six', DB::table('ppb_analysts')->where('id', 10)->value('line_name'));
+        $this->assertNull(DB::table('ppb_analysts')->where('id', 7)->value('line_name'));
+
+        // The schedule card for slot 4 now resolves the reassigned pick text and result.
+        $game = \App\Models\PpbGame::with('assignments')->findOrFail(644);
+        $preview = app(\App\Services\Ppb\SchedulePickDisplay::class)->load(collect([$game]))['assigned'][$slot->id];
+        $this->assertSame('r', $preview['recommend_pick']);
+        $this->assertSame('a', $preview['short_analysis']);
+        $this->assertSame(2, (int) $preview['is_win']);
+
+        $again = $this->run17($roster);
+        $this->assertSame(0, $again['slots']['moved']);
+        $this->assertSame(1, $again['slots']['already']);
+        $this->assertSame(0, $again['line_names_by_name']['filled']);
+        $this->assertSame(1, $again['line_names_by_name']['kept_existing']);
+    }
+
     public function test_checksum_mismatch_prevents_writes(): void
     {
         $this->write();
@@ -174,6 +214,17 @@ class LegacyCsdaImportTest extends TestCase
             $manifest[$file] = ['rows' => count($rows), 'sha256' => hash('sha256', $bytes)];
         }
         File::put($this->dir.'/manifest.json', json_encode($manifest, JSON_THROW_ON_ERROR));
+    }
+
+    private function run17(string $roster): array
+    {
+        $migration = require database_path('migrations/2026_11_26_000017_move_reassigned_pick_slots_and_fill_line_names_by_name.php');
+        ob_start();
+        try {
+            return $migration->apply($roster);
+        } finally {
+            ob_end_clean();
+        }
     }
 
     private function run16(): array
