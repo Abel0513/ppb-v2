@@ -2,7 +2,7 @@
 @section('title', '出缺勤紀錄表')
 
 @push('styles')
-<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-attendance-legacy.css') }}?v=20261127-2">
+<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-attendance-legacy.css') }}?v=20261127-3">
 @endpush
 
 @section('legacy-content')

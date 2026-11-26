@@ -1,7 +1,7 @@
 /* 出缺勤 — legacy attendanceRecord look (content area only). */
 .ppb-att{max-width:1160px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft JhengHei',sans-serif}
-.ppb-att .page-title{font-size:22px;font-weight:400;color:#1e3a7a;margin-bottom:20px}
-.ppb-att .page-title-month{font-weight:800}
+.ppb-att .page-title{font-size:22px;font-weight:800;line-height:normal;letter-spacing:normal;color:#1e3a7a;margin-bottom:20px}
+.ppb-att .page-title-month{font-weight:inherit}
 .ppb-att .table-container{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.04)}
 .ppb-att .thead{display:flex;align-items:center;background:#f1f5f9;border-bottom:2px solid #e2e8f0;padding:12px 8px;gap:8px}
 .ppb-att .thead span{font-size:.9rem;font-weight:700;color:#475569;text-align:center}
