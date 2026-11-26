@@ -167,6 +167,66 @@ class LegacyCsdaImportTest extends TestCase
         $this->assertSame(1, $again['line_names_by_name']['kept_existing']);
     }
 
+    public function test_link_merge_links_legacy_only_analysts_by_exact_name_and_moves_their_evaluation_rows(): void
+    {
+        (require database_path('migrations/2026_11_14_000011_create_ppb_evaluation_tables.php'))->up();
+        $migration = require database_path('migrations/2026_11_26_000018_link_legacy_only_analysts_by_name.php');
+        $migration->createTable();
+        DB::table('ppb_analysts')->insert([
+            ['id' => 20, 'name' => '元', 'display_name' => null, 'user_type' => 1, 'line_name' => null],
+            ['id' => 21, 'name' => 'Ye', 'display_name' => '葉秋', 'user_type' => 0, 'line_name' => null],
+            ['id' => 22, 'name' => '潔西', 'display_name' => null, 'user_type' => 0, 'line_name' => null],
+            ['id' => 23, 'name' => '潔西', 'display_name' => null, 'user_type' => 0, 'line_name' => null],
+        ]);
+        $sha = str_repeat('0', 64);
+        DB::table('ppb_evaluations')->insert([
+            ['subject_type' => 'v2', 'subject_id' => 20, 'month' => '2026-11', 'source_sha256' => $sha],
+            ['subject_type' => 'v2', 'subject_id' => 20, 'month' => '2026-10', 'source_sha256' => $sha],
+            ['subject_type' => 'legacy', 'subject_id' => 49, 'month' => '2026-10', 'source_sha256' => $sha],
+        ]);
+        DB::table('ppb_evaluation_ratings')->insert(['source_type' => 'v2', 'source_id' => 1, 'subject_type' => 'v2', 'subject_id' => 20,
+            'month' => '2026-11', 'source_sha256' => $sha]);
+        DB::table('ppb_evaluation_attendance')->insert(['subject_type' => 'v2', 'subject_id' => 21, 'game_id' => 644, 'attendance_status' => 1]);
+        DB::table('ppb_evaluation_videos')->insert(['scheduled_at' => '2026-11-07 04:00:00', 'guest_1' => 'legacy:15', 'guest_2' => 'v2:20']);
+
+        $roster = $this->dir.'/analysts.json';
+        File::put($roster, json_encode([
+            ['id' => 6, 'name' => '葉秋'], ['id' => 7, 'name' => '洛老師'], ['id' => 18, 'name' => '潔西'],
+            ['id' => 22, 'name' => 'BONBON'], ['id' => 49, 'name' => '元'],
+        ], JSON_THROW_ON_ERROR));
+        $counts = $this->run18($migration, $roster);
+        $this->assertSame(['linked' => 2, 'already' => 0, 'mapped_by_evidence' => 0, 'roster_mismatch' => 0, 'no_match' => 2, 'ambiguous' => 1], $counts['links']);
+        $this->assertSame(['evaluations' => 1, 'ratings' => 1, 'attendance' => 1, 'video_guests' => 1], $counts['remapped']);
+        $this->assertSame(['evaluations' => 1, 'attendance' => 0], $counts['remap_conflicts']);
+
+        $subjects = app(\App\Services\Ppb\Evaluation\EvaluationSubjects::class);
+        $mappings = $subjects->mappings();
+        $this->assertSame(20, $mappings[49]);
+        $this->assertSame(21, $mappings[6]);
+        $this->assertSame(7, $mappings[24]); // Derived evidence is kept.
+        $this->assertDatabaseHas('ppb_evaluations', ['subject_type' => 'legacy', 'subject_id' => 49, 'month' => '2026-11']);
+        $this->assertDatabaseHas('ppb_evaluation_ratings', ['subject_type' => 'legacy', 'subject_id' => 49]);
+        $this->assertDatabaseHas('ppb_evaluation_attendance', ['subject_type' => 'legacy', 'subject_id' => 6, 'game_id' => 644]);
+        $this->assertDatabaseHas('ppb_evaluation_videos', ['guest_2' => 'legacy:49']);
+        $this->assertSame(5, DB::table('ppb_analysts')->whereIn('id', [7, 20, 21, 22, 23])->count()); // V2 records are kept.
+
+        $reader = Mockery::mock(LegacyReader::class);
+        $reader->shouldReceive('profiles')->andReturn([
+            ['id' => 6, 'user_type' => 0, 'sort_id' => 3], ['id' => 49, 'user_type' => 1, 'sort_id' => 4],
+        ]);
+        $this->app->instance(LegacyReader::class, $reader);
+        $this->app->forgetInstance(\App\Services\Ppb\Evaluation\EvaluationSubjects::class);
+        $rows = collect(app(\App\Services\Ppb\Evaluation\EvaluationSubjects::class)->all());
+        $this->assertSame('元', $rows->firstWhere('id', 49)['label']);
+        $this->assertSame('葉秋', $rows->firstWhere('id', 6)['label']);
+        $this->assertSame([22, 23], $rows->where('type', 'v2')->pluck('id')->values()->all());
+
+        $again = $this->run18($migration, $roster);
+        $this->assertSame(2, $again['links']['already']);
+        $this->assertSame(0, $again['links']['linked']);
+        $this->assertSame(['evaluations' => 0, 'ratings' => 0, 'attendance' => 0, 'video_guests' => 0], $again['remapped']);
+    }
+
     public function test_checksum_mismatch_prevents_writes(): void
     {
         $this->write();
@@ -219,6 +279,16 @@ class LegacyCsdaImportTest extends TestCase
     private function run17(string $roster): array
     {
         $migration = require database_path('migrations/2026_11_26_000017_move_reassigned_pick_slots_and_fill_line_names_by_name.php');
+        ob_start();
+        try {
+            return $migration->apply($roster);
+        } finally {
+            ob_end_clean();
+        }
+    }
+
+    private function run18(object $migration, string $roster): array
+    {
         ob_start();
         try {
             return $migration->apply($roster);

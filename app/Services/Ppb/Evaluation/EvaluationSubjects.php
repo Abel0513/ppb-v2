@@ -25,7 +25,19 @@ class EvaluationSubjects
             $native=(int)array_key_first($candidates);
             if(count($reverse[$native])===1)$verified[(int)$legacy]=$native;
         }
-        return $verified;
+        // Explicit links (migration 000018) win over derived evidence; keep the mapping one-to-one.
+        $links=$this->explicitLinks();
+        foreach($verified as $legacy=>$native)if(isset($links[$legacy])||in_array($native,$links,true))unset($verified[$legacy]);
+        return $links+$verified;
+    }
+
+    /** @return array<int,int> legacy analyst id => V2 analyst id */
+    private function explicitLinks(): array
+    {
+        if(!Schema::hasTable('ppb_legacy_analyst_links'))return [];
+        $links=[];
+        foreach(DB::table('ppb_legacy_analyst_links')->get(['legacy_analyst_id','analyst_id']) as $row)$links[(int)$row->legacy_analyst_id]=(int)$row->analyst_id;
+        return $links;
     }
 
     public function all(): array
