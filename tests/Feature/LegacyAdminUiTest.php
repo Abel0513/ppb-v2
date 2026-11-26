@@ -1295,4 +1295,55 @@ class LegacyAdminUiTest extends TestCase
         self::assertStringContainsString('ppb-videos-legacy.css', $html);
         self::assertFileExists(public_path('assets/ppb/people/'.substr(sha1('BONBON'), 0, 12).'.webp'));
     }
+
+    public function test_attendance_deletions_migration_recovers_partial_first_attempt(): void
+    {
+        Schema::create('ppb_attendance_deletions', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('legacy_record_id')->unique();
+            $table->unsignedBigInteger('legacy_gid');
+            $table->string('subject_type', 12);
+            $table->unsignedBigInteger('subject_id');
+            $table->tinyInteger('attendance_status');
+            $table->dateTime('recommended_time');
+            $table->unsignedBigInteger('actor_id')->nullable();
+            $table->uuid('request_id')->unique();
+            $table->timestamp('deleted_at')->nullable();
+            $table->timestamp('restored_at')->nullable();
+            $table->timestamps();
+        });
+        $migration = require database_path('migrations/2026_11_27_000019_create_ppb_attendance_deletions.php');
+        $migration->up();
+        $migration->up();
+        self::assertTrue(Schema::hasIndex('ppb_attendance_deletions', 'ppb_att_del_subject_restored_idx'));
+        self::assertTrue(Schema::hasIndex('ppb_attendance_deletions', 'ppb_attendance_deletions_request_id_unique'));
+        foreach (Schema::getIndexes('ppb_attendance_deletions') as $index) {
+            self::assertLessThanOrEqual(64, strlen($index['name']));
+        }
+    }
+
+    public function test_attendance_deletions_migration_adds_all_indexes_to_primary_only_table(): void
+    {
+        // Live state after the failed first attempt: all columns, PRIMARY only.
+        Schema::create('ppb_attendance_deletions', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('legacy_record_id');
+            $table->unsignedBigInteger('legacy_gid');
+            $table->string('subject_type', 12);
+            $table->unsignedBigInteger('subject_id');
+            $table->tinyInteger('attendance_status');
+            $table->dateTime('recommended_time');
+            $table->unsignedBigInteger('actor_id')->nullable();
+            $table->uuid('request_id');
+            $table->timestamp('deleted_at');
+            $table->timestamp('restored_at')->nullable();
+            $table->timestamps();
+        });
+        (require database_path('migrations/2026_11_27_000019_create_ppb_attendance_deletions.php'))->up();
+        foreach (['ppb_attendance_deletions_legacy_record_id_unique', 'ppb_attendance_deletions_request_id_unique',
+            'ppb_att_del_subject_restored_idx'] as $name) {
+            self::assertTrue(Schema::hasIndex('ppb_attendance_deletions', $name), $name);
+        }
+        self::assertCount(13, Schema::getColumnListing('ppb_attendance_deletions'));
+    }
 }
