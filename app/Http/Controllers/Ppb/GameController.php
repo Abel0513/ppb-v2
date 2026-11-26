@@ -288,13 +288,13 @@ class GameController extends Controller
     public function unsettledCount(LegacyUnsettledCount $legacy, SchedulePickDisplay $display): JsonResponse
     {
         try {
-            $count = $legacy->count();
+            $data = $legacy->snapshot();
         } catch (\Throwable $error) {
             report($error);
-            $count = $display->unsettledCount();
+            $data = ['count' => $display->unsettledCount(), 'games' => []];
         }
 
-        return response()->json(['count' => $count], 200, ['Cache-Control' => 'private, no-store']);
+        return response()->json($data, 200, ['Cache-Control' => 'private, no-store']);
     }
 
     private function absenceCounts(): array

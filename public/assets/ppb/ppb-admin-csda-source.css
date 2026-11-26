@@ -1124,10 +1124,44 @@
 .admin-page-heading{min-width:0}
 .admin-mobile-menu-button{flex-shrink:0}
 .admin-topbar-right{display:flex;align-items:center;gap:8px}
-.admin-unsettled-chip{
-    display:inline-flex;align-items:center;gap:4px;white-space:nowrap;
-    padding:4px 8px;border-radius:999px;background:#edf0fb;color:#3f528f;
-    font-size:11px;font-weight:750;text-decoration:none;
+
+/* old-system unsettled badge by owner request 2026-11-26 */
+.admin-unsettled{position:relative}
+.admin-unsettled-button{
+    display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+    padding:6px 9px;border-radius:999px;background:#dc2626;color:#fff;
+    font-size:13px;font-weight:800;cursor:pointer;
 }
-.admin-unsettled-chip:hover{background:#e1e7f6}
-.admin-unsettled-chip:focus-visible{outline:2px solid var(--admin-primary);outline-offset:2px}
+.admin-unsettled-button:hover,.admin-unsettled-button[aria-expanded=true]{background:#b91c1c}
+.admin-unsettled-button:focus-visible{outline:2px solid #b91c1c;outline-offset:2px}
+.admin-unsettled-count{
+    min-width:22px;padding:1px 6px;border-radius:999px;
+    background:#fff;color:#b91c1c;font-size:12px;text-align:center;
+}
+.admin-unsettled-dropdown{
+    position:absolute;top:calc(100% + 9px);right:0;z-index:100;
+    width:min(344px,calc(100vw - 24px));max-height:min(420px,calc(100vh - 72px));
+    max-height:min(420px,calc(100dvh - 72px));overflow-y:auto;overscroll-behavior:contain;
+    border:1px solid #e2e8f0;border-radius:14px;background:#fff;
+    box-shadow:0 18px 45px rgba(15,23,42,.16);
+}
+.admin-unsettled-header{
+    position:sticky;top:0;z-index:1;display:flex;justify-content:space-between;align-items:center;
+    padding:11px 13px;border-bottom:1px solid #e2e8f0;background:#fff;
+}
+.admin-unsettled-header span,.admin-unsettled-time,.admin-unsettled-status{color:#64748b;font-size:12px}
+.admin-unsettled-status{margin:0;padding:14px 13px}
+.admin-unsettled-games{margin:0;padding:0;list-style:none}
+.admin-unsettled-games li+li{border-top:1px solid #edf2f7}
+.admin-unsettled-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;padding:10px 13px}
+a.admin-unsettled-row:hover,a.admin-unsettled-row:focus-visible{background:#f5f8ff}
+a.admin-unsettled-row:focus-visible{outline:2px solid #1d4ed8;outline-offset:-2px}
+.admin-unsettled-code{padding:1px 7px;border-radius:6px;background:#e0edff;color:#1d4ed8;font-size:12px;font-weight:750}
+.admin-unsettled-matchup{flex-basis:100%;overflow-wrap:anywhere}
+@media(max-width:740px){
+    .admin-unsettled-dropdown{position:fixed;top:58px;right:12px}
+}
+@media(max-width:380px){
+    .admin-unsettled-button{gap:4px;padding-inline:7px;font-size:12px}
+    .admin-unsettled-count{padding-inline:4px}
+}
