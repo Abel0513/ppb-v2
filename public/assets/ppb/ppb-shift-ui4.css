@@ -1,6 +1,6 @@
 /* PPB UI4 2026-11-04 | Visual source: old AdminSchedule/shift.tpl and Public/Admin/css/shift.css.
  * Scoped to .ppb-shift-page. No old-site files or shared CSDA styling modified. */
-.ppb-shift-page{background:#f0f0f0;padding:18px 20px 32px}
+.ppb-shift-page{background:#f0f0f0} /* padding: shared .admin-content standard */
 .ppb-shift-wrap{width:100%;max-width:none}
 .ppb-shift-page .ppb-shift-search-card,.ppb-shift-page .ppb-shift-card{
  background:#fff;border:0;border-radius:10px;padding:15px 20px;margin:0 0 22px;
@@ -34,7 +34,7 @@
 .ppb-shift-pagination{margin:10px 0 22px}
 @media(max-width:1100px){.ppb-shift-header{gap:8px}.ppb-shift-matchup{flex:1 1 100%;order:2}.ppb-shift-legends{margin-left:0}.ppb-shift-reviewer{order:3}.ppb-shift-actions{order:1}}
 @media(max-width:640px){
- .ppb-shift-page{padding:8px 8px 20px;background:#f3f6fb}
+ .ppb-shift-page{background:#f3f6fb}
  .ppb-shift-page .ppb-shift-search-card{padding:10px 12px;margin-bottom:10px}
  .ppb-shift-search-form{gap:8px}.ppb-shift-filter{flex:1 1 140px;flex-direction:column;align-items:stretch;gap:2px;font-size:11px}
  .ppb-shift-filter input{width:100%;font-size:12px;height:34px}.ppb-shift-search-btn,.ppb-shift-add-btn{height:34px;padding:0 16px;font-size:13px}

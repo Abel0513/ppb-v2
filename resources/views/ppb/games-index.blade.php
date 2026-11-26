@@ -3,7 +3,7 @@
 @section('title', $readOnly ? '賽事排班（唯讀）' : '賽事排班')
 @push('styles')
 <link rel="stylesheet" href="{{ asset('assets/ppb/ppb-schedule-dialogs.css') }}?v=v2-style-20261126">
-<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-shift-ui4.css') }}?v=20261105-op1">
+<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-shift-ui4.css') }}?v=20261127-pad">
 @endpush
 @section('body')
 @php
