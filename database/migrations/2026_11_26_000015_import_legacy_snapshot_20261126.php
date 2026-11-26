@@ -12,6 +12,10 @@ return new class extends Migration {
         'ppb_evaluation_videos', 'ppb_sport_fixtures',
     ];
 
+    private const SKIP = 409;
+    /** @var array<string, list<string>> */
+    private array $conflicts = [];
+
     public function up(): void
     {
         $this->importSnapshot(database_path('data/legacy-import-20261126'));
@@ -37,6 +41,7 @@ return new class extends Migration {
         }
 
         $counts = DB::transaction(function () use ($snapshot) {
+            $this->conflicts = [];
             $counts = array_fill_keys(self::TABLES, ['inserted' => 0, 'updated' => 0, 'skipped' => 0]);
             $this->lockScheduleScopes($snapshot['games']);
             [$mapping, $nativeNames] = $this->analystMapping($snapshot['analysts']);
@@ -52,8 +57,17 @@ return new class extends Migration {
                 $games[$game['id']] = true;
                 $gamePicks = $picks->get($game['id'], collect());
                 $fixtureKey = substr($game['recommended_time'], 0, 10).'|'.$game['matchup'];
-                $gameId = $this->importGame($game, $gamePicks, $fixtureIds[$fixtureKey] ?? null,
-                    $mapping, $existingIds->get($game['id'], collect()), $counts['ppb_games']);
+                try {
+                    $gameId = $this->importGame($game, $gamePicks, $fixtureIds[$fixtureKey] ?? null,
+                        $mapping, $existingIds->get($game['id'], collect()), $counts['ppb_games']);
+                } catch (RuntimeException $conflict) {
+                    $this->skipOrFail($conflict, 'games', $counts['ppb_games']);
+                    foreach ($gamePicks as $pick) {
+                        $this->conflicts['picks_of_skipped_games'][] = (string) $pick['id'];
+                        ++$counts['ppb_legacy_pick_contents']['skipped'];
+                    }
+                    continue;
+                }
                 foreach ($gamePicks as $pick) {
                     $this->importPick($pick, $game, $gameId, $mapping, $analystNames[$pick['analyst_id']], $counts);
                 }
@@ -65,13 +79,34 @@ return new class extends Migration {
             $names = array_column($snapshot['analysts'], 'id', 'name');
             $legacyByNative = array_flip($mapping);
             foreach ($snapshot['videos'] as $video) {
-                $this->importVideo($video, $names, $nativeNames, $legacyByNative, $counts['ppb_evaluation_videos']);
+                try {
+                    $this->importVideo($video, $names, $nativeNames, $legacyByNative, $counts['ppb_evaluation_videos']);
+                } catch (RuntimeException $conflict) {
+                    $this->skipOrFail($conflict, 'videos', $counts['ppb_evaluation_videos']);
+                }
             }
             return $counts;
         }, 3);
 
-        Log::info('PPB legacy snapshot 2026-11-26 imported', $counts);
+        $report = array_map(fn ($items) => ['count' => count($items), 'items' => array_slice($items, 0, 50)], $this->conflicts);
+        Log::info('PPB legacy snapshot 2026-11-26 imported', ['counts' => $counts, 'conflicts' => $report]);
         echo 'PPB legacy snapshot 2026-11-26 '.json_encode($counts, JSON_THROW_ON_ERROR).PHP_EOL;
+        echo 'PPB legacy snapshot 2026-11-26 conflicts '.json_encode(array_map(fn ($items) => count($items), $this->conflicts), JSON_THROW_ON_ERROR).PHP_EOL;
+    }
+
+    /** Conflicts that cannot corrupt data are reported and the source row is skipped. */
+    private function skip(string $message): RuntimeException
+    {
+        return new RuntimeException($message, self::SKIP);
+    }
+
+    private function skipOrFail(RuntimeException $conflict, string $kind, array &$count): void
+    {
+        if ($conflict->getCode() !== self::SKIP) {
+            throw $conflict;
+        }
+        $this->conflicts[$kind][] = $conflict->getMessage();
+        ++$count['skipped'];
     }
 
     private function lockScheduleScopes(array $games): void
@@ -138,11 +173,11 @@ return new class extends Migration {
                 json_decode((string) $game->notes, true)['_ppb_legacy_game_v1'] ?? false);
         $legacyId = $source['id'];
         if ($matches->count() > 1) {
-            throw new RuntimeException("Ambiguous imported V2 game for legacy schedule {$legacyId}");
+            throw $this->skip("Ambiguous imported V2 game for legacy schedule {$legacyId}");
         }
         $old = $matches->first();
         if ($existingIds->isNotEmpty() && ($existingIds->count() !== 1 || $existingIds->first()->id !== $old?->id)) {
-            throw new RuntimeException("Legacy schedule {$legacyId} no longer matches its linked V2 game");
+            throw $this->skip("Legacy schedule {$legacyId} no longer matches its linked V2 game");
         }
         $play = [
             'play_type' => $source['play_type'], 'play_value' => $source['play_value'],
@@ -153,7 +188,7 @@ return new class extends Migration {
         if ($old) {
             $notes = json_decode($old->notes, true, 512, JSON_THROW_ON_ERROR);
             if (isset($notes['legacy_source_schedule_id']) && (int) $notes['legacy_source_schedule_id'] !== $legacyId) {
-                throw new RuntimeException("V2 game {$old->id} is linked to a different legacy schedule");
+                throw $this->skip("V2 game {$old->id} is linked to a different legacy schedule");
             }
             $merged = $notes + ['legacy_source_schedule_id' => $legacyId];
             if (trim((string) ($notes['lottery_no'] ?? '')) === '' && $source['lottery_no'] !== null) {
@@ -186,7 +221,7 @@ return new class extends Migration {
 
         if ((clone $scope)->where('active_number', $number)->lockForUpdate()->first()) {
             $code = ($type === 1 ? 'G' : 'E').$number;
-            throw new RuntimeException("Legacy schedule {$legacyId} conflicts with occupied V2 slot {$month} {$code}");
+            throw $this->skip("Legacy schedule {$legacyId} conflicts with occupied V2 slot {$month} {$code}");
         }
 
         $cancelled = $source['cancelled'];
@@ -224,11 +259,37 @@ return new class extends Migration {
         $submissionKey = ['legacy_source_pick_id' => $pick['id']];
         $submission = DB::table('ppb_submissions')->where($submissionKey)->lockForUpdate()->first();
         $analystId = $pick['analyst_id'];
-        if (($archive && ((int) $archive->game_id !== $gameId || $archive->kind !== $kind
-                || (int) $archive->legacy_analyst_id !== $analystId))
+        if (($archive && ((int) $archive->game_id !== $gameId || $archive->kind !== $kind))
             || ($submission && ((int) $submission->game_id !== $gameId || $submission->kind !== $kind
                 || $submission->status !== 'legacy_imported'))) {
-            throw new RuntimeException("Legacy pick {$pick['id']} conflicts with existing source lineage");
+            // A different game or kind would move the pick; keep the existing V2 rows untouched.
+            $this->conflicts['picks_skipped_lineage'][] = (string) $pick['id'];
+            ++$counts['ppb_legacy_pick_contents']['skipped'];
+            return;
+        }
+        if ($archive && (int) $archive->legacy_analyst_id !== $analystId) {
+            // Same legacy pick ID, game and kind, but the legacy author was reassigned
+            // after the earlier import. Keep the existing V2 attribution, links and
+            // numbers; refresh only the text and record the reconciliation.
+            $text = ['recommend_pick' => $pick['long_url'] ?? $pick['recommend'],
+                'short_analysis' => $kind === 'long' ? ($archive->short_analysis ?? $pick['analysis']) : $pick['analysis']];
+            $text = array_filter($text, fn ($value) => $value !== null);
+            if ($this->changes($archive, $text)) {
+                $kept = array_merge((array) $archive, $text);
+                $text['source_sha256'] = hash('sha256', $this->json($source + [
+                    'legacy_analyst_id' => (int) $kept['legacy_analyst_id'], 'kind' => $kept['kind'],
+                    'legacy_game_code' => $kept['legacy_game_code'], 'recommend_pick' => $kept['recommend_pick'],
+                    'short_analysis' => $kept['short_analysis'], 'legacy_is_substitute' => (int) $kept['legacy_is_substitute'],
+                    'legacy_is_win' => $kept['legacy_is_win'] === null ? null : (int) $kept['legacy_is_win'],
+                    'legacy_recommended_time' => $kept['legacy_recommended_time'],
+                    'legacy_source_schedule_id' => $game['id'],
+                ]));
+            }
+            $this->save('ppb_legacy_pick_contents', $source, $archive, $text, $counts['ppb_legacy_pick_contents'], false);
+            $this->conflicts['picks_reconciled_author'][] = $pick['id'].':'.$archive->legacy_analyst_id.'->'.$analystId;
+            ++$counts['ppb_assignments']['skipped'];
+            ++$counts['ppb_submissions']['skipped'];
+            return;
         }
 
         // CT6 stores the source URL in recommend_pick. Verified CT4 archives
@@ -321,7 +382,12 @@ return new class extends Migration {
         $byMatch = [];
         foreach ($fixtures as $fixture) {
             $key = ['source' => 'pay_sport_schedule', 'source_id' => (string) $fixture['id']];
-            $old = $this->uniqueRow('ppb_sport_fixtures', $key);
+            try {
+                $old = $this->uniqueRow('ppb_sport_fixtures', $key);
+            } catch (RuntimeException $conflict) {
+                $this->skipOrFail($conflict, 'fixtures', $count);
+                continue;
+            }
             $matchup = trim($fixture['league'].' '.$fixture['away'].'@'.$fixture['home']);
             $values = [
                 'sport' => $fixture['sport'], 'league' => $fixture['league'],
@@ -340,7 +406,7 @@ return new class extends Migration {
         // slot on the date and week label, both available in this schema.
         $week = array_search($source['week_label'], [1 => '第一周', '第二周', '第三周', '第四周', '第五周'], true);
         if ($week === false) {
-            throw new RuntimeException("Unknown week label for legacy video {$source['id']}");
+            throw $this->skip("Unknown week label for legacy video {$source['id']}");
         }
         $key = ['scheduled_at' => $this->utc($source['date'].' 00:00:00'), 'week_no' => $week];
         $old = $this->uniqueRow('ppb_evaluation_videos', $key);
@@ -366,7 +432,7 @@ return new class extends Migration {
     {
         $rows = DB::table($table)->where($key)->lockForUpdate()->limit(2)->get();
         if ($rows->count() > 1) {
-            throw new RuntimeException("Ambiguous legacy snapshot match in {$table}: ".$this->json($key));
+            throw $this->skip("Ambiguous legacy snapshot match in {$table}: ".$this->json($key));
         }
         return $rows->first();
     }
