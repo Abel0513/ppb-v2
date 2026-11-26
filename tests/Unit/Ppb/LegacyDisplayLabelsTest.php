@@ -20,8 +20,9 @@ class LegacyDisplayLabelsTest extends TestCase
     public function test_only_the_verified_unmapped_ids_have_specific_names(): void
     {
         self::assertSame('哆啦', LegacyDisplayLabels::unmappedAnalyst(4));
-        self::assertSame('黛秋', LegacyDisplayLabels::unmappedAnalyst(6));
+        self::assertSame('葉秋', LegacyDisplayLabels::unmappedAnalyst(6));
         self::assertSame('洛老師', LegacyDisplayLabels::unmappedAnalyst(7));
+        self::assertSame('潔西', LegacyDisplayLabels::unmappedAnalyst(18));
         self::assertSame('舊分析師 #5', LegacyDisplayLabels::unmappedAnalyst(5));
     }
 }

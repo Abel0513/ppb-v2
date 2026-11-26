@@ -47,6 +47,12 @@ class PpbGame extends Model
         $value = $notes['lottery_no'] ?? null;
         return (is_int($value) || is_string($value)) && trim((string) $value) !== '' ? (string) $value : null;
     }
+    public function legacyPrediction(): ?string
+    {
+        $notes = json_decode((string) $this->notes, true);
+        $prediction = $notes['legacy_prediction'] ?? null;
+        return ($notes['_ppb_legacy_game_v1'] ?? false) && is_string($prediction) ? $prediction : null;
+    }
     public function getDisplayCodeAttribute(): string {
         return ($this->game_type === 1 ? 'G' : 'E').($this->game_number ?? '?');
     }

@@ -25,6 +25,7 @@ class LegacyAttendanceSource
         $notes = json_decode((string) $game?->notes, true);
 
         return $game && ($notes['_ppb_legacy_game_v1'] ?? false)
+            && (int) ($notes['legacy_source_schedule_id'] ?? $game->id) === (int) $row['gid']
             && $game->display_code === $row['code'] && $game->recommended_at
             && CarbonImmutable::parse($game->getRawOriginal('recommended_at'), 'UTC')
                 ->tz('Asia/Taipei')->toDateTimeString() === $row['recommended_time'];

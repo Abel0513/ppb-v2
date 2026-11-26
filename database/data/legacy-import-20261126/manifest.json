@@ -1,0 +1,22 @@
+{
+  "games.json": {
+    "rows": 138,
+    "sha256": "36a0ecfa80646ef7d1f0ea76b732e774fa3005cdd1c7755ef37dabd0ffa64d09"
+  },
+  "picks.json": {
+    "rows": 892,
+    "sha256": "86f021809f17ae0fd9982b311e08316659fb5abe173bcbb97c2c8a31da22f75f"
+  },
+  "videos.json": {
+    "rows": 24,
+    "sha256": "24617a562b10ac647ea3483fbdba9987eb6a077d92fecc4544cd629b2b59005d"
+  },
+  "fixtures.json": {
+    "rows": 103,
+    "sha256": "e3f8116ee9c072dd134ce614cc299cf6a71e2be85033360d6603dd47af68f906"
+  },
+  "analysts.json": {
+    "rows": 35,
+    "sha256": "d0da253c1da2d5c04b625a34fa4e36a877c68caae6e0c32c22c76787e08f5623"
+  }
+}

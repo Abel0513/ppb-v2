@@ -307,22 +307,22 @@ class LegacyAdminUiTest extends TestCase
             'color' => '#142536', 'background' => '#ABCDEF',
         ]);
         DB::table('ppb_legacy_pick_contents')->insert([
-            'game_id' => 800, 'source_pick_id' => 20, 'legacy_analyst_id' => 42, 'kind' => 'pick',
+            'game_id' => 750, 'source_pick_id' => 20, 'legacy_analyst_id' => 42, 'kind' => 'pick',
         ]);
         DB::table('ppb_submissions')->insert([
-            'game_id' => 800, 'legacy_source_pick_id' => 20, 'submitted_analyst_id' => 9,
+            'game_id' => 750, 'legacy_source_pick_id' => 20, 'submitted_analyst_id' => 9,
             'kind' => 'pick', 'status' => 'legacy_imported',
         ]);
         DB::table('ppb_games')->insert([
-            ['id' => 800, 'game_type' => 1, 'game_number' => 15, 'recommended_at' => '2026-10-31 16:00:00',
-                'matchup_text' => 'Imported matchup', 'notes' => '{"_ppb_legacy_game_v1":true}'],
+            ['id' => 750, 'game_type' => 1, 'game_number' => 15, 'recommended_at' => '2026-10-31 16:00:00',
+                'matchup_text' => 'Imported matchup', 'notes' => '{"_ppb_legacy_game_v1":true,"legacy_source_schedule_id":800}'],
             ['id' => 851, 'game_type' => 2, 'game_number' => 8, 'recommended_at' => '2026-11-03 05:00:00',
                 'matchup_text' => 'Unrelated local matchup', 'notes' => null],
             ['id' => 900, 'game_type' => 1, 'game_number' => 40, 'recommended_at' => '2026-08-31 16:00:00',
                 'matchup_text' => 'Native matchup', 'notes' => null],
         ]);
         DB::table('ppb_evaluation_attendance')->insert([
-            ['game_id' => 800, 'subject_type' => 'legacy', 'subject_id' => 42, 'attendance_status' => 1],
+            ['game_id' => 750, 'subject_type' => 'legacy', 'subject_id' => 42, 'attendance_status' => 1],
             ['game_id' => 900, 'subject_type' => 'legacy', 'subject_id' => 42, 'attendance_status' => 2],
         ]);
 

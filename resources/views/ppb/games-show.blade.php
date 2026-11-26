@@ -16,7 +16,7 @@
 </div>
 <p class="small-note">指派完整度：短文 {{ $game->assignments->where('kind','pick')->where('status','active')->count() }}/5；BONUS {{ $game->assignments->where('kind','bonus')->where('status','active')->count() }}/1；核稿 {{ $game->reviewer_analyst_id ? '已選' : '未選' }}；長文 {{ $game->has_long_article ? ($game->assignments->where('kind','long')->where('status','active')->count().'/1') : '未安排' }}。</p>
 <p class="small-note">WP 系統尚未接入本階段的實際上傳功能。人員完整度是上傳前檢查，不能當成文章已成功發布。</p>
-<p class="small-note">玩法：{{ [1=>'讓分',2=>'不讓分',3=>'大小分',4=>'特殊玩法',5=>'手動玩法'][$game->play_type] ?? '—' }} {{ $game->play_value }}／盤口：{{ [1=>'兩路盤',2=>'三路盤'][$game->market_type] ?? '—' }}。{{ $game->starts_at ? '實際開賽：'.$game->starts_at->timezone('Asia/Taipei')->format('Y-m-d H:i') : '尚未設定實際開賽時間' }}</p>
+<p class="small-note">玩法：{{ [1=>'讓分',2=>'不讓分',3=>'大小分',4=>'特殊玩法',5=>'手動玩法'][$game->play_type] ?? $game->legacyPrediction() ?? '—' }} {{ $game->play_value }}／盤口：{{ [1=>'兩路盤',2=>'三路盤'][$game->market_type] ?? '—' }}。{{ $game->starts_at ? '實際開賽：'.$game->starts_at->timezone('Asia/Taipei')->format('Y-m-d H:i') : '尚未設定實際開賽時間' }}</p>
 @if($game->status==='cancelled')<p class="small-note">取消原因：{{ $game->cancel_reason }}</p>@endif
 </div>
 <div class="card" style="margin-bottom:18px"><h2 class="card-title">分析師指派</h2><p class="small-note">5 位短文不得重複。BONUS 與長文可兼任；已有投稿、代班歷程時不能直接覆寫既有任務。</p>

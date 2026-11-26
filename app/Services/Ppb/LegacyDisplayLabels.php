@@ -16,8 +16,7 @@ final class LegacyDisplayLabels
 
     public static function unmappedAnalyst(int $id): string
     {
-        // Run 45687197017 / PR #120: id 4 is fourth by sort_id,id and its
-        // November short settled rate (4–8, 33%) matches captured row 哆啦.
-        return [4 => '哆啦', 6 => '黛秋', 7 => '洛老師'][$id] ?? '舊分析師 #'.$id;
+        // Verified against option values in the 2026-11-26 legacy shift export.
+        return [4 => '哆啦', 6 => '葉秋', 7 => '洛老師', 18 => '潔西'][$id] ?? '舊分析師 #'.$id;
     }
 }

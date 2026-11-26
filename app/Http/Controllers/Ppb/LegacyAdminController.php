@@ -92,13 +92,21 @@ class LegacyAdminController extends Controller
         }
 
         $games = PpbGame::whereIntegerInRaw('id', $native->concat($legacy)->pluck('gid')->unique()->all())->get()->keyBy('id');
-        $key = fn ($row) => $row['gid'].':'.$row['subject_type'].':'.$row['subject_id'];
-        $nativeKeys = $native->keyBy($key);
-        $legacy = $legacy->unique($key)->map(function ($row) use ($games, $source) {
-            $game = $games->get($row['gid']);
+        $imported = collect();
+        if ($legacy->isNotEmpty()) {
+            $requestedIds = $legacy->pluck('gid')->flip();
+            $imported = PpbGame::where('notes', 'like', '%"legacy_source_schedule_id"%')->get()
+                ->groupBy(fn ($game) => json_decode($game->notes, true)['legacy_source_schedule_id'] ?? 0)
+                ->filter(fn ($games, $id) => $requestedIds->has($id));
+        }
+        $key = fn ($row, $gameId = null) => ($gameId ?? $row['gid']).':'.$row['subject_type'].':'.$row['subject_id'];
+        $nativeKeys = $native->keyBy(fn ($row) => $key($row));
+        $legacy = $legacy->unique(fn ($row) => $key($row))->map(function ($row) use ($games, $imported, $source) {
+            $linked = $imported->get($row['gid']);
+            $game = $linked === null ? $games->get($row['gid']) : ($linked->count() === 1 ? $linked->first() : null);
 
             return $row + ['game' => $source->matchesImportedGame($row, $game) ? $game : null];
-        })->reject(fn ($row) => $row['game'] && $nativeKeys->has($key($row)));
+        })->reject(fn ($row) => $row['game'] && $nativeKeys->has($key($row, $row['game']->id)));
 
         $byMonth = $legacy->concat($native->map(function ($row) use ($games) {
             $game = $games->get($row['gid']);

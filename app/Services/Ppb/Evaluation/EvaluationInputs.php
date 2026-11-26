@@ -52,7 +52,26 @@ class EvaluationInputs
         $start=$date->startOfMonth()->utc()->format('Y-m-d H:i:s');$end=$date->endOfMonth()->utc()->format('Y-m-d H:i:s');
         $videos=DB::table('ppb_evaluation_videos')->where(fn($q)=>$q->where('guest_1',$key)->orWhere('guest_2',$key)->orWhere('guest_3',$key))->whereBetween('scheduled_at',[$start,$end])->orderBy('scheduled_at')->orderBy('id')->limit(1001)->get()->map(fn($r)=>(array)$r)->all();
         if(count($videos)>1000)throw new \RuntimeException('V2_VIDEO_COVERAGE_LIMIT');
-        return ['attendance'=>$attendance,'games'=>$games,'overrides'=>$overrides->map(fn($r)=>(array)$r)->all(),'videos'=>$videos,'video_count'=>count(array_filter($videos,fn($v)=>!$v['cancelled']))];
+        // The bridge already counts legacy video attendance. Retain snapshot
+        // cards for V2 local reports and exclude their weekly keys here.
+        $snapshotKeys = $subject['type'] === 'legacy' && $videos ? $this->snapshotVideoKeys() : [];
+        $videoCount = count(array_filter($videos, fn ($video) => !$video['cancelled']
+            && !isset($snapshotKeys[$video['scheduled_at'].':'.($video['week_no'] ?? '')])));
+        return ['attendance'=>$attendance,'games'=>$games,'overrides'=>$overrides->map(fn($r)=>(array)$r)->all(),'videos'=>$videos,'video_count'=>$videoCount];
+    }
+
+    private function snapshotVideoKeys(): array
+    {
+        $path = database_path('data/legacy-import-20261126/videos.json');
+        if (!is_file($path)) return [];
+
+        $weeks = ['第一周' => 1, '第二周' => 2, '第三周' => 3, '第四周' => 4, '第五周' => 5];
+        $keys = [];
+        foreach (json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR) as $video) {
+            $date = CarbonImmutable::parse($video['date'], 'Asia/Taipei')->utc()->toDateTimeString();
+            $keys[$date.':'.$weeks[$video['week_label']]] = true;
+        }
+        return $keys;
     }
 
     private function games(array $subject,CarbonImmutable $date): array
