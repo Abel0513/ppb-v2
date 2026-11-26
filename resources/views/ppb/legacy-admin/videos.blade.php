@@ -3,57 +3,101 @@
 
 @push('styles')
 <link rel="stylesheet" href="{{ asset('assets/ppb/ppb-schedule-dialogs.css') }}?v=v2-style-20261126">
+<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-videos-legacy.css') }}?v=20261127-1">
 @endpush
 
 @section('legacy-content')
+@php
+  $weekLabels = [1 => '第一周', '第二周', '第三周', '第四周', '第五周'];
+  $people = config('ppb_video_people', []);
+  $legacyColors = config('ppb_legacy_colors', []);
+  $analysts = \App\Models\PpbAnalyst::whereIn('id', $roster->pluck('native_id')->filter()->all())->get()->keyBy('id');
+  $person = function (?string $name, ?array $colors = null) use ($people) {
+      $name = trim((string) $name);
+      if ($name === '') return null;
+      $colors = $colors ?: ($people['colors'][$name] ?? $people['fallback'] ?? ['background' => '#f3f4f6', 'color' => '#374151']);
+      $file = 'assets/ppb/people/'.substr(sha1($name), 0, 12).'.webp';
+      return ['name' => $name, 'initials' => mb_substr($name, 0, 2),
+          'photo' => is_file(public_path($file)) ? asset($file) : null,
+          'style' => 'background:'.($colors['background'] ?? '#f3f4f6').';color:'.($colors['color'] ?? '#374151')];
+  };
+  $guest = function (?string $key) use ($roster, $analysts, $legacyColors, $person) {
+      $subject = $key ? $roster->get($key) : null;
+      if (! $subject) return null;
+      $analyst = $subject['native_id'] ? $analysts->get($subject['native_id']) : null;
+      $colors = $analyst?->scheduleColors($legacyColors[(int) $analyst->id] ?? null);
+      return $person($subject['label'], $colors && $colors['background'] ? $colors : null);
+  };
+@endphp
+<div class="ppb-vs">
 @if($canManageVideos)
-  <div class="toolbar"><button type="button" class="action" data-open-video>＋ 新增影音排班</button></div>
+  <div class="ppb-vs-header"><button type="button" class="btn-add" data-open-video>＋ 新增班表</button></div>
 @endif
 @include('ppb.legacy-admin.month-tabs')
 @if(!$ready)<p class="notice">影音排班資料暫時無法取得。</p>@endif
-@php $weekLabels = [1 => '第一周', '第二周', '第三周', '第四周', '第五周']; @endphp
-<div class="ppb-video-grid">
+<div class="ppb-vs-grid">
   @forelse($videos as $video)
     @php
       $date = \Carbon\CarbonImmutable::parse($video->scheduled_at, 'UTC')->tz('Asia/Taipei');
       $editor = $roster->get($video->guest_1);
       $fields = [
-          'video_id' => $video->id, 'video_revision' => $video->revision, 'scheduled_at' => $date->format('Y-m-d\TH:i'),
+          'video_id' => $video->id, 'video_revision' => $video->revision ?? null, 'scheduled_at' => $date->format('Y-m-d\TH:i'),
           'host_name' => $video->host_name ?? null, 'editor_name' => $video->editor_name ?? null, 'week_no' => $video->week_no ?? null,
           'sport_label' => $video->sport_label ?? null, 'guest_1' => $video->guest_1, 'guest_2' => $video->guest_2,
           'guest_3' => $video->guest_3, 'cancelled' => (int) $video->cancelled,
       ];
+      $sport = trim((string) ($video->sport_label ?? ''));
+      $members = [['p' => $person($video->host_name ?? null), 'role' => '主持人']];
+      foreach (range(1, 3) as $slot) $members[] = ['p' => $guest($video->{'guest_'.$slot}), 'role' => '來賓 '.$slot];
+      $cutter = $person($video->editor_name ?? null);
     @endphp
-    <section class="card">
-      <header class="toolbar">
-        <h2 class="card-title">{{ $date->format('n/j') }}{{ isset($weekLabels[$video->week_no ?? 0]) ? '（'.$weekLabels[$video->week_no].'）' : '' }}</h2>
+    <section class="card {{ $video->cancelled ? 'is-cancelled' : '' }}">
+      <div class="card-head">
+        <div class="card-meta">
+          @if($sport !== '')<span class="sport-tag {{ strtoupper($sport) === 'NBA' ? 'nba' : 'other' }}">{{ $sport }}</span>@endif
+          <span class="card-date">{{ $date->format('n/j') }}{{ isset($weekLabels[$video->week_no ?? 0]) ? '（'.$weekLabels[$video->week_no].'）' : '' }}</span>
+          @if($video->cancelled)<span class="cancelled-tag">已取消</span>@endif
+        </div>
         @if($canManageVideos && $editor)
-          <div class="ppb-video-actions">
-            <button type="button" class="admin-button admin-button-secondary" data-open-video="{{ json_encode($fields, JSON_THROW_ON_ERROR) }}">編輯</button>
+          <div class="card-actions">
+            <button type="button" class="action-btn edit" title="編輯" aria-label="編輯" data-open-video="{{ json_encode($fields, JSON_THROW_ON_ERROR) }}">✏️</button>
             @unless($video->cancelled)
-              <button type="button" class="admin-button admin-button-secondary" data-cancel-video="{{ json_encode($fields, JSON_THROW_ON_ERROR) }}">取消排班</button>
+              <button type="button" class="action-btn del" title="取消排班" aria-label="取消排班" data-cancel-video="{{ json_encode($fields, JSON_THROW_ON_ERROR) }}">🗑️</button>
             @endunless
           </div>
         @endif
-      </header>
-      <dl class="ppb-video-people">
-        @if(!empty($video->sport_label))
-          <dt>推薦賽事</dt><dd>{{ $video->sport_label }}</dd>
-        @endif
-        <dt>主持人</dt><dd>{{ $video->host_name ?? '—' }}</dd>
-        @foreach(range(1, 3) as $slot)
-          @php
-            $guest = $roster->get($video->{'guest_'.$slot});
-          @endphp
-          <dt>來賓 {{ $slot }}</dt><dd>{{ $guest['label'] ?? '—' }}</dd>
-        @endforeach
-        <dt>剪輯師</dt><dd>{{ $video->editor_name ?? '—' }}</dd>
-      </dl>
-      @if($video->cancelled)<p class="status disabled">已取消</p>@endif
+      </div>
+      <div class="card-body">
+        <div class="section-label">主持人 &amp; 來賓</div>
+        <div class="persons">
+          @foreach($members as $member)
+            <div class="person-card">
+              @if($member['p'])
+                <div class="avatar" style="{{ $member['p']['style'] }}">@if($member['p']['photo'])<img src="{{ $member['p']['photo'] }}" alt="{{ $member['p']['name'] }}" loading="lazy">@else{{ $member['p']['initials'] }}@endif</div>
+                <span class="person-name">{{ $member['p']['name'] }}</span>
+              @else
+                <div class="avatar avatar-empty">—</div>
+                <span class="person-name">—</span>
+              @endif
+              <span class="person-role">{{ $member['role'] }}</span>
+            </div>
+          @endforeach
+        </div>
+        <div class="card-divider"></div>
+        <div class="editor-row">
+          @if($cutter)
+            <div class="editor-avatar" style="{{ $cutter['style'] }}">@if($cutter['photo'])<img src="{{ $cutter['photo'] }}" alt="{{ $cutter['name'] }}" loading="lazy">@else{{ $cutter['initials'] }}@endif</div>
+          @else
+            <div class="editor-avatar avatar-empty">—</div>
+          @endif
+          <div class="editor-info"><span class="editor-name">{{ $cutter['name'] ?? '—' }}</span><span class="editor-role">剪輯師</span></div>
+        </div>
+      </div>
     </section>
   @empty
-    @if($ready)<p class="notice">無資料</p>@endif
+    @if($ready)<p class="empty-msg">本月尚無班表</p>@endif
   @endforelse
+</div>
 </div>
 @if($canManageVideos)
 <dialog class="ppb-schedule-dialog" id="ppbVideoDialog" aria-labelledby="ppbVideoTitle">

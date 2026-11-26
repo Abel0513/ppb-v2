@@ -1100,4 +1100,26 @@ class LegacyAdminUiTest extends TestCase
         $this->get(self::HOST.'/analysis-schedule?p=2')->assertOk();
         self::assertContains($this->get(self::HOST.'/admin/schedule/articles')->getStatusCode(), [302, 401]);
     }
+
+    public function test_videos_page_uses_old_system_cards(): void
+    {
+        $this->actor(['schedules.view', 'evaluations.view', 'evaluations.manage']);
+        DB::table('ppb_analysts')->insert(['id' => 62, 'name' => '羅蘋哥', 'user_type' => 0, 'color' => '#f3f9fd', 'background' => '#0642b1']);
+        DB::table('ppb_evaluation_videos')->insert([
+            'scheduled_at' => '2026-11-08 04:00:00', 'guest_1' => 'v2:62', 'week_no' => 1, 'sport_label' => 'NBA',
+            'host_name' => '湘瑩', 'editor_name' => 'BONBON', 'cancelled' => false,
+        ]);
+        $html = $this->get(self::HOST.'/admin/schedule/videos?month=2026-11')->assertOk()
+            ->assertSee('<span class="sport-tag nba">NBA</span>', false)
+            ->assertSee('<span class="card-date">11/8（第一周）</span>', false)
+            ->assertSee('<div class="avatar" style="background:#7f1d1d;color:#fee2e2">湘瑩</div>', false)
+            ->assertSee('<div class="avatar" style="background:#0642b1;color:#f3f9fd"><img src="', false)
+            ->assertSee('assets/ppb/people/'.substr(sha1('羅蘋哥'), 0, 12).'.webp', false)
+            ->assertSee('<span class="person-role">來賓 3</span>', false)
+            ->assertSee('<span class="editor-name">BONBON</span>', false)
+            ->assertSee('＋ 新增班表')
+            ->getContent();
+        self::assertStringContainsString('ppb-videos-legacy.css', $html);
+        self::assertFileExists(public_path('assets/ppb/people/'.substr(sha1('BONBON'), 0, 12).'.webp'));
+    }
 }
