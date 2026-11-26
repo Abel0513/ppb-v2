@@ -46,7 +46,8 @@ class LegacyAdminController extends Controller
             $rows->where('kind', 'long')->where('status', 'active')->with('currentAnalyst')])
             ->orderBy('recommended_at')->orderBy('game_type')->orderBy('game_number')->orderBy('id')->get() : collect();
 
-        return view('ppb.legacy-admin.articles', compact('month', 'pager', 'games'));
+        return view($request->routeIs('ppb.public.articles') ? 'ppb.public-articles' : 'ppb.legacy-admin.articles',
+            compact('month', 'pager', 'games'));
     }
 
     private function monthPager(Request $request, $months): LengthAwarePaginator
