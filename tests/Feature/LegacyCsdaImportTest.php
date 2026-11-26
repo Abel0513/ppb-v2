@@ -51,15 +51,17 @@ class LegacyCsdaImportTest extends TestCase
             ['id' => 8, 'name' => 'New Author', 'line_name' => null],
             ['id' => 9, 'name' => 'Kept Author', 'line_name' => 'V2 edited'],
         ]);
-        DB::table('ppb_games')->insert([
-            'id' => 644, 'month_key' => '2026-11', 'game_type' => 1, 'game_number' => 19, 'active_number' => 19,
-            'recommended_at' => '2026-11-07 03:00:00', 'sport' => 'other', 'home_team' => 'H', 'away_team' => 'A',
-            'notes' => '{"_ppb_legacy_game_v1":true,"legacy_source_schedule_id":644}',
-        ]);
+        foreach ([644 => 19, 645 => 20] as $gameId => $number) {
+            DB::table('ppb_games')->insert([
+                'id' => $gameId, 'month_key' => '2026-11', 'game_type' => 1, 'game_number' => $number, 'active_number' => $number,
+                'recommended_at' => '2026-11-07 03:00:00', 'sport' => 'other', 'home_team' => 'H', 'away_team' => 'A',
+                'notes' => '{"_ppb_legacy_game_v1":true,"legacy_source_schedule_id":'.$gameId.'}',
+            ]);
+        }
         // Mapping evidence: legacy 24 -> V2 7, legacy 15 -> V2 8, legacy 16 -> V2 9.
         $this->pick(3988, 24, 7, 4);
-        $this->pick(5000, 15, 8, 1);
-        $this->pick(5001, 16, 9, 2);
+        $this->pick(5000, 15, 8, 1, 645);
+        $this->pick(5001, 16, 9, 2, 645);
 
         $this->dir = sys_get_temp_dir().'/ppb-csda-import-'.Str::uuid();
         File::makeDirectory($this->dir);
@@ -139,19 +141,19 @@ class LegacyCsdaImportTest extends TestCase
         $this->assertSame(24, (int) DB::table('ppb_legacy_pick_contents')->where('source_pick_id', 3988)->value('legacy_analyst_id'));
     }
 
-    private function pick(int $id, int $legacy, int $native, int $slot): void
+    private function pick(int $id, int $legacy, int $native, int $slot, int $game = 644): void
     {
         $assignment = DB::table('ppb_assignments')->insertGetId([
-            'game_id' => 644, 'kind' => 'pick', 'slot_no' => $slot, 'original_analyst_id' => $native,
+            'game_id' => $game, 'kind' => 'pick', 'slot_no' => $slot, 'original_analyst_id' => $native,
             'current_analyst_id' => $native, 'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
         ]);
         DB::table('ppb_legacy_pick_contents')->insert([
-            'source_pick_id' => $id, 'game_id' => 644, 'legacy_analyst_id' => $legacy, 'kind' => 'pick',
+            'source_pick_id' => $id, 'game_id' => $game, 'legacy_analyst_id' => $legacy, 'kind' => 'pick',
             'legacy_game_code' => 'G19', 'recommend_pick' => 'r', 'short_analysis' => 'a', 'legacy_is_substitute' => 0,
             'legacy_is_win' => 2, 'legacy_recommended_time' => '2026-11-07 11:00:00', 'source_sha256' => str_repeat('0', 64),
         ]);
         DB::table('ppb_submissions')->insert([
-            'game_id' => 644, 'kind' => 'pick', 'status' => 'legacy_imported', 'assignment_id' => $assignment,
+            'game_id' => $game, 'kind' => 'pick', 'status' => 'legacy_imported', 'assignment_id' => $assignment,
             'submitted_analyst_id' => $native, 'legacy_source_pick_id' => $id, 'content_body' => '{"_ppb_legacy_pick_v1":true}',
             'created_at' => now(), 'updated_at' => now(),
         ]);

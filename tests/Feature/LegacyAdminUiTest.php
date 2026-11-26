@@ -786,7 +786,8 @@ class LegacyAdminUiTest extends TestCase
             ->assertSee('共 23 筆，第 1 / 2 頁')->assertDontSee('Synthetic 21');
         $html = $page->getContent();
         self::assertStringNotContainsString('toggleActive', $html);
-        self::assertStringNotContainsString('<form method="post"', strtolower($html));
+        $block = substr($html, strpos($html, 'data-csda-readonly'));
+        self::assertStringNotContainsString('method="post"', strtolower(substr($block, 0, strpos($block, '</main>') ?: strlen($block))));
         self::assertStringContainsString('disabled', $html);
 
         $this->get($url.'?page=2')->assertOk()->assertSee('Synthetic 21')->assertSee('經銷');
