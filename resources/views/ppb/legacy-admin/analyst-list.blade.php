@@ -3,7 +3,7 @@
 @section('title', $title)
 
 @push('styles')
-<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-analyst-list-legacy.css') }}?v=t60u-20261127">
+<link rel="stylesheet" href="{{ asset('assets/ppb/ppb-analyst-list-legacy.css') }}?v=t60u-20261127b">
 @endpush
 
 @section('legacy-content')
@@ -35,9 +35,6 @@
         @if($tab->format('Y-m') === $month) aria-current="page" @endif>{{ $tab->format('Y/n月') }}</a>
     @endforeach
   </nav>
-  @if($canManageAnalysts)
-    <a class="manage-link" href="{{ route('ppb.analysts.index') }}">分析師資料管理</a>
-  @endif
 </div>
 <div class="table-container">
 <table data-legacy-report="{{ $kind }}" @if($unavailable) data-roster-unavailable @endif>
@@ -92,6 +89,9 @@
   </tbody>
 </table>
 </div>
+@if($canManageAnalysts)
+<div class="manage-row"><a class="manage-link" href="{{ route('ppb.analysts.index') }}">分析師資料管理</a></div>
+@endif
 </div>
 @endsection
 
